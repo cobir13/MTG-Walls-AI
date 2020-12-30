@@ -21,6 +21,13 @@ class Card():
     def copy(self):
         return copy.copy(self)
 ##---------------------------------------------------------------------------##
+class ManaSource():
+    def __init__(self):
+        self.tapsfor = []
+    @property
+    def unavailable(self): return False
+    def MakeMana(self,gamestate): pass
+##---------------------------------------------------------------------------##
 class Spell(Card):
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
@@ -42,28 +49,22 @@ class Permanent(Card):
         self.tapped = False
     def Upkeep(self):
         pass
-    def ManaCanMake(self,gamestate):
-        """The mana that this permanent can produce at this moment, given the gamestate"""
-        return ""
 ##---------------------------------------------------------------------------##
-class Land(Permanent):
+class Land(Permanent,ManaSource):
     def __init__(self,name,typelist):
         super().__init__(name,"",typelist)
         self.cost = None
-        self.tapsfor = []
     @property
     def unavailable(self):
         return self.tapped or len(self.tapsfor)==0 
-    def MakeMana(self,gamestate):
-        """mutates the pool of the given gamestate"""
-        if self.unavailable:
+    def MakeMana(self,gamestate,color):
+        """mutates the pool of the given gamestate to addd a mana of the given
+        color (if possible, otherwise this function just does nothing)."""
+        if self.unavailable or color not in self.tapsfor:
             return
-        elif len(self.tapsfor) ==1:
-            gamestate.pool.AddMana( self.tapsfor[0] )
         else:
-            gamestate.pool.AddMana("L")
-        # gamestate.pool.AddMana(self.ManaCanMake(gamestate))
-        self.tapped = True
+            gamestate.pool.AddMana(color)
+            self.tapped = True
 ##---------------------------------------------------------------------------##
 class Creature(Permanent):
     def __init__(self,name,cost,power,toughness,typelist):
