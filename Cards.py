@@ -6,11 +6,12 @@ Created on Mon Dec 28 21:13:28 2020
 """
 
 
-from ManaHandler import ManaPool,ManaCost
+from ManaHandler import ManaCost
 import copy
 
 
 ##---------------------------------------------------------------------------##
+
 class Card():
     def __init__(self,name,cost,typelist):
         self.name = name
@@ -20,27 +21,44 @@ class Card():
         return self.name + ("(T)" if hasattr(self,"tapped") and self.tapped else "")
     def copy(self):
         return copy.copy(self)
+    
 ##---------------------------------------------------------------------------##
+
 class ManaSource():
     def __init__(self):
         self.tapsfor = []
     @property
     def unavailable(self): return False
     def MakeMana(self,gamestate): pass
+
 ##---------------------------------------------------------------------------##
+
+class Ability():
+    def __init__(self,card,cost,func):
+        """func is the function of the ability. It takes in a gamestate and does whatever it does"""
+        self.card = card
+        if isinstance(cost,ManaCost):
+            self.cost = cost
+        else:
+            self.cost = ManaCost(cost)
+        self.func = func
+    def Activate(self,gamestate):
+        """Deducts payment for the ability and then performs the ability"""
+        gamestate.pool.PayCost(self.cost)
+        self.func(gamestate)
+        
+
+
+##===========================================================================##
+
 class Spell(Card):
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
-    
-    def GetAbilities(self,gamestate):
-        if self.cost.CanAfford(gamestate.manapool):
-            #can afford, so return a lambda which is "pay+do effect"
-            return [lambda: self.cost.Pay(gamestate.manapool) and self.Effect(gamestate)]
-            return [self.Effect]
-            
     def Effect(self,gamestate):
         pass
-##---------------------------------------------------------------------------##     
+    
+##---------------------------------------------------------------------------##  
+   
 class Permanent(Card):
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
@@ -49,7 +67,9 @@ class Permanent(Card):
         self.tapped = False
     def Upkeep(self):
         pass
+    
 ##---------------------------------------------------------------------------##
+
 class Land(Permanent,ManaSource):
     def __init__(self,name,typelist):
         super().__init__(name,"",typelist)
@@ -65,7 +85,9 @@ class Land(Permanent,ManaSource):
         else:
             gamestate.pool.AddMana(color)
             self.tapped = True
+            
 ##---------------------------------------------------------------------------##
+
 class Creature(Permanent):
     def __init__(self,name,cost,power,toughness,typelist):
         super().__init__(name,cost,typelist)
@@ -74,18 +96,11 @@ class Creature(Permanent):
         self.toughness = toughness 
     def Upkeep(self):
         self.summonsick = False
+        
 ##---------------------------------------------------------------------------##
 
 
 
 
-if __name__ == "__main__":
-    caryatid = Creature("Sylvan Caryatid","1G",0,3,["creature","plant","defender"])
 
-    
-    pool = ManaPool("GGGGGGRRWWW")
-    print(pool)
-    while pool.CanAffordCost(caryatid.cost):
-        print("can afford. paying")
-        pool.PayCost(caryatid.cost)
-        print(pool)
+

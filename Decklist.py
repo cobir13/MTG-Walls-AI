@@ -6,6 +6,8 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 import Cards
+import AI #hopefully not circular dependency...
+
 
 ##---------------------------------------------------------------------------##
 class Caretaker(Cards.Creature,Cards.ManaSource):
@@ -115,27 +117,72 @@ class Axebane(Cards.Creature,Cards.ManaSource):
         gamestate.pool.AddMana( color*len([perm for perm in gamestate.field if "defender" in perm.typelist]) )
         self.tapped = True
 ##---------------------------------------------------------------------------##
-
-
+##===========================================================================##
+##---------------------------------------------------------------------------##
+class Arcades(Cards.Creature):
+    def __init__(self):
+        super().__init__("Arcades, the Strategist","1GWU",3,5,["legendary","vigilance","elder","dragon"])
+    def Trigger(self,gamestate,card):
+        if "defender" in card.typelist:
+            gamestate.Draw(verbose=True)
+        if card.name == self.name and card != self:
+            print("LEGEND RULE! SACRIFICING THE NEW ARCADES")
+            gamestate.field.remove(card)
         
-
-
-
-
-
-arcades   = Cards.Creature("Arcades, the Strategist","1GWU",3,5,["vigilance","elder","dragon"])
-recruiter = Cards.Creature("Duskwatch Recruiter","1G",2,2,["human","warrier","werewolf"])
-trophymage= Cards.Creature("Trophy Mage","2U",2,2,["human","wizard"])
-
-staff     = Cards.Permanent("Staff of Domination", "3", ["artifact"])
-company   = Cards.Spell("Collected Company", "3G", "instant")
-
-
-
-
-
-
-
+##---------------------------------------------------------------------------##
+class Recruiter(Cards.Creature):
+    def __init__(self):
+        super().__init__("Duskwatch Recruiter","1G",2,2,["human","warrier","werewolf"])
+        self.frontface = True
+        def recruit(gamestate):
+            print("     reveal %s" %",".join([c.name for c in gamestate.deck[:3]]))
+            options = [c for c in gamestate.deck[:3] if isinstance(c,Cards.Creature)]
+            if len(options)>0: #might wiff entirely
+                card = AI.ChooseRecruit(gamestate,options)
+                gamestate.deck.remove(card)
+                gamestate.hand.append(card)
+                gamestate.deck = gamestate.deck[3:]+gamestate.deck[:2] #put to bottom, ignores order
+            else:
+                gamestate.deck = gamestate.deck[3:]+gamestate.deck[:3]     #put all 3 to bottom
+        self.abilitylist = [Cards.Ability(self, "2G", recruit)]
+                
+                
+##---------------------------------------------------------------------------##
+class TrophyMage(Cards.Creature):
+    def __init__(self):
+        super().__init__("Trophy Mage","2U",2,2,["human","wizard"])
+    def Trigger(self,gamestate,card):
+        if card == self: #if IT is the thing which just entered the battlefield
+            tutortarget = AI.ChooseTrophyMageTarget(gamestate)
+            if tutortarget is not None: #might be no valid targets
+                gamestate.deck.remove(tutortarget)
+                gamestate.hand.append(tutortarget)
+            gamestate.Shuffle()
+##---------------------------------------------------------------------------##
+class Staff(Cards.Permanent):
+    def __init__(self):
+        super().__init__("Staff of Domination","3",["artifact"])
+ ##---------------------------------------------------------------------------##       
+class Company(Cards.Spell):
+    def __init__(self):
+        super().__init__("Collected Company", "3G", ["instant"])
+    def Effect(self,gamestate):
+        options = [card for card in gamestate.deck[:6] if (isinstance(card,Cards.Creature) and card.cost.CMC()<=3)]
+        if len(options)>0: #might wiff entirely   
+            chosen = AI.ChooseCompany(gamestate,options)
+            for card in chosen:
+                gamestate.deck.remove(card)
+                gamestate.field.append(card)
+            print("    hit:",[str(card) for card in chosen])
+            gamestate.deck = gamestate.deck[6:]+gamestate.deck[:6-len(chosen)] #put to bottom, ignores order
+            for card in chosen:
+                gamestate.ResolveCastingTriggers(card)
+        else:
+            gamestate.deck = gamestate.deck[6:]+gamestate.deck[:6] #all 6 to bottom
+                
+            
+##---------------------------------------------------------------------------##
+##===========================================================================##
 ##---------------------------------------------------------------------------##
 class Forest(Cards.Land):
     def __init__(self):
@@ -156,27 +203,45 @@ class TempleGarden(Cards.Land):
     def __init__(self):
         super().__init__("Temple Garden",["shock"])
         self.tapsfor = ["G","W"]
-    def Effect(self,gamestate):
-        gamestate.life -= 2
+    def Trigger(self,gamestate,card):
+        if card == self:
+            gamestate.life -= 2
 ##---------------------------------------------------------------------------##
 class BreedingPool(Cards.Land):
     def __init__(self):
         super().__init__("Breeding Pool",["shock"])
         self.tapsfor = ["U","G"]
-    def Effect(self,gamestate):
-        gamestate.life -= 2
+    def Trigger(self,gamestate,card):
+        if card == self:
+            gamestate.life -= 2
 ##---------------------------------------------------------------------------##
 class HallowedFountain(Cards.Land):
     def __init__(self):
         super().__init__("Hallowed Fountain",["shock"])
         self.tapsfor = ["U","W"]
-    def Effect(self,gamestate):
-        gamestate.life -= 2
+    def Trigger(self,gamestate,card):
+        if card == self:
+            gamestate.life -= 2
 ##---------------------------------------------------------------------------##
 class Westvale(Cards.Land):
+    def maketoken(self,gamestate):
+        gamestate.life -= 1
+        token = Cards.Creature("Cleric","",1,1,["token","cleric"])
+        gamestate.field.append(token)
+        self.abilitylist = []
+        self.tapped = True
     def __init__(self):
         super().__init__("Westvale Abbey",[])
         self.tapsfor = ["C"]
+        
+        self.abilitylist = [Cards.Ability(self, "5", self.maketoken)]
+    def Untap(self):
+        super().Untap()
+        self.abilitylist = [Cards.Ability(self, "5", self.maketoken)]
+    def MakeMana(self,gamestate,color):
+        super().MakeMana(gamestate,color)
+        if self.tapped:
+            self.abilitylist = []
 ##---------------------------------------------------------------------------##
 class Wildwoods(Cards.Land):
     def __init__(self):

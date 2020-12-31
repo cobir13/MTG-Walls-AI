@@ -41,27 +41,39 @@ class GameState():
     def Draw(self,verbose=False):
         if self.deck: #if at least one card left
             card = self.deck.pop(0)
-            if verbose: print("drawing:",str(card))
+            if verbose: print("draw:   ",str(card))
             self.hand.append(card) #removes from 0th index of deck
         else: #ran out of cards
-            print("YOU LOSE")
-            raise IOError
+            raise IOError("DRAW FROM AN EMPTY LIBRARY")
             
     def MainPhase(self,verbose=False):
-        while (AI.ShouldPlayLand(self) or AI.ChooseCardToCast(self)):
-            if AI.ShouldPlayLand(self):
-                land = AI.ChooseLandToPlay(self)
-                if verbose: print("playing:",str(land))
-                self.PlayLand(land)
-            else:
-                card = AI.ChooseCardToCast(self)
+        while True:
+            command,obj = AI.ChooseActionToTake(self) #{"land","spell","ability","pass"}
+            if command == "pass":
+                break
+            elif command == "land":
+                assert(isinstance(obj,Cards.Land)) #so obj is a Land object
+                if verbose: print("playing:",str(obj))
+                self.PlayLand(obj)
+            elif command in ["spell","ability"]: #casting and activating are very similar
+                assert(hasattr(obj,"cost"))    
                 #generate the necessary mana.
-                firingsolution = self.TappingSolutionForCost(card.cost)
-                if verbose: print("floating",[ (str(source),color) for source,color in firingsolution] )
+                firingsolution = self.TappingSolutionForCost(obj.cost)
+                if verbose:
+                    lst = ["(%s,%s)" %(s.name,color) for s,color in firingsolution]
+                    print("floating","[ %s ]" %",".join(lst))
                 self.GenerateManaForCasting(firingsolution)
-                #cast the chosen spell
-                if verbose: print("casting:",str(card))
-                self.CastSpell(card)
+                if command == "spell":
+                    assert(isinstance(obj,Cards.Card))
+                    #cast the chosen spell
+                    if verbose: print("   cast:",str(obj))
+                    self.CastSpell(obj)
+                if command == "ability":
+                    assert(isinstance(obj,Cards.Ability))
+                    #activate the chosen ability
+                    if verbose: print("    use: %s's ability" %obj.card.name)
+                    obj.Activate(self)
+
             
             
             
@@ -79,7 +91,7 @@ class GameState():
                 self.hand.remove(card)
         #clear any floating mana
         if verbose and self.pool.CMC()>0:
-            print("end with %s" %(str(game.pool)))
+            print("end with %s" %(str(self.pool)))
         for color in self.pool.data.keys():
             self.pool.data[color] = 0 
         #pass the turn
@@ -93,10 +105,27 @@ class GameState():
 ##---------------------------------------------------------------------------##   
 
     def __str__(self):
-        #sort first somehow? locally only, not mutating
-        txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
+        #sort first. locally only, not mutating.  Do the hand first
+        handlands,castables,uncastables = self.ShowHandAsSorted()
+        castables.  sort(key=lambda c: (c.cost.CMC(),str(c)) ) #str not c.name to include (T)"tapped"
+        uncastables.sort(key=lambda c: (c.cost.CMC(),str(c)) )
+        handlands.  sort(key=lambda c:               str(c)  )
+        sortedhand = handlands+castables+uncastables
+        #now sort the battlefield
+        lands = []
+        nonlands= []
+        for card in self.field:
+            if isinstance(card,Cards.Land):
+                lands.append(card)
+            else:
+                nonlands.append(card)
+        nonlands.sort(key=lambda c: (c.cost.CMC(),str(c)) )
+        lands.   sort(key=lambda c:               str(c)  )
+        sortedfield = lands+nonlands
+        #now print
+        txt = "HAND:\n   "+",".join([str(card) for card in sortedhand])
         txt+= "\n"
-        txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
+        txt+= "FIELD:\n   "+",".join([str(card) for card in sortedfield])
         return txt
 
 
@@ -104,28 +133,65 @@ class GameState():
   
     def PlayLand(self,land):
         assert(not self.playedland)
-        if hasattr(land, "Effect"):
-            getattr(land,"Effect")(self)
         self.hand.remove(land)
         self.field.append(land)
         self.playedland = True
+        self.ResolveCastingTriggers(land)
         
 
     def GenerateManaForCasting(self,firingsolution):
+        """MUTATES SELF BY ADDING MANA AND TAPPING THINGS!!!"""
         for source,color in firingsolution:
             source.MakeMana(self,color)
         #flipped duskwatch recruiter?
         
 
     def CastSpell(self,card):
-        assert(self.pool.CanAffordCost(card.cost))
         self.pool.PayCost(card.cost)        
-        if hasattr(card, "Effect"):
-            getattr(card,"Effect")(self)
         self.hand.remove(card)
         if isinstance(card,Cards.Permanent):
             self.field.append(card)
+        self.ResolveCastingTriggers(card)
     
+    
+    def ResolveCastingTriggers(self,card):
+        """When any card is cast (or a permanent enters the field), resolve any
+        effects that it triggers (including its own ETBs, if any).  Call this
+        function AFTER the permanent has entered, technically."""
+        if hasattr(card, "Effect"):
+            card.Effect(self)
+        for perm in self.field: #which should include card, too
+            if hasattr(perm,"Trigger"):
+                perm.Trigger(self,card)
+            
+    def GetAvailableAbilities(self):
+        """return a list of all abilities which currently can be activated 
+            (in play already and also affordable)"""
+        abilities = []
+        for c in self.field:
+            if hasattr(c,"abilitylist"):
+                for ab in c.abilitylist:
+                    tappingsolution = self.TappingSolutionForCost(ab.cost)
+                    if tappingsolution is not None: #possible to pay for ability!
+                        abilities.append(ab)
+        return abilities
+    
+    def ShowHandAsSorted(self):
+        """returns 3 lists: all lands, all castable spells, and all uncastable
+        spells.  Every card in the hand will be in one of these three lists."""
+        lands = []
+        castables = []
+        uncastables = []
+        for card in self.hand:
+            if isinstance(card,Cards.Land):
+                lands.append(card)
+            else:
+                tappingsolution = self.TappingSolutionForCost(card.cost)
+                if tappingsolution is None:
+                    uncastables.append(card)
+                else:
+                    castables.append(card)
+        return lands,castables,uncastables
 
 
 ##-------------------Alternate Universe Functions----------------------------##
@@ -138,30 +204,35 @@ class GameState():
         hypothet.field = [c.copy() for c in self.field]
         hypothet.pool = self.pool.copy()
         
-        #use up any floating mana, first
-        colorcost = cost.copy()
-        for color,amount in hypothet.pool.data.items():
-            assert(amount>=0) #mana pools should be positive...
-            colorcost.data[color] = max(colorcost.data[color]-amount,0)
-        if colorcost.CMC()==0:
-            return [] #we covered the cost with just our floating mana!
+        #check our mana pool, see if we've got any floating
+        if hypothet.pool.CanAffordCost(cost):
+            return [] #we can cover the cost with just our floating mana!
         
-        #if reached here, we'll need to draw on actual mana sources. List possibilities.
+        #OK, we're going to have to do some REAL work. Get a list of actual mana sources.
         sourcelist = [] #list of indices in hypothet.field, b/c index translates across universes
         for k,perm in enumerate(hypothet.field):
             if isinstance(perm,Cards.ManaSource) and not perm.unavailable:         
                 if isinstance(perm,Decklist.Caretaker) and not perm.CanMakeMana(hypothet):
                     continue #"unavailable" is unreliable for Caretakers, need special check
                 sourcelist.append(k)
-        
         #sort the sourcelist: try beginning sources first, save last sources for later
         #monocolors at the beginning, pure gold at the end
-        sourcelist.sort(key=lambda i: AI.RankerMana(hypothet.field[i]))
+        sourcelist.sort(key=lambda i: AI.RankerMana(hypothet.field[i],hypothet))
+                
+        #First, can we afford the colors?
+        colorcost = cost.copy()
+        colorcost.data["gen"] = 0
+        colorsolution = []
+        #Use our mana pool to pay for as much colored bits as we can
+        for color,amount in hypothet.pool.data.items():
+            assert(amount>=0) #mana pools should be positive...
+            colorcost.data[color] = max(colorcost.data[color]-amount,0)
         
-        #is there a solution to covering the colored part of the cost?
-        colorsolution = AI.FindSolutionForColors(colorcost, sourcelist,hypothet)
-        if not colorsolution:
-            return None #no, we can't cover the cost. couldn't get the colors to work out.
+        if colorcost.CMC()>0:
+            #we couldn't cover the colors with just our floating mana. What about mana sources?
+            colorsolution = AI.FindSolutionForColors(colorcost, sourcelist,hypothet)
+            if not colorsolution:
+                return None #no, we can't cover the cost. couldn't get the colors to work out.
         
         #now time to work out how to cover the non-colored bit
         fullsolution = AI.FindSolutionForGeneric(cost,colorsolution,sourcelist,hypothet)
@@ -195,7 +266,10 @@ class GameState():
         hypothet.pool = self.pool.copy()
         firingsolution = hypothet.TappingSolutionForCost(card.cost)
         hypothet.GenerateManaForCasting(firingsolution)
-        hypothet.CastSpell(coil)
+        try:
+            hypothet.CastSpell(coil)
+        except IOError: #I didn't bother to populate the fake-gamestate deck, but
+            pass        #drawing from an empty deck is fine in a fake universe
         return hypothet.CMCAvailable()
         #flipped duskwatch recruiter?
         
@@ -206,88 +280,3 @@ class GameState():
 
 
 
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    decklist = []
-    for i in range(4):
-        decklist.append(Decklist.Caretaker())
-        decklist.append(Decklist.Caryatid())
-        decklist.append(Decklist.Battlement())
-        decklist.append(Decklist.Roots())
-        decklist.append(Decklist.Axebane())
-    for i in range(3):
-        decklist.append(Decklist.Forest())
-        decklist.append(Decklist.TempleGarden())
-        decklist.append(Decklist.BreedingPool())
-        decklist.append(Decklist.HallowedFountain())
-    decklist.append(Decklist.Forest())
-    decklist.append(Decklist.Plains())
-    decklist.append(Decklist.Island())
-    
-# Westvale
-# Wildwoods
-# LumberingFalls
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-    decklist.append(Decklist.Forest())
-    
-    
-    game = GameState()
-    game.deck = decklist
-    game.Shuffle()
-    
-    
-    
-    for i in range(6):
-        game.Draw()
-    
-    # game.hand.append(Decklist.Caretaker())
-    # game.hand.append(Decklist.Caryatid())
-    # game.hand.append(Decklist.Battlement())
-    # game.hand.append(Decklist.Roots())
-    # game.hand.append(Decklist.Axebane())
-    # game.hand.append(Decklist.Forest())
-    # game.hand.append(Decklist.Forest())
-    
-    
-    # game.hand.append(Decklist.Caretaker())
-    # game.hand.append(Decklist.Caretaker())
-    # game.hand.append(Decklist.Caretaker())
-    # game.hand.append(Decklist.Battlement())
-    # game.hand.append(Decklist.Caryatid())
-    # game.hand.append(Decklist.Forest())
-    # game.hand.append(Decklist.Forest())
-    
-    
-    print(game)
-
-    while game.turncount<5 and len(game.hand)>0:
-        
-        print("\n--------------------turn %i------------------\n" %game.turncount)
-        game.Upkeep()
-        game.Draw()
-        game.MainPhase()
-        game.PassTurn()
-        game.PassTurn()
-        
-
-        
-    print(game)

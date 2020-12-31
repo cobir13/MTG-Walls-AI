@@ -12,63 +12,98 @@ import Decklist
 
 
 
-def ShouldPlayLand(gamestate):
-    return not gamestate.playedland and len([card for card in gamestate.hand if isinstance(card,Cards.Land)])>0
+def ChooseActionToTake(gamestate):
+    """For the given gamestate, what action should we take next? Land-drop,
+        cast a spell, activate ability, or pass turn?
+    Returns a string from {"land","spell","ability","pass"} and an object
+        to take the action with (or None, for the "pass" option)   
+    """
+    lands,castables,uncastables = gamestate.ShowHandAsSorted()
+    abilities = gamestate.GetAvailableAbilities()
+    
+    #simple logic: play land; then cast spells; then activate abilities if mana left
+    
+    if lands and not gamestate.playedland:
+        return "land",ChooseLandToPlay(gamestate)
+    
+    if castables:
+        totalmana = gamestate.CMCAvailable()
+        def NetCostToCast(card): #might be negative
+            return totalmana - gamestate.CMCAvailableIfCast(card)
+        netcosts = [ NetCostToCast(c) for c in castables ]
+        minn = min(netcosts)
+        #if any spells are free or GAIN us mana, restrict our attention to cast
+        #those first. They're literally free!
+        if minn<=0: 
+            castables=[c for c in castables if NetCostToCast(c)==minn]
+        #rank within these remaining options, b/c might still be ties.
+        #...really should do something involving whether I can cast any more spells afterwards...
+        castables.sort(key=lambda c: RankerSpells(c,gamestate))
+        #look aheady to see if we can do several spells at once?
+        return "spell",castables[0]
+    
+    if abilities:
+        #GetAvailableAbilities already checked, they're affordable
+        #if given a choice, I want to use duskwatch before making tokens with westvale.
+        #so I will do a Stupid Sort based on CMC, since recruiting is cheaper
+        abilities.sort(key=lambda ab:ab.cost.CMC())
+        return "ability",abilities[0]
+
+    #if reached here, then there's nothing to do. be sad and pass turn
+    return "pass",None
+
+
+
+
 
 def ChooseLandToPlay(gamestate):
-    lands = [card for card in gamestate.hand if isinstance(card,Cards.Land)]
-    #insert rankings here later  #needs actual logic!
-    return lands[0]
+    landsinhand = [card for card in gamestate.hand if isinstance(card,Cards.Land)]
+    landsinplay = [card for card in gamestate.field if isinstance(card,Cards.Land)]
+    
+    #if no 1-drops and no lands in play, play a tapland
+    onedrops = [c for c in gamestate.hand if (not isinstance(c,Cards.Land) and c.cost.CMC()==1)]
+    if len(onedrops)==0:
+        taplands = [c for c in landsinhand if c.tapped]
+        if taplands:
+            return taplands[0]
+
+    #if green in hand but not in play, play a green source
+    greeninplay  = [c for c in landsinplay if "G" in c.tapsfor]
+    greensinhand = [c for c in landsinhand if "G" in c.tapsfor]
+    
+    if len(greensinhand)>0 and len(greeninplay)==0:
+        return greensinhand[0]
+    
+    return landsinhand[0]
+    
+    
     
     
     
 def ChooseCardstoDiscard(gamestate):
     """Return a list of cards to discard at end of turn, if more than 7 cards in hand"""
-    return gamestate.hand[len(gamestate.hand)-7:]
+    return gamestate.hand[:len(gamestate.hand)-7]
 
-
-def ChooseCardToCast(gamestate):
-    """Out of the list of cards in hand, return the card to cast next"""
-    #in theory could also consider activating abilities here...?
-    #in evaluating which is better, don't forget that Arcades draws cards...
-    #get list of castable cards
-    totalmana = gamestate.CMCAvailable()
+def ChooseTrophyMageTarget(gamestate):
     options = []
-    mostafter = 0 #the amount of mana available after casting the card which generates the most mana
+    for card in gamestate.deck:
+        if "artifact" in card.typelist and card.cost.CMC()==3:
+            options.append(card)
+    if len(options)>0:
+        return options[0] #if no options, return None
     
-    for card in gamestate.hand:
-        if isinstance(card,Cards.Land): continue #it's a land
-        tappingsolution = gamestate.TappingSolutionForCost(card.cost)
-        if tappingsolution is None: continue #too expensive or wrong colors
-        options.append(card)
-        futuremana = gamestate.CMCAvailableIfCast(card)
-        if futuremana>mostafter:
-            mostafter = futuremana
-    
-    if len(options)==0:
-        return False
-    
-    #if any spells are free or net mana, cast those. List b/c might be tie
-    #really should do something fancier here, involving whether I can cast any more spells afterwards
-    if mostafter>=totalmana:    
-        options=[c for c in options if gamestate.CMCAvailableIfCast(c)==mostafter]
+def ChooseRecruit(gamestate,options):
+    return options[0] #for now, no logic at all
 
-    #sort options by priority order. better logic for this ordering?
-    def rank(card):
-        return [Decklist.Battlement,
-                Decklist.Axebane,
-                Decklist.Roots,
-                Decklist.Caryatid,
-                Decklist.Caretaker  ].index(type(card))
-    options.sort(key=rank)
-    
-    return options[0]
-    
-    
+def ChooseCompany(gamestate,options):
+    ranked = sorted(options,key=lambda c: RankerSpells(c,gamestate))
+    return ranked[:2] #for now, no logic at all
 
 
 
-def RankerMana(source):
+
+
+def RankerMana(source,gamestate):
     """Assign a "ranking" number to a given mana source. Low rank means should
     attempt to use first, high rank means valuable and should be saved for later.
     Note: function assumes input is a ManaSource objects."""
@@ -86,6 +121,35 @@ def RankerMana(source):
         rank += 5
     return rank
 
+
+def RankerSpells(spell,gamestate):
+    """Assign a "priority" number to a given spell. Low number means should be
+    played as quickly as possible, high number means less critical."""
+    rank = 100
+    if isinstance(spell,Cards.ManaSource):
+        rank = 10
+        if isinstance(spell,Decklist.Battlement) or isinstance(spell,Decklist.Axebane):
+            rank = 7
+    elif isinstance(spell,Decklist.Company): #company is usually better than Walls
+        rank = 4
+    elif isinstance(spell,Decklist.Arcades):
+        if len([c for c in gamestate.hand if "defender" in c.typelist])>1:
+            rank = 4
+        else:
+            rank = 15
+    elif isinstance(spell,Decklist.TrophyMage) or isinstance(spell,Decklist.Staff):
+        rank = 20
+        defenderlist = [c for c in gamestate.field if "defender" in c.typelist]
+        if len(defenderlist)>=5:
+            rank -= 9
+        scaler_ready = False
+        for c in defenderlist:
+            if (isinstance(c,Decklist.Battlement) or isinstance(c,Decklist.Axebane)) and not c.unavailable:
+                scaler_ready = True
+                break
+        if scaler_ready:
+            rank -= 9
+    return rank
 
 
 
