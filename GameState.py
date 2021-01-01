@@ -66,7 +66,7 @@ class GameState():
                 if command == "spell":
                     assert(isinstance(obj,Cards.Card))
                     #cast the chosen spell
-                    if verbose: print("   cast:",str(obj))
+                    if verbose: print("    cast",str(obj))
                     self.CastSpell(obj)
                 if command == "ability":
                     assert(isinstance(obj,Cards.Ability))

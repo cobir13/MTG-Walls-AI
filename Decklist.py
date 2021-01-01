@@ -12,7 +12,7 @@ import AI #hopefully not circular dependency...
 ##---------------------------------------------------------------------------##
 class Caretaker(Cards.Creature,Cards.ManaSource):
     def __init__(self):
-        super().__init__("Saruli Caretaker"    ,"G" ,0,3,["defender","dryad"])
+        super().__init__("Caretaker","G" ,0,3,["defender"])
         self.tapsfor = ["W","U","B","R","G"]
     @property
     def unavailable(self):
@@ -62,7 +62,7 @@ class Caretaker(Cards.Creature,Cards.ManaSource):
 ##---------------------------------------------------------------------------##
 class Caryatid(Cards.Creature,Cards.ManaSource):
     def __init__(self):
-        super().__init__("Sylvan Caryatid"     ,"1G",0,3,["defender","plant"])
+        super().__init__("Caryatid","1G",0,3,["defender","plant"])
         self.tapsfor = ["W","U","B","R","G"]
     @property
     def unavailable(self):
@@ -75,7 +75,7 @@ class Caryatid(Cards.Creature,Cards.ManaSource):
 ##---------------------------------------------------------------------------##
 class Roots(Cards.Creature,Cards.ManaSource):
     def __init__(self):
-        super().__init__("Wall of Roots"       ,"1G",0,5,["defender","plant","wall"])
+        super().__init__("Roots","1G",0,5,["defender"])
         self.unused = True
         self.tapsfor = ["G"]
     @property
@@ -92,7 +92,7 @@ class Roots(Cards.Creature,Cards.ManaSource):
 ##---------------------------------------------------------------------------##
 class Battlement(Cards.Creature,Cards.ManaSource):
     def __init__(self):
-        super().__init__("Overgrown Battlement","1G",0,4,["defender","wall"])
+        super().__init__("Battlement","1G",0,4,["defender"])
         self.tapsfor = ["G"]
     @property
     def unavailable(self):
@@ -106,7 +106,7 @@ class Battlement(Cards.Creature,Cards.ManaSource):
 #####-NOTE: AXEBANE COLORS AREN'T QUITE CORRECT---#--#-#---__###__#_#-#---
 class Axebane(Cards.Creature,Cards.ManaSource):
     def __init__(self):
-        super().__init__("Axebane Guardian"    ,"2G",0,3,["defender","human","druid"])
+        super().__init__("Axebane","2G",0,3,["defender","human"])
         self.tapsfor = ["W","U","B","R","G"]
     @property
     def unavailable(self):
@@ -117,11 +117,18 @@ class Axebane(Cards.Creature,Cards.ManaSource):
         gamestate.pool.AddMana( color*len([perm for perm in gamestate.field if "defender" in perm.typelist]) )
         self.tapped = True
 ##---------------------------------------------------------------------------##
+class Blossoms(Cards.Creature):
+    def __init__(self):
+        super().__init__("Blossoms","1G",0,4,["defender"])
+    def Trigger(self,gamestate,card):
+        if card == self: #if IT is the thing which just entered the battlefield
+            gamestate.Draw(verbose=True)
+##---------------------------------------------------------------------------##
 ##===========================================================================##
 ##---------------------------------------------------------------------------##
 class Arcades(Cards.Creature):
     def __init__(self):
-        super().__init__("Arcades, the Strategist","1GWU",3,5,["legendary","vigilance","elder","dragon"])
+        super().__init__("Arcades","1GWU",3,5,["legendary","vigilance","dragon"])
     def Trigger(self,gamestate,card):
         if "defender" in card.typelist:
             gamestate.Draw(verbose=True)
@@ -132,10 +139,9 @@ class Arcades(Cards.Creature):
 ##---------------------------------------------------------------------------##
 class Recruiter(Cards.Creature):
     def __init__(self):
-        super().__init__("Duskwatch Recruiter","1G",2,2,["human","warrier","werewolf"])
+        super().__init__("Recruiter","1G",2,2,["human"])
         self.frontface = True
         def recruit(gamestate):
-            print("     reveal %s" %",".join([c.name for c in gamestate.deck[:3]]))
             options = [c for c in gamestate.deck[:3] if isinstance(c,Cards.Creature)]
             if len(options)>0: #might wiff entirely
                 card = AI.ChooseRecruit(gamestate,options)
@@ -150,7 +156,7 @@ class Recruiter(Cards.Creature):
 ##---------------------------------------------------------------------------##
 class TrophyMage(Cards.Creature):
     def __init__(self):
-        super().__init__("Trophy Mage","2U",2,2,["human","wizard"])
+        super().__init__("Trophy Mage","2U",2,2,["human"])
     def Trigger(self,gamestate,card):
         if card == self: #if IT is the thing which just entered the battlefield
             tutortarget = AI.ChooseTrophyMageTarget(gamestate)
@@ -161,11 +167,28 @@ class TrophyMage(Cards.Creature):
 ##---------------------------------------------------------------------------##
 class Staff(Cards.Permanent):
     def __init__(self):
-        super().__init__("Staff of Domination","3",["artifact"])
+        super().__init__("Staff","3",["artifact"])
+    def Trigger(self,gamestate,card):
+        #when it or a defender enters the field, check if we can combo-win
+        if card == self or "defender" in card.typelist:
+            defenders = []
+            scalers = []
+            for perm in gamestate.field:
+                if "defender" in perm.typelist:
+                    defenders.append(perm)
+                if isinstance(perm,Axebane) or isinstance(perm,Battlement):
+                    scalers.append(perm)
+            if len(defenders)<5:
+                return #never mind, don't have 5 defenders
+            atleastthree = gamestate.CMCAvailable()>3
+            for wall in scalers:
+                #if scaler can tap for 5, we win!
+                if (not wall.unavailable) or (not wall.summonsick and atleastthree):
+                    raise IOError("STAFF COMBO WINS THE GAME!")
  ##---------------------------------------------------------------------------##       
 class Company(Cards.Spell):
     def __init__(self):
-        super().__init__("Collected Company", "3G", ["instant"])
+        super().__init__("Company", "3G", ["instant"])
     def Effect(self,gamestate):
         options = [card for card in gamestate.deck[:6] if (isinstance(card,Cards.Creature) and card.cost.CMC()<=3)]
         if len(options)>0: #might wiff entirely   
@@ -199,34 +222,52 @@ class Island(Cards.Land):
         super().__init__("Island",["basic"])
         self.tapsfor = ["U"]
 ##---------------------------------------------------------------------------##
-class TempleGarden(Cards.Land):
+class TempleGarden(Forest,Plains):
     def __init__(self):
-        super().__init__("Temple Garden",["shock"])
+        Cards.Land.__init__(self, "Temple Garden", ["shock"])
         self.tapsfor = ["G","W"]
     def Trigger(self,gamestate,card):
         if card == self:
             gamestate.life -= 2
 ##---------------------------------------------------------------------------##
-class BreedingPool(Cards.Land):
+class BreedingPool(Forest,Island):
     def __init__(self):
-        super().__init__("Breeding Pool",["shock"])
+        Cards.Land.__init__(self, "Breeding Pool", ["shock"])
         self.tapsfor = ["U","G"]
     def Trigger(self,gamestate,card):
         if card == self:
             gamestate.life -= 2
 ##---------------------------------------------------------------------------##
-class HallowedFountain(Cards.Land):
+class HallowedFountain(Plains,Island):
     def __init__(self):
-        super().__init__("Hallowed Fountain",["shock"])
+        Cards.Land.__init__(self, "Hallowed Fountain", ["shock"])
         self.tapsfor = ["U","W"]
     def Trigger(self,gamestate,card):
         if card == self:
             gamestate.life -= 2
+class WindsweptHeath(Cards.Land):
+    def __init__(self):
+        super().__init__("Windswept Heath",["fetch"])
+        self.tapsfor = ["U","W","G"] #can't ACTUALLY make these colors, but can fetch any one of them
+    def Trigger(self,gamestate,card):
+        if card == self: #if IT is the thing which just entered the battlefield
+            gamestate.field.remove(self) #sacrifice itself    
+            gamestate.life -= 1
+            tutortarget = AI.ChooseFetchTarget(gamestate,[Forest,Plains])
+            if tutortarget is not None: #might be no valid targets
+                gamestate.deck.remove(tutortarget)
+                gamestate.field.append(tutortarget)
+            gamestate.Shuffle()
+            if tutortarget is not None:
+                gamestate.ResolveCastingTriggers(tutortarget)
+    @property
+    def unavailable(self): #fetches are never available to tap for mana
+        return True
 ##---------------------------------------------------------------------------##
 class Westvale(Cards.Land):
     def maketoken(self,gamestate):
         gamestate.life -= 1
-        token = Cards.Creature("Cleric","",1,1,["token","cleric"])
+        token = Cards.Creature("Cleric","",1,1,["token"])
         gamestate.field.append(token)
         self.abilitylist = []
         self.tapped = True
@@ -255,3 +296,30 @@ class LumberingFalls(Cards.Land):
         self.tapped = True
         self.tapsfor = ["U","G"]
 ##---------------------------------------------------------------------------##
+
+
+
+
+
+Caretaker
+Caryatid
+Roots
+Battlement
+Axebane
+Blossoms
+Arcades
+Recruiter
+TrophyMage
+Staff
+Company
+
+Forest
+Plains
+Island
+TempleGarden
+BreedingPool
+HallowedFountain
+WindsweptHeath
+Westvale
+Wildwoods
+LumberingFalls
