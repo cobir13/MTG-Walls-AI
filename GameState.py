@@ -44,7 +44,7 @@ class GameState():
             if verbose: print("draw:   ",str(card))
             self.hand.append(card) #removes from 0th index of deck
         else: #ran out of cards
-            raise IOError("DRAW FROM AN EMPTY LIBRARY")
+            raise IOError("DRAW FROM AN EMPTY LIBRARY AND LOSE!")
             
     def MainPhase(self,verbose=False):
         while True:

@@ -122,7 +122,7 @@ class Blossoms(Cards.Creature):
         super().__init__("Blossoms","1G",0,4,["defender"])
     def Trigger(self,gamestate,card):
         if card == self: #if IT is the thing which just entered the battlefield
-            gamestate.Draw(verbose=True)
+            gamestate.Draw(verbose=False)
 ##---------------------------------------------------------------------------##
 ##===========================================================================##
 ##---------------------------------------------------------------------------##
@@ -131,9 +131,9 @@ class Arcades(Cards.Creature):
         super().__init__("Arcades","1GWU",3,5,["legendary","vigilance","dragon"])
     def Trigger(self,gamestate,card):
         if "defender" in card.typelist:
-            gamestate.Draw(verbose=True)
+            gamestate.Draw(verbose=False)
         if card.name == self.name and card != self:
-            print("LEGEND RULE! SACRIFICING THE NEW ARCADES")
+            # print("LEGEND RULE! SACRIFICING THE NEW ARCADES")
             gamestate.field.remove(card)
         
 ##---------------------------------------------------------------------------##
@@ -147,7 +147,7 @@ class Recruiter(Cards.Creature):
                 card = AI.ChooseRecruit(gamestate,options)
                 gamestate.deck.remove(card)
                 gamestate.hand.append(card)
-                gamestate.deck = gamestate.deck[3:]+gamestate.deck[:2] #put to bottom, ignores order
+                gamestate.deck = gamestate.deck[2:]+gamestate.deck[:2] #put to bottom, ignores order
             else:
                 gamestate.deck = gamestate.deck[3:]+gamestate.deck[:3]     #put all 3 to bottom
         self.abilitylist = [Cards.Ability(self, "2G", recruit)]
@@ -196,8 +196,8 @@ class Company(Cards.Spell):
             for card in chosen:
                 gamestate.deck.remove(card)
                 gamestate.field.append(card)
-            print("    hit:",[str(card) for card in chosen])
-            gamestate.deck = gamestate.deck[6:]+gamestate.deck[:6-len(chosen)] #put to bottom, ignores order
+            # print("    hit:",[str(card) for card in chosen])
+            gamestate.deck = gamestate.deck[6-len(chosen):]+gamestate.deck[:6-len(chosen)] #put to bottom, ignores order
             for card in chosen:
                 gamestate.ResolveCastingTriggers(card)
         else:

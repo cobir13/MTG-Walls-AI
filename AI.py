@@ -93,6 +93,12 @@ def ChooseLandToPlay(gamestate):
 def ChooseCardstoDiscard(gamestate):
     """Return a list of cards to discard at end of turn, if more than 7 cards in hand"""
     ranked = sorted(gamestate.hand,key=lambda c: RankerSpellsToCast(c,gamestate))
+    save_at_all_costs = []
+    for card in ranked:
+        if isinstance(card,Decklist.Staff) or isinstance(card,Decklist.Arcades):
+            ranked.remove(card)
+            save_at_all_costs.append(card)
+    ranked = save_at_all_costs + ranked
     return ranked[7:]
 
 def ChooseTrophyMageTarget(gamestate):
@@ -137,7 +143,7 @@ def ChooseFetchTarget(gamestate,landtypes):
     if options:
         #ideally get a dual.  if not, get anything
         choice = sorted(options,key=lambda c: len(c.tapsfor))[0]
-        print("      fetch",choice)
+        # print("      fetch",choice)
         return choice
 
     
