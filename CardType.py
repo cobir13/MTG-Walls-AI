@@ -34,9 +34,10 @@ class ManaSource():
 ##---------------------------------------------------------------------------##
 
 class Ability():
-    def __init__(self,card,cost,func):
+    def __init__(self,name,card,cost,func):
         """func is the function of the ability. It takes in a gamestate and does whatever it does"""
         self.card = card
+        self.name = name
         if isinstance(cost,ManaCost):
             self.cost = cost
         else:

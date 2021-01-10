@@ -5,7 +5,7 @@ Created on Tue Dec 29 12:06:04 2020
 @author: Cobi
 """
 
-import Cards
+import CardType
 import Decklist
 # import ManaHandler
 
@@ -56,7 +56,7 @@ def ChooseActionToTake(gamestate):
     #sort according to their rank
     fulllist.sort(key=lambda tup: (tup[0],str(tup[1])) )
     if len(fulllist)>0:
-        telltype = "ability" if isinstance(fulllist[0][1],Cards.Ability) else "spell"
+        telltype = "ability" if isinstance(fulllist[0][1],CardType.Ability) else "spell"
         return telltype,fulllist[0][1]
 
     #if reached here, fulllist is empty and there's nothing to do. be sad and pass turn
@@ -67,11 +67,11 @@ def ChooseActionToTake(gamestate):
 
 
 def ChooseLandToPlay(gamestate):
-    landsinhand = [card for card in gamestate.hand if isinstance(card,Cards.Land)]
-    landsinplay = [card for card in gamestate.field if isinstance(card,Cards.Land)]
+    landsinhand = [card for card in gamestate.hand if isinstance(card,CardType.Land)]
+    landsinplay = [card for card in gamestate.field if isinstance(card,CardType.Land)]
     
     #if no 1-drops and no lands in play, play a tapland
-    onedrops = [c for c in gamestate.hand if (not isinstance(c,Cards.Land) and c.cost.CMC()==1)]
+    onedrops = [c for c in gamestate.hand if (not isinstance(c,CardType.Land) and c.cost.CMC()==1)]
     if len(onedrops)==0:
         taplands = [c for c in landsinhand if c.tapped]
         if taplands:
@@ -108,20 +108,23 @@ def ChooseTrophyMageTarget(gamestate):
     
 def ChooseRecruit(gamestate,options):
     ranked = sorted(options,key=lambda c: RankerSpellsToCast(c,gamestate))
-    return ranked[0] #for now, no logic at all
+    return ranked[0]
 
 def ChooseCompany(gamestate,options):
     ranked = sorted(options,key=lambda c: RankerSpellsToCast(c,gamestate))
     return ranked[:2]
 
-
+def ChooseSacToOrmendahl(gamestate):
+    critters = [c for c in gamestate.field if isinstance(c,CardType.Creature)]
+    ranked = sorted(critters,key=lambda c: RankerSpellsToCast(c,gamestate)) #this is JUST WRONG RANKER but ok logic for now
+    return ranked[-5:]
 
 
 def ChooseFetchTarget(gamestate,landtypes):    
     """Decide what land to fetch. Current logic doesn't look at hand, only at field"""
     fetchables = [c for c in gamestate.deck if any([isinstance(c,t) for t in landtypes]) ]
     #see what colors we need in play
-    landsinplay = [card for card in gamestate.field if isinstance(card,Cards.Land)]
+    landsinplay = [card for card in gamestate.field if isinstance(card,CardType.Land)]
     missingcolors = []
     for color in ["G","U","W"]:
         if not any([color in c.tapsfor for c in landsinplay]):
@@ -153,10 +156,10 @@ def RankerMana(source,gamestate):
     """Assign a "ranking" number to a given mana source. Low rank means should
     attempt to use first, high rank means valuable and should be saved for later.
     Note: function assumes input is a ManaSource objects."""
-    assert(isinstance(source,Cards.ManaSource))
+    assert(isinstance(source,CardType.ManaSource))
     rank = 0
     #most important: sort land->wall->scaling wall
-    if isinstance(source,Cards.Creature): #all my creature mana dorks are defenders
+    if isinstance(source,CardType.Creature): #all my creature mana dorks are defenders
         rank += 20
     if isinstance(source,Decklist.Battlement) or isinstance(source,Decklist.Axebane):
         rank += 20
@@ -166,38 +169,6 @@ def RankerMana(source,gamestate):
     if isinstance(source,Decklist.Caretaker):
         rank += 5
     return rank
-
-
-# def RankerSpells(spell,gamestate):
-#     """Assign a "priority" number to a given spell. Low number means should be
-#     played as quickly as possible, high number means less critical. Doesn't
-#     worry about castability, this is just about what do we WANT."""
-#     rank = 100
-#     if isinstance(spell,Cards.ManaSource):
-#         rank = 10
-#         if isinstance(spell,Decklist.Battlement) or isinstance(spell,Decklist.Axebane):
-#             rank = 7
-#     elif isinstance(spell,Decklist.Company): #company is usually better than Walls
-#         rank = 4
-#     elif isinstance(spell,Decklist.Arcades):
-#         if len([c for c in gamestate.hand if "defender" in c.typelist])>1:
-#             rank = 4
-#         else:
-#             rank = 15
-#     elif isinstance(spell,Decklist.TrophyMage) or isinstance(spell,Decklist.Staff):
-#         rank = 20
-#         defenderlist = [c for c in gamestate.field if "defender" in c.typelist]
-#         if len(defenderlist)>=5:
-#             rank -= 9
-#         scaler_ready = False
-#         for c in defenderlist:
-#             if (isinstance(c,Decklist.Battlement) or isinstance(c,Decklist.Axebane)) and not c.unavailable:
-#                 scaler_ready = True
-#                 break
-#         if scaler_ready:
-#             rank -= 9
-#     return rank
-
 
 
 
@@ -223,8 +194,10 @@ def MasterRanker(gamestate):
                     Decklist.Staff      : 70,
                     Decklist.TrophyMage : 71    }
     #base ranks of abilities. keyed by cardname and CMC
-    ability_ranking = { (Decklist.Recruiter,3)  : 100,
-                        (Decklist.Westvale ,5)  : 100   }
+    ability_ranking = { "recruit"       : 100, #duskwatch recruiter
+                        "pump"          : 105, #shalai
+                        "makecleric"    : 101, #westvale
+                        "ormendahl"     : 1 } #flip westvale
     ###--OK, look at the gamestate and see if our priorities should change
     #list of things we might care about
     haveArcades = False
@@ -240,9 +213,9 @@ def MasterRanker(gamestate):
         haveStaffPlay = isinstance(permanent,Decklist.Staff    ) or haveStaffPlay
         if "defender" in permanent.typelist:
             defenders += 1
-        # if isinstance(permanent,Decklist.Battlement) or isinstance(permanent,Decklist.Axebane):
-        #     if not permanent.summonsick:
-        #         scalers_notsick += 1
+        if isinstance(permanent,Decklist.Battlement) or isinstance(permanent,Decklist.Axebane):
+            if not permanent.summonsick:
+                scalers_notsick += 1
     for permanent in gamestate.hand:
         haveStaffHand = isinstance(permanent,Decklist.Staff    ) or haveStaffHand
     ###---adjust the rankings accordingly   

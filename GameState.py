@@ -7,7 +7,7 @@ Created on Mon Dec 28 21:13:59 2020
 
 import random
 import Decklist
-import Cards
+import CardType
 from ManaHandler import ManaPool
 import AI
 
@@ -25,72 +25,116 @@ class GameState():
         self.myturn = True
         
         self.life = 20
+        self.opponentlife = 20
         self.playedland = False
+        
+        self.verbose = False
 
         
     def Shuffle(self):
         random.shuffle(self.deck)
-        
-    def Upkeep(self,verbose=False):
+    
+    def TurnCycle(self):
+        if self.verbose:
+            if self.turncount == 1:
+                print(self)
+            print("\n--------------------turn %i------------------\n" %self.turncount)
+        self.Upkeep()
+        if self.turncount>1:
+            self.Draw()
+        self.MainPhase()
+        self.Attack()
+        self.PassTurn()  #pass to opponent
+        self.PassTurn()  #pass back to self
+
+    
+    
+    def Upkeep(self):
         """untap, upkeep, and draw"""
         for permanent in self.field:
             permanent.Untap()
         for permanent in self.field:
             permanent.Upkeep()
             
-    def Draw(self,verbose=False):
+    def Draw(self):
         if self.deck: #if at least one card left
             card = self.deck.pop(0)
-            if verbose: print("draw:   ",str(card))
+            if self.verbose: print("draw:   ",str(card))
             self.hand.append(card) #removes from 0th index of deck
         else: #ran out of cards
             raise IOError("DRAW FROM AN EMPTY LIBRARY AND LOSE!")
             
-    def MainPhase(self,verbose=False):
+    def MainPhase(self):
         while True:
             command,obj = AI.ChooseActionToTake(self) #{"land","spell","ability","pass"}
             if command == "pass":
                 break
             elif command == "land":
-                assert(isinstance(obj,Cards.Land)) #so obj is a Land object
-                if verbose: print("playing:",str(obj))
+                assert(isinstance(obj,CardType.Land)) #so obj is a Land object
+                if self.verbose: print("playing:",str(obj))
                 self.PlayLand(obj)
             elif command in ["spell","ability"]: #casting and activating are very similar
                 assert(hasattr(obj,"cost"))    
                 #generate the necessary mana.
                 firingsolution = self.TappingSolutionForCost(obj.cost)
-                if verbose:
+                if self.verbose:
                     lst = ["(%s,%s)" %(s.name,color) for s,color in firingsolution]
                     print("floating","[ %s ]" %",".join(lst))
                 self.GenerateManaForCasting(firingsolution)
                 if command == "spell":
-                    assert(isinstance(obj,Cards.Card))
+                    assert(isinstance(obj,CardType.Card))
                     #cast the chosen spell
-                    if verbose: print("    cast",str(obj))
+                    if self.verbose: print("    cast",str(obj))
                     self.CastSpell(obj)
                 if command == "ability":
-                    assert(isinstance(obj,Cards.Ability))
+                    assert(isinstance(obj,CardType.Ability))
                     #activate the chosen ability
-                    if verbose: print("    use: %s's ability" %obj.card.name)
+                    if self.verbose: print("    use: %s's %s ability" %(obj.card.name,obj.name))
                     obj.Activate(self)
 
             
             
             
-    def Attack(self,verbose=False):
-        pass
+    def Attack(self):
+        """Attack with anything that can"""
+        attackerlist = [] #keep track of what attacked, to print if verbose
+        oldlife = self.opponentlife
+        haveArcades = any( [isinstance(c,Decklist.Arcades) for c in self.field])
+        #attack with everything that can
+        for critter in self.field:
+            if not isinstance(critter,CardType.Creature): #only attack with creatures
+                continue
+            if critter.summonsick or critter.tapped: #creature needs to be able to attack
+                continue
+            if "defender" in critter.typelist:
+                if haveArcades: #have an Arcades, so can attack with the defenders!
+                    self.opponentlife -= critter.toughness
+                    attackerlist.append(critter)
+            else: #non-defenders
+                self.opponentlife -= critter.power
+                attackerlist.append(critter)
+        #attacking taps the attacker 
+        for critter in attackerlist:
+            if not "vigilance" in critter.typelist:
+                    critter.tapped = True  
+            if "lifelink" in critter.typelist:
+                self.life += critter.power
+        if self.verbose and len(attackerlist)>0: #print what just happened
+            print("COMBAT  ",",".join([att.name for att in attackerlist]),"for %i damage" %(oldlife-self.opponentlife))
+        if self.opponentlife <= 0:
+            raise IOError("COMBAT DAMAGE WINS THE GAME!")
     
     
-    def PassTurn(self,verbose=False):
+    def PassTurn(self):
         #discard down to 7 cards
         if len(self.hand)>7:
             discardlist = AI.ChooseCardstoDiscard(self)
-            if verbose:
+            if self.verbose:
                 print("discard:",[str(c) for c in discardlist])
             for card in discardlist:
                 self.hand.remove(card)
         #clear any floating mana
-        if verbose and self.pool.CMC()>0:
+        if self.verbose and self.pool.CMC()>0:
             print("end with %s" %(str(self.pool)))
         for color in self.pool.data.keys():
             self.pool.data[color] = 0 
@@ -115,7 +159,7 @@ class GameState():
         lands = []
         nonlands= []
         for card in self.field:
-            if isinstance(card,Cards.Land):
+            if isinstance(card,CardType.Land):
                 lands.append(card)
             else:
                 nonlands.append(card)
@@ -126,11 +170,18 @@ class GameState():
         txt = "HAND:\n   "+",".join([str(card) for card in sortedhand])
         txt+= "\n"
         txt+= "FIELD:\n   "+",".join([str(card) for card in sortedfield])
+        txt+= "\nLife: %i     Opponent: %i" %(self.life,self.opponentlife)
         return txt
 
 
 ##---------------------------------------------------------------------------##      
   
+    def TakeDamage(self,damage):
+        self.life -= damage
+        if self.life <= 0:
+            raise IOError("LOSE DUE TO DAMAGE!")
+
+
     def PlayLand(self,land):
         assert(not self.playedland)
         self.hand.remove(land)
@@ -149,7 +200,7 @@ class GameState():
     def CastSpell(self,card):
         self.pool.PayCost(card.cost)        
         self.hand.remove(card)
-        if isinstance(card,Cards.Permanent):
+        if isinstance(card,CardType.Permanent):
             self.field.append(card)
         self.ResolveCastingTriggers(card)
     
@@ -183,7 +234,7 @@ class GameState():
         castables = []
         uncastables = []
         for card in self.hand:
-            if isinstance(card,Cards.Land):
+            if isinstance(card,CardType.Land):
                 lands.append(card)
             else:
                 tappingsolution = self.TappingSolutionForCost(card.cost)
@@ -211,7 +262,7 @@ class GameState():
         #OK, we're going to have to do some REAL work. Get a list of actual mana sources.
         sourcelist = [] #list of indices in hypothet.field, b/c index translates across universes
         for k,perm in enumerate(hypothet.field):
-            if isinstance(perm,Cards.ManaSource) and not perm.unavailable:         
+            if isinstance(perm,CardType.ManaSource) and not perm.unavailable:         
                 if isinstance(perm,Decklist.Caretaker) and not perm.CanMakeMana(hypothet):
                     continue #"unavailable" is unreliable for Caretakers, need special check
                 sourcelist.append(k)
@@ -249,7 +300,7 @@ class GameState():
         hypothet.field = [c.copy() for c in self.field]
         hypothet.pool = self.pool.copy()
         for permanent in hypothet.field:
-            if isinstance(permanent,Cards.ManaSource):
+            if isinstance(permanent,CardType.ManaSource):
                 #add mana (by mutating "hypothet" gamestate)
                 permanent.MakeMana(hypothet,permanent.tapsfor[0])
         return hypothet.pool.CMC()
