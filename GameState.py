@@ -33,6 +33,20 @@ class GameState():
         
     def Shuffle(self):
         random.shuffle(self.deck)
+
+    def AddToDeck(self,card):
+        self.deck.append(card)
+        card.gamestate = self
+
+    def AddToHand(self,card):
+        self.hand.append(card)
+        card.gamestate = self
+
+    def AddToField(self,card):
+        self.field.append(card)
+        card.gamestate = self
+
+    ##-----------------------------------------------------------------------##
     
     def TurnCycle(self):
         if self.verbose:
@@ -146,7 +160,7 @@ class GameState():
         
 
   
-##---------------------------------------------------------------------------##   
+    ##-----------------------------------------------------------------------##
 
     def __str__(self):
         #sort first. locally only, not mutating.  Do the hand first
@@ -297,12 +311,13 @@ class GameState():
     def CMCAvailable(self):
         """How much mana (ignoring color) is available to me right now?"""
         hypothet = GameState()
-        hypothet.field = [c.copy() for c in self.field]
+        for c in self.field:
+            hypothet.AddToField(c.copy)
         hypothet.pool = self.pool.copy()
         for permanent in hypothet.field:
-            if isinstance(permanent,CardType.ManaSource):
+            if isinstance(permanent,CardType.ManaSource) and not permanent.unavailable:
                 #add mana (by mutating "hypothet" gamestate)
-                permanent.MakeMana(hypothet,permanent.tapsfor[0])
+                permanent.MakeMana(permanent.tapsfor[0])
         return hypothet.pool.CMC()
 
 
@@ -311,9 +326,10 @@ class GameState():
         how much mana will I have available afterwards?  Assumes card IS castable"""
         #just casts the card in an alternate gamestate and evaluates the result
         hypothet = GameState()
-        hypothet.field = [c.copy() for c in self.field]
+        for c in self.field:
+            hypothet.AddToField(c.copy)
         coil = card.copy()
-        hypothet.hand = [coil]
+        hypothet.AddTohand(coil)
         hypothet.pool = self.pool.copy()
         firingsolution = hypothet.TappingSolutionForCost(card.cost)
         hypothet.GenerateManaForCasting(firingsolution)

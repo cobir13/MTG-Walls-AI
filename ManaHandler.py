@@ -13,7 +13,7 @@ class ManaPool():
         """Takes in a string in the usual mtg color syntax. This is a mana POOL,
         so there's no such thing as generic mana here. Everything must be specified."""
         cost_str = cost_str.upper()
-        self.data = {}
+        self.data = {}  #dictionary of {color:amount}
         for s in ManaPool.colorlist:
             self.data[s] = cost_str.count(s)
 
@@ -21,10 +21,11 @@ class ManaPool():
         """ "converted mana cost". An int, ignoring color"""
         return sum(self.data.values())
         
-    def AddMana(self,cost_str):
-        cost_str = cost_str.upper()
+    def AddMana(self,mana):
+        if isinstance(mana,str):
+            mana = ManaPool(mana)
         for s in ManaPool.colorlist:
-            self.data[s] += cost_str.count(s)
+            self.data[s] += mana.data[s]
     
     def CanAffordCost(self,cost):
         if self.CMC() < cost.CMC():
@@ -68,6 +69,15 @@ class ManaPool():
 
     def copy(self):
         return ManaPool(str(self))
+    
+    def __eq__(self,other):
+        #two pools are equal if they have the same in each entry
+        for color,amount in self.data.items():
+            if amount != other.data[color]:
+                return False
+        return True
+        
+        
 
 ##---------------------------------------------------------------------------##
 

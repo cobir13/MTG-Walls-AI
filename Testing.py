@@ -62,11 +62,12 @@ if __name__ == "__main__":
     # for trial in range(500):
 
     game = GameState.GameState()
-    game.deck = decklist[:]
+    for c in decklist:
+        game.AddToDeck(c)
     game.Shuffle()        
-    for i in range(6):
+    for i in range(7):
         game.Draw()
-    game.hand.append(Decklist.Westvale())
+
 
     game.verbose = True
         

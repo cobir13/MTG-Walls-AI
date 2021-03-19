@@ -287,6 +287,58 @@ def FindSolutionForGeneric(fullcost,colorsolution,source_indices,hypothet):
         
 
 
+# =============================================================================
+# def FindSolutionForColors(coloredcost,source_indices,hypothet):
+#     """Find the mana sources to tap, and the colors to tap them for, to
+#        generate enough mana to pay the COLORED PART of the given cost. The
+#        function entirely ignores the generic part of the cost.
+#        
+#     source_indices- indices (into hypothet.field) of all available mana sources.
+#     hypothet      - a "fake" gamestate object where we can safely try
+#                     tapping for mana without affecting the real game.
+#     Returns:  a list of tuples: (source index in hypothet.field,color) which will
+#               successfully pay the colored cost, or False if cost can't be paid."""
+#     
+#     coloredcost = coloredcost.copy()
+#     coloredcost.data["gen"] = 0
+#     #go through each source, seeing how each one contributes to the
+#     #colored part of the cost. Stop as soon as the cost is paid.
+#     accumulator = [(coloredcost,[])] #tuples: remaining colored cost,list of sources
+#     for k in source_indices:
+#         s = hypothet.field[k]
+#         newlist = []
+#         for color in s.tapsfor:
+#             for cost,firingsolution in accumulator:
+#                 if cost.data[color]>0: #this cost needs this color
+#                     newcost = cost.copy()
+#                     newcost.data[color] -= 1
+#                     if newcost.CMC()==0: #we've found a good solution!
+#                         return firingsolution+[(k,color)]
+#                     else: #making progress, should track it, but we're not done yet
+#                         tup = (newcost,firingsolution+[(k,color)])    
+#                         newlist.append(tup)
+#         #replace the old accumulator with our progress.  maybe not safe???
+#         if len(newlist)>0:
+#             accumulator = newlist
+#         # #some nice print statements
+#         # for cost,firingsolution in accumulator:
+#         #     print("   ",str(cost),firingsolution)
+#     #if reached here, then couldn't cover the cost. Be sad.
+#     return False
+# =============================================================================
+
+
+
+
+
+###---Testing new lookup function for determining mana---###
+
+# Note: as of 11:59pm 20210109, I have made gamestate a field of Cards and made
+# ManaSource.tapsfor return a list of all possible ManaPools rather than a list
+# of possible colors (as 1-letter strings). Both these changes broke things.
+# Specifically, I need to rewrite the color finder
+
+
 def FindSolutionForColors(coloredcost,source_indices,hypothet):
     """Find the mana sources to tap, and the colors to tap them for, to
        generate enough mana to pay the COLORED PART of the given cost. The
@@ -324,12 +376,4 @@ def FindSolutionForColors(coloredcost,source_indices,hypothet):
         #     print("   ",str(cost),firingsolution)
     #if reached here, then couldn't cover the cost. Be sad.
     return False
-
-
-
-
-
-
-    
-
 
