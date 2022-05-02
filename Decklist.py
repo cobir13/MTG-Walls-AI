@@ -22,17 +22,21 @@ import ZONE
 
 Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
 
-def RootsAfford(source,gamestate):
+def RootsAfford(gamestate,source):
     return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
-def RootsPay(source,gamestate):
-    source.counters.append("used")
-    source.counters.append("-0/-1")
-def RootsExecute(source,gamestate):
-    gamestate.pool.AddMana("G")
+def RootsPay(gamestate,source):
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newsource.counters.append("used")
+    newsource.counters.append("-0/-1")
+    return [(newstate,newsource)]
+def RootsExecute(gamestate,source):
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newstate.pool.AddMana("G")
+    return [(newstate,newsource)]
 Roots.activated.append( ActivatedAbility("Roots add mana",
                                                Cost(None,RootsAfford,RootsPay),
                                                RootsExecute) )
-def RootsUpkeep(source):
+def RootsUpkeep(gamestate,source):
     #remove "used" from the list of counters
     source.counters = [c for c in source.counters if c!="used"]
 Roots.upkeep.append(RootsUpkeep)
@@ -41,13 +45,13 @@ Roots.upkeep.append(RootsUpkeep)
       
 Caryatid = Creature("Caryatid",Cost("1G",None,None),["defender","hexproof"],0,3)
 
-def CaryatidAfford(source,gamestate):
+def CaryatidAfford(gamestate,source):
     return (not source.tapped and not source.summonsick and 
             source.zone == ZONE.FIELD)
-def CaryatidPay(source,gamestate):
+def CaryatidPay(gamestate,source):
     source.tapped = True
-def CaryatidExecute(source,gamestate):
-    
+def CaryatidExecute(gamestate,source):
+    pass
 
       
 ##---------------------------------------------------------------------------##

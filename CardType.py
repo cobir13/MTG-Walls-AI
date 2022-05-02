@@ -19,6 +19,29 @@ import Abilities
 
 class CardType():
     def __init__(self,name,cost,typelist):
+        """
+        name (str)  : name of this card.
+        cost (Cost) : mana and additional cost to cast this card.
+        typelist (list(str)):
+                      List of lowercase tags describing this card. Includes
+                      MtG types as well as relevant keywords.
+        activated (list(Abilities)):
+                      List of Ability objects representing activated abilities.
+        upkeep (list(fn)):
+                      List of functions that should be run on the gamestate and
+                      card every upkeep. For effects that trigger on upkeep.
+        
+        pay_fn: function that takes in a GameState and a source Cardboard.
+            Returns a list of (gamestate,source) pairs giving all possible
+            ways the ability could be executed, accounting for all player
+            choices and options.  Empty list if impossible to execute.
+            DOES NOT MUTATE the original gamestate.
+        
+        
+        
+        """
+
+        
         self.name = name
         self.cost = cost
         self.typelist = [s.lower() for s in typelist]
@@ -28,13 +51,7 @@ class CardType():
         #FORMAT IS: lambda source_cardboard,gamestate : mutated gamestate
         self.upkeep = []
         self.cast_effect = []  #also where enter-the-battlefield effects live
-        
-        # #build the ability to cast the spell?
-        # def casting(source,gamestate):
-        #     gamestate.MoveZone(source,ZONE.FIELD)
-        #     for effect in self.cast_effect:
-        #          effect(source,gamestate)
-        # Abilities.ActivatedAbility("cast "+name,cost,
+
         
     CAST_DESTINATION = ZONE.UNKNOWN  #children should overwrite
 
@@ -46,31 +63,52 @@ class CardType():
     #easier to copy and iterate Gamestates.
 
 
-    def CanAfford(self,source,gamestate):
+    def CanAfford(self,gamestate,source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
-        return self.cost.CanAfford(source,gamestate)  
+        return self.cost.CanAfford(gamestate,source)  
     
-    def Cast(self,source,gamestate):
+    def Cast(self,gamestate,source):
         """Returns a copy of the gamestate but with the costs paid and the
         card cast. DOES NOT MUTATE. Returns False if card cannot be cast
         (due to cost, lack of targets, etc.)"""
+        
+        """
+        Takes in the GameState in which the spell is supposed to be cast
+            and also the source Cardboard that is being cast.
+        Returns a list of (GameState,Cardboard) pairs in which the spell
+            has been cast. The list is:
+            - length 1 if there is exactly one way to do this
+            - length 0 if this cannot be done (costs, lack of targets, etc)
+            - length >1 if there are options that can be decided differently.
+        The original GameState and source Cardboard are NOT mutated.
+        """
+        
+        
+        
         #check to make sure the execution is legal
-        if not self.cost.CanAfford(source,gamestate):
+        if not self.cost.CanAfford(gamestate,source):
             return False
-        #Make the new gamestate (and source for the new gamestate) to mutate
-        newstate = gamestate.copy(omit=[source])
-        newsource = source.copy()
-        newstate.GetZone(newsource.zone).append(newsource)    
-        #we can safely try to mutate the copies. Pay costs:
-        if not self.cost.Pay(newsource,newstate):
-            return False
-        if newstate.verbose:
+        #split off universes where costs have been paid
+        paid_list = self.cost.Pay(gamestate,source)
+        if gamestate.verbose and len(paid_list)>0:
             print("Casting: %s" %self.name)
-        newstate.MoveZone(newsource,self.CAST_DESTINATION)
-        for effect in self.cast_effect:
-            effect(newsource,newstate)
-        return newstate
+        #for each of these universes, cast the spell
+        executed_list = []
+        for state,card in paid_list:
+            #these are copies so it is safe to mutate them during casting
+            state.MoveZone(card,self.CAST_DESTINATION)
+            #trigger enter-the-battlefield effects or cast effects
+            if len(self.cast_effect)>0:
+                for effect in self.cast_effect:
+                    executed_list += effect(state,card)
+            else:
+                executed_list += [(state,card)]
+        return executed_list
+        
+    
+
+        
 
     
 

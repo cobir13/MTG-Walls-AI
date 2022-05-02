@@ -23,37 +23,60 @@ import copy
 
 class ActivatedAbility():
     def __init__(self,name,cost,execute_fn):
+        """
+        pay_fn: function that takes in a GameState and a source Cardboard.
+            Returns a list of (gamestate,source) pairs giving all possible
+            ways the ability could be executed, accounting for all player
+            choices and options.  Empty list if impossible to execute.
+            DOES NOT MUTATE the original gamestate.
+        """
         self.name = name
         self.cost = cost
         self.execute_fn = execute_fn
         
-    def PayAndExecute(self,source,gamestate):
-        """Returns a copy of the gamestate but with the costs paid and the
-        ability performed. DOES NOT MUTATE. Returns False if ability cannot
-        be activated (due to cost, lack of targets, etc.)"""
+    def PayAndExecute(self,gamestate,source):
+        """Returns list of GameStates where the cost has been paid and the 
+            abilities have been performed.
+        Takes in the GameState in which the ability is supposed to be performed
+            and also the source Cardboard that is generating the cost.
+        Returns a list of (GameState,Cardboard) pairs in which the cost has
+            been paid and the abilities have been performed. The list is:
+            - length 1 if there is exactly one way to do this
+            - length 0 if this cannot be done (costs, lack of targets, etc)
+            - length >1 if there are options that can be decided differently.
+        The original GameState and source Cardboard are NOT mutated.
+        """   
         #check to make sure the execution is legal
-        if not self.cost.CanAfford(source,gamestate):
+        if not self.cost.CanAfford(gamestate,source):
             return False
-        newstate = gamestate.copy(omit=[source])
-        #copy the source separately to keep track of it in the new universe
-        newsource = source.copy()
-        newstate.GetZone(newsource.zone).append(newsource)        
-        #we can safely try to mutate the copies
-        if not self.cost.Pay(newsource,newstate):
-            return False
-        self.Execute(newsource,newstate)
-        return newstate
-        
-    def CanAfford(self,source,gamestate):
-        """Returns boolean: can this gamestate afford the cost?
-        DOES NOT MUTATE."""
-        return self.cost.CanAfford(source,gamestate)   
-    
-    def Execute(self,source,gamestate):
-        """MUTATES the gamestate to perform the ability."""
-        self.execute_fn(source,gamestate)
         if gamestate.verbose:
             print("Activating: %s" %self.name)
+        #split off universes where costs have been paid
+        paid_list = self.cost.Pay(gamestate,source)
+        #for each of these universes, complete the effect
+        executed_list = []
+        for state,card in paid_list:
+            executed_list += self.Execute(state,card)
+        return executed_list
+        
+    def CanAfford(self,gamestate,source):
+        """Returns boolean: can this gamestate afford the cost?
+        DOES NOT MUTATE."""
+        return self.cost.CanAfford(gamestate,source)   
+    
+    def Execute(self,gamestate,source):
+        """
+        Takes in the GameState in which the ability is supposed to be performed
+            and also the source Cardboard that is generating the ability.
+        Returns a list of (GameState,Cardboard) pairs in which the effect
+            has been performed. The list is:
+            - length 1 if there is exactly one way to do this
+            - length 0 if this cannot be done (costs, lack of targets, etc)
+            - length >1 if there are options that can be decided differently.
+        The original GameState and source Cardboard are NOT mutated.
+        """
+        return self.execute_fn(gamestate,source)
+        
         
     def __str__(self):
         return self.name

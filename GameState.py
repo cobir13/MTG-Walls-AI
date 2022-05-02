@@ -82,6 +82,21 @@ class GameState():
         state.verbose = self.verbose
         #return
         return state
+    
+    
+    def CopyAndTrack(self,tracklist):
+        """Returns a disconnected copy of the gamestate and also a list of
+        Cardboards in the new gamestate corresponding to the list o
+        Cardboards we were asked to track. This allows tracking "between
+        split universes."
+        Return signature is: GameState, [Cardboard] """
+        newstate = self.copy(omit=tracklist)
+        newlist = []
+        for c in tracklist:
+            new_c = c.copy()
+            newstate.GetZone(new_c.zone).append(new_c)
+            newlist.append(new_c)
+        return newstate,newlist
 
     
     def MoveZone(self,cardboard,destination):
@@ -139,15 +154,15 @@ class GameState():
         for cardboard in self.hand + self.field + self.grave:
             for ability in cardboard.cardtype.activated:
                 #check whether price can be paid
-                if ability.CanAfford(cardboard,self):
+                if ability.CanAfford(self,cardboard):
                     e = Effect(ability.name,
-                               lambda a=ability,c=cardboard,g=self : a.PayAndExecute(c,g))
+                               lambda a=ability,g=self,c=cardboard : a.PayAndExecute(g,c))
                     ab_list.append(e)
         #look for all cards that can be cast
         for cardboard in self.hand:
-            if cardboard.cardtype.CanAfford(cardboard,self):
+            if cardboard.cardtype.CanAfford(self,cardboard):
                 e = Effect("cast "+cardboard.name,
-                           lambda c=cardboard,g=self : c.cardtype.Cast(c,g) )
+                           lambda g=self,c=cardboard : c.cardtype.Cast(g,c) )
                 ab_list.append(e)
         return ab_list
 

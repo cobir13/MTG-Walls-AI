@@ -32,7 +32,7 @@ if __name__ == "__main__":
 
     options = game.GetValidActions()
     print(options,"\n")
-    copygame2 = options[0].Run()
+    [(copygame2,_)] = options[0].Run()
     print(copygame2,"\n-------------\n")
 
     assert(copygame2.GetValidActions() == [] )
@@ -44,7 +44,7 @@ if __name__ == "__main__":
     options = copygame2.GetValidActions()
     print(options,"\n")
     
-    copygame3 = options[0].Run()
+    [(copygame3,_)] = options[0].Run()
     print(copygame3,"\n\n")
     print(copygame3.GetValidActions())
     
