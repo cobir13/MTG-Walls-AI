@@ -117,37 +117,44 @@ class GameState():
         return zone
 
 
-    def GetValidAbilities(self):
+    
+
+
+
+    def GetValidActions(self):
+        class Effect():
+            """nicer wrapper for the actions"""
+            def __init__(self,name,func):
+                """When run, the function will mutate a gamestate."""
+                self.name = name
+                self.func = func
+            def Run(self):
+                return self.func()
+            def __str__(self):
+                return self.name
+            def __repr__(self):
+                return("Effect(%s)" %self.name)
         ab_list = []
+        #look for all activated abilities that can be activated (incl. mana ab)
         for cardboard in self.hand + self.field + self.grave:
             for ability in cardboard.cardtype.activated:
                 #check whether price can be paid
                 if ability.CanAfford(cardboard,self):
-                    ab_list.append( lambda: ability.PayAndExecute(cardboard,self))
+                    e = Effect(ability.name,
+                               lambda a=ability,c=cardboard,g=self : a.PayAndExecute(c,g))
+                    ab_list.append(e)
+        #look for all cards that can be cast
+        for cardboard in self.hand:
+            if cardboard.cardtype.CanAfford(cardboard,self):
+                e = Effect("cast "+cardboard.name,
+                           lambda c=cardboard,g=self : c.cardtype.Cast(c,g) )
+                ab_list.append(e)
         return ab_list
 
 
 
 
     def __str__(self):
-        # #sort first. locally only, not mutating.  Do the hand first
-        # handlands,castables,uncastables = self.ShowHandAsSorted()
-        # castables.  sort(key=lambda c: (c.cost.CMC(),str(c)) ) #str not c.name to include (T)"tapped"
-        # uncastables.sort(key=lambda c: (c.cost.CMC(),str(c)) )
-        # handlands.  sort(key=lambda c:               str(c)  )
-        # sortedhand = handlands+castables+uncastables
-        # #now sort the battlefield
-        # lands = []
-        # nonlands= []
-        # for card in self.field:
-        #     if isinstance(card,CardType.Land):
-        #         lands.append(card)
-        #     else:
-        #         nonlands.append(card)
-        # nonlands.sort(key=lambda c: (c.cost.CMC(),str(c)) )
-        # lands.   sort(key=lambda c:               str(c)  )
-        # sortedfield = lands+nonlands
-        #now print
         txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
         txt+= "\n"
         txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
@@ -172,7 +179,18 @@ class GameState():
                     self.MoveZone(cardboard,ZONE.GRAVE)
                     continue
             i += 1
-                    
+
+        #legend rule
+
+
+    def Upkeep(self):
+        """This function DOES mutate the gamestate, since there are no
+        choices in the upkeep triggers."""
+        for cardboard in self.hand + self.field + self.grave:
+            for ability in cardboard.cardtype.upkeep:
+                ability(cardboard,self)  #apply the ability to mutate self
+
+
 
 
         

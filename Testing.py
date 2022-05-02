@@ -24,20 +24,34 @@ if __name__ == "__main__":
     game = GameState.GameState()
     game.verbose = True
     game.hand = decklist
-    wall = game.hand[0]
-    
-    print(game,"\n-------------\n")
+
+    # print(game,"\n-------------\n")
     
     game.MoveZone(game.hand[0],ZONE.FIELD)
 
 
+    options = game.GetValidActions()
+    print(options,"\n")
+    copygame2 = options[0].Run()
+    print(copygame2,"\n-------------\n")
+
+    assert(copygame2.GetValidActions() == [] )
+    
+    print("I add in an extra mana to see what happens\n")
+    copygame2.pool.AddMana("G")
+    print(copygame2,"\n\n")
+    
+    options = copygame2.GetValidActions()
+    print(options,"\n")
+    
+    copygame3 = options[0].Run()
+    print(copygame3,"\n\n")
+    print(copygame3.GetValidActions())
+    
+    print("\n-------------\nJust to check, game0 is still unchanged:")
     print(game,"\n-------------\n")
     
     
-    copygame = wall.activated[0].PayAndExecute(wall,game)
-    print("game:\n",game,"\n-------------\n")
-    print("copy:\n",copygame,"\n-------------\n")
-
 
     # decklist = []
     # #34 nonlands, right now

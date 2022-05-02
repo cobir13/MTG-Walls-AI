@@ -26,8 +26,8 @@ class Cardboard():
         self.counters = []  #holds counters and also internal effects for tracking once-per-turn abilities
         self.zone = zone
     
-    
-    def GetName(self):
+    @property
+    def name(self):
         return self.cardtype.name
     
 
@@ -35,7 +35,8 @@ class Cardboard():
         s = self.cardtype.name
         if self.zone == ZONE.FIELD and self.tapped:
             s += "(T)"
-        #something about counters also?
+        if len(self.counters)>0:
+            s += "[%s]" %",".join(self.counters)
         return s
     
     def copy(self):
@@ -55,8 +56,8 @@ class Cardboard():
     def GetAbilities(self):
         ability_list = []
         for ability in self.cardtype.activated:
-            name = ability.name
-            func = lambda game: ability.PayAndExecute(self,game)
+            # name = ability.name
+            func = lambda game,s=self: ability.PayAndExecute(s,game)
             ability_list.append( func )
         return ability_list
         

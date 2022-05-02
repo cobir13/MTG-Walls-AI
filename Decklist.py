@@ -5,8 +5,12 @@ Created on Tue Dec 29 11:50:12 2020
 @author: Cobi
 """
 
-import CardType
+from CardType import Creature,Spell
+from Abilities import ActivatedAbility
+from Costs import Cost
+
 import ZONE
+
 
 # from ManaHandler import ManaPool
 # import AI #hopefully not circular dependency...
@@ -16,8 +20,7 @@ import ZONE
 
 
 
-Roots = CardType.Creature("Roots","1G",["defender"],0,5)
-
+Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
 
 def RootsAfford(source,gamestate):
     canuse = (source.cardtype==Roots and "used" not in source.counters)
@@ -27,10 +30,10 @@ def RootsPay(source,gamestate):
     source.counters.append("used")
     source.counters.append("-0/-1")
 def RootsExecute(source,gamestate):
-    gamestate.pool.AddMana("G")   
-ab = CardType.ActivatedAbility("Roots add mana",RootsAfford,RootsPay,RootsExecute)
-Roots.activated.append( ab )
-
+    gamestate.pool.AddMana("G")
+Roots.activated.append( ActivatedAbility("Roots add mana",
+                                               Cost(None,RootsAfford,RootsPay),
+                                               RootsExecute) )
 def RootsUpkeep(source):
     #remove "used" from the list of counters
     source.counters = [c for c in source.counters if c!="used"]
