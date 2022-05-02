@@ -5,7 +5,7 @@ Created on Tue Dec 29 11:50:12 2020
 @author: Cobi
 """
 
-from CardType import Creature,Spell
+from CardType import Creature,Spell,Land
 from Abilities import ActivatedAbility
 from Costs import Cost
 
@@ -15,6 +15,39 @@ import ZONE
 # from ManaHandler import ManaPool
 # import AI #hopefully not circular dependency...
 
+
+
+
+
+def DorkAvailable(gamestate,source):
+    return (not source.tapped and not source.summonsick and 
+            source.zone == ZONE.FIELD)
+
+def TapToPay(gamestate,source):
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newsource.tapped = True
+    return [(newstate,newsource)]
+
+# def AddGreen(gamestate,source):
+#     newstate,[newsource] = gamestate.CopyAndTrack([source])
+#     newstate.pool.AddMana("G")  #add green mana
+#     return [(newstate,newsource)]
+# def AddGold(gamestate,source):
+#     newstate,[newsource] = gamestate.CopyAndTrack([source])
+#     newstate.pool.AddMana("A")  #add gold mana
+#     return [(newstate,newsource)]
+
+def AddColor(gamestate,source,color):
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newstate.pool.AddMana(color)  #add mana
+    return [(newstate,newsource)]
+
+def AddDual(gamestate,source,color1,color2):
+    state1,[source1] = gamestate.CopyAndTrack([source])
+    state2,[source2] = gamestate.CopyAndTrack([source])
+    state1.pool.AddMana(color1)  #add mana
+    state2.pool.AddMana(color2)  #add mana
+    return [(state1,source1),(state2,source2)]
 
 
 
@@ -29,13 +62,10 @@ def RootsPay(gamestate,source):
     newsource.counters.append("used")
     newsource.counters.append("-0/-1")
     return [(newstate,newsource)]
-def RootsExecute(gamestate,source):
-    newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newstate.pool.AddMana("G")
-    return [(newstate,newsource)]
-Roots.activated.append( ActivatedAbility("Roots add G",
-                                               Cost(None,RootsAfford,RootsPay),
-                                               RootsExecute) )
+Roots.activated.append(
+            ActivatedAbility("Roots add G",
+                             Cost(None,RootsAfford,RootsPay),
+                             lambda g,s : AddColor(g,s,"g") ))
 def RootsUpkeep(gamestate,source):
     #remove "used" from the list of counters
     source.counters = [c for c in source.counters if c!="used"]
@@ -44,52 +74,157 @@ Roots.upkeep.append(RootsUpkeep)
 ##---------------------------------------------------------------------------##
       
 Caryatid = Creature("Caryatid",Cost("1G",None,None),["defender","hexproof"],0,3)
+Caryatid.activated.append(
+            ActivatedAbility("Caryatid add Au",
+                             Cost(None,DorkAvailable,TapToPay),
+                             lambda g,s : AddColor(g,s,"A") ))
 
-def CaryatidAfford(gamestate,source):
-    return (not source.tapped and not source.summonsick and 
-            source.zone == ZONE.FIELD)
-def CaryatidPay(gamestate,source):
-    newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newsource.tapped = True
-    return [(newstate,newsource)]
-def CaryatidExecute(gamestate,source):
-    newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newstate.pool.AddMana("A")  #add gold mana
-    return [(newstate,newsource)]
-Caryatid.activated.append( ActivatedAbility("Caryatid add Au",
-                                            Cost(None,CaryatidAfford,CaryatidPay),
-                                            CaryatidExecute) )
 
-      
 ##---------------------------------------------------------------------------##
-# class Caryatid(CardType.Creature,CardType.ManaSource):
+
+
+
+
+
+
+##---------------------------------------------------------------------------##
+
+
+Forest = Land("Forest",["basic","forest"])
+Forest.activated.append(
+            ActivatedAbility("Forest add G",
+                             Cost(None,Land.LandAvailable,TapToPay),
+                             lambda g,s : AddColor(g,s,"G") ))
+
+Plains = Land("Plains",["basic","plains"])
+Plains.activated.append(
+            ActivatedAbility("Plains add W",
+                             Cost(None,Land.LandAvailable,TapToPay),
+                             lambda g,s : AddColor(g,s,"W") ))
+
+Island = Land("Island",["basic","island"])
+Island.activated.append(
+            ActivatedAbility("Island add U",
+                             Cost(None,Land.LandAvailable,TapToPay),
+                             lambda g,s : AddColor(g,s,"U") ))
+
+TempleGarden = Land("TempleGarden",["forest","plains"])
+TempleGarden.activated.append(
+            ActivatedAbility("TempleGarden add W/G",
+                             Cost(None,Land.LandAvailable,TapToPay),
+                             lambda g,s : AddDual(g,s,"W","G") ))
+TempleGarden.cast_effect.append(Land.ShockIntoPlay)
+
+
+BreedingPool = Land("BreedingPool",["forest","island"])
+BreedingPool.activated.append(
+            ActivatedAbility("BreedingPool add U/G",
+                             Cost(None,Land.LandAvailable,TapToPay),
+                             lambda g,s : AddDual(g,s,"U","G") ))
+BreedingPool.cast_effect.append(Land.ShockIntoPlay)
+
+HallowedFountain = Land("HallowedFountain",["plains","island"])
+HallowedFountain.activated.append(
+            ActivatedAbility("HallowedFountain add W/U",
+                             Cost(None,Land.LandAvailable,TapToPay),
+                             lambda g,s : AddDual(g,s,"W","U") ))
+HallowedFountain.cast_effect.append(Land.ShockIntoPlay)
+
+
+
+# class WindsweptHeath(CardType.Land):
 #     def __init__(self):
-#         super().__init__("Caryatid","1G",0,3,["defender","plant"])
+#         super().__init__("Windswept Heath",["fetch"])
 #     @property
 #     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool(c) for c in ["W","U","B","R","G"]]
+#         return []
+#     def Trigger(self,card):
+#         if card == self: #if IT is the thing which just entered the battlefield
+#             self.gamestate.field.remove(self) #sacrifice itself    
+#             self.gamestate.TakeDamage(1)
+#             tutortarget = AI.ChooseFetchTarget(self.gamestate,[Forest,Plains])
+#             if tutortarget is not None: #might be no valid targets
+#                 self.gamestate.deck.remove(tutortarget)
+#                 self.gamestate.field.append(tutortarget)
+#                 if self.gamestate.verbose:
+#                     print("    fetch",tutortarget.name)
+#             self.gamestate.Shuffle()
+#             if tutortarget is not None:
+#                 self.gamestate.ResolveCastingTriggers(tutortarget)
 #     @property
-#     def unavailable(self):
-#         return self.tapped or self.summonsick
-#     def MakeMana(self,color):
-#         if super().MakeMana(color):  #added mana, so tap or the like
-#             self.tapped = True
+#     def unavailable(self): #fetches are never available to tap for mana
+#         return True
+# ##---------------------------------------------------------------------------##
+# class Westvale(CardType.Land):
+#     def maketoken(self,gamestate):
+#         gamestate.TakeDamage(1)
+#         gamestate.AddToField( CardType.Creature("Cleric","",1,1,["token"]) )
+#         self.abilitylist = []
+#         self.tapped = True
+#     def flip(self,gamestate):
+#         sacrifices = AI.ChooseSacToOrmendahl(gamestate)
+#         if len(sacrifices)<5: return #not enough fodder to sac!
+#         if gamestate.verbose:
+#             print("sacrificing",[c.name for c in sacrifices],"to Ormendahl")
+#         for critter in sacrifices:
+#             gamestate.field.remove(critter)
+#         #legend rule
+#         alreadythere = [c for c in gamestate.field if c.name == "Ormendahl"]
+#         for ormendahl in alreadythere:
+#             print("LEGEND RULE! SACRIFICING THE OLD ORMENDAHL")
+#             gamestate.field.remove(ormendahl)
+#         gamestate.field.remove(self)
+#         #make the new Ormendahl
+#         ormendahl = CardType.Creature("Ormendahl","",9,7,["legendary","lifelink","flying"])
+#         ormendahl.summonsick = False #hasty
+#         gamestate.AddToField( ormendahl )
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+#     def canpayforflip(self):
+#         return len([c for c in self.gamestate.field if isinstance(c,CardType.Creature)])>=5 and not self.tapped
+    
+#     def __init__(self):
+#         super().__init__("Westvale Abbey",[])
+#         self.abilitylist = [CardType.Ability("makecleric",self, "5", self.maketoken),
+#                             CardType.Ability("ormendahl", self, "5", self.flip     )]
+#     @property
+#     def tapsfor(self):
+#         return [] if self.unavailable else [CardType.ManaPool("C")]
+#     def Activate(self):
+#         """Deducts payment for the ability and then performs the ability"""
+#         #overwriting to make sure we actually HAVE the creatures to sacrifice, 
+#         #since I can't check that without a gamestate object and I don't have
+#         #one during init or Untap
+#         if not self.canpayforflip(self.gamestate):
+#             #not actually able to use the ability right now! whoops. remove it from the ability list...
+#             self.abilitylist = [ab for ab in self.abilitylist if ab.name != "ormendahl"]
+#             print("removing ormendahl ability")
+#         else:
+#             super().Activate()
+#     def Trigger(self,card):
+#         #only add the Ormendahl ability when it's usable, so when have 5 creatures
+#         if card == self or isinstance(card,CardType.Creature): #if IT or a creature entered
+#             #if enough creatures to sac, AND we don't already have Ormendahl-maker ability...
+#             if self.canpayforflip(self.gamestate) and len(self.abilitylist)==1:
+#                 self.abilitylist.append( CardType.Ability("ormendahl" ,self, "5", self.flip) )
+#                 print("adding ormendahl ability")
+#     def Untap(self):
+#         super().Untap()
+#         self.abilitylist = [CardType.Ability("makecleric",self, "5", self.maketoken),
+#                             CardType.Ability("ormendahl", self, "5", self.flip     )]
+#     def MakeMana(self,color):
+#         super().MakeMana(color)
+#         if self.tapped:
+#             self.abilitylist = []
+# ##---------------------------------------------------------------------------##
+# class Wildwoods(CardType.Land):
+#     def __init__(self):
+#         super().__init__("Stirring Wildwoods",["manland"])
+#         self.tapped = True
+#     @property
+#     def tapsfor(self):
+#         return [] if self.unavailable else [CardType.ManaPool("W"),CardType.ManaPool("G")]
+# ##---------------------------------------------------------------------------##
+# class LumberingFalls(CardType.Land):
 
 
 

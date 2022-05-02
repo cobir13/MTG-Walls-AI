@@ -22,71 +22,122 @@ if __name__ == "__main__":
         decklist.append( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND) )
 
     game = GameState.GameState()
-    game.verbose = True
+    game.verbose = False #True
     game.hand = decklist
-
-    # print(game,"\n-------------\n")
-    
     game.MoveZone(game.hand[0],ZONE.FIELD)
 
-
     options = game.GetValidActions()
-    # print(options,"\n")
     [(copygame2,_)] = options[0].Run()
-    # print(copygame2,"\n-------------\n")
-
     assert(copygame2.GetValidActions() == [] )
     
-    # print("I add in an extra mana to see what happens\n")
+    #add in an extra mana to see what happens
     copygame2.pool.AddMana("G")
-    # print(copygame2,"\n\n")
-    
     options = copygame2.GetValidActions()
-    # print(options,"\n")
     assert(len(options)==3)
-    
     [(copygame3,_)] = options[0].Run()
-    # print(copygame3,"\n\n")
-    # print(copygame3.GetValidActions())
     assert(len(copygame3.field)==2)
     assert(len(copygame3.hand)==2)
     assert(str(copygame3.pool)=="")
     
-    # print("\n-------------\nJust to check, game0 is still unchanged:")
-    # print(game,"\n-------------\n")
+    #Just to check, game0 is still unchanged:
     assert(len(game.field)==1)
     assert(str(game.pool)=="")
     
     ###---finished testing wall of Roots.  let's try Caryatid
-    
-    print("\n\n-------------")
     game.field.append(Cardboard.Cardboard(Decklist.Caryatid,ZONE.FIELD))
-    print(game,"\n-------------\n")
     options = game.GetValidActions()
-    print(options,"\n")
     [(carygame1,_)] = options[0].Run()
     assert(len(options)==1)
-    print(carygame1,"\n-------------\n")
-    
-    print("\nuntap and upkeep\n")
     carygame1.Untap()
     carygame1.Upkeep()
-    print(carygame1,"\n")
     options = carygame1.GetValidActions()
-    print(options,"\n")
     assert(len(options)==2)
-    # print(carygame1,"\n-------------\n")
-    
     while len(options)>0:
         (gameN,_) = options[0].Run()[0]
         options = gameN.GetValidActions()
-        print(options)
-    print("\n\n",gameN,"\n-------------\n")
     assert(len(gameN.hand)==2)
     assert(len(gameN.field)==3)
     assert(gameN.pool == ManaHandler.ManaPool("G"))
     
     
+    ###--------------------------------------------------------------------
+
+    #basic game-loop
+    def BasicLoop(gamestate):
+        gameN = gamestate
+        options = gameN.GetValidActions()
+        while len(options)>0:
+            if len(options)>1 and gameN.verbose:
+                print("Split! options are:",options)
+                print("Taking 0th option in list")
+            universes = options[0].Run()
+            if len(universes)>1 and gameN.verbose:
+                print("Split! universes are:")
+                for u,_ in universes:
+                    print("     ---\n",u,"\n     ---")
+                print("Taking last option in list")
+            (gameN,_) = universes[-1]
+            options = gameN.GetValidActions()
+        return gameN
+
+    ###--------------------------------------------------------------------
+    
+    #testing basic lands
+    game = GameState.GameState()
+    game.verbose = False
+    game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
+    game.field.append( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
+    game.hand.append( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    game.hand.append( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    game.hand.append( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
+    game.hand.append( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+                      
+    gameN = BasicLoop(game)
+    assert(len(gameN.hand)==1)
+    assert(len(gameN.field)==5)
+    assert(gameN.pool == ManaHandler.ManaPool(""))
+    assert(len(game.field)==2)  #orig game is untouched
+
+    ###--------------------------------------------------------------------
+    
+    #testing shocklands
+    game = GameState.GameState()
+    game.verbose = True
+    game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
+    game.hand.append( Cardboard.Cardboard(Decklist.BreedingPool,ZONE.HAND))
+    game.hand.append( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+                      
+    gameN = BasicLoop(game)
+    assert(len(gameN.hand)==0)
+    assert(len(gameN.field)==3)
+    assert(gameN.pool == ManaHandler.ManaPool(""))
+    assert(gameN.life == 18)
+
+    print(gameN)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # decklist = []
     # #34 nonlands, right now

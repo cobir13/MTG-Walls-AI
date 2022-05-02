@@ -7,6 +7,7 @@ Created on Mon Dec 28 21:13:28 2020
 
 
 from ManaHandler import ManaCost,ManaPool
+import Costs
 import ZONE
 import Abilities
 
@@ -83,9 +84,6 @@ class CardType():
             - length >1 if there are options that can be decided differently.
         The original GameState and source Cardboard are NOT mutated.
         """
-        
-        
-        
         #check to make sure the execution is legal
         if not self.cost.CanAfford(gamestate,source):
             return False
@@ -128,6 +126,40 @@ class Creature(Permanent):
         if "creature" not in self.typelist:
             self.typelist = ["creature"] + self.typelist
         
+class Land(Permanent):
+    def __init__(self,name,typelist):
+        
+        #build the "cost" of casting a land
+        def canplayland(gamestate,source):
+            return not gamestate.playedland
+        def playland(gamestate,source):
+            #doesn't actually move, just pays the "cost" of saying we've played a land
+            newstate,[newsource] = gamestate.CopyAndTrack([source])
+            newstate.playedland = True
+            return [(newstate,newsource)]
+        cost = Costs.Cost(None,canplayland,playland)
+        #use normal initializer
+        super().__init__(name,cost,typelist)
+        if "land" not in self.typelist:
+            self.typelist = ["land"] + self.typelist
+
+    def EnterTapped(gamestate,source):
+        """useful for tap-lands"""
+        source.tapped = True     #effect is allowed to mutate
+        return [(gamestate,source)]
+
+    def ShockIntoPlay(gamestate,source):
+        """useful for shock lands"""
+        gamestate2,[source2] = gamestate.CopyAndTrack([source])
+        #Either the land enters tapped OR we take 2 damage
+        source.tapped = True     #effect is allowed to mutate
+        gamestate2.life -= 2
+        return [(gamestate,source),(gamestate2,source2)]
+
+    def LandAvailable(gamestate,source):
+        """useful for abilities checking if the land can be tapped for mana"""
+        return (not source.tapped and source.zone == ZONE.FIELD)
+
 
 
 
