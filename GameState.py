@@ -203,7 +203,16 @@ class GameState():
         choices in the upkeep triggers."""
         for cardboard in self.hand + self.field + self.grave:
             for ability in cardboard.cardtype.upkeep:
-                ability(cardboard,self)  #apply the ability to mutate self
+                ability(self,cardboard)  #apply the ability to mutate self
+
+    def Untap(self):
+        """This function DOES mutate the gamestate, since there are no
+        choices in the untap triggers."""
+        self.pool = ManaPool("")
+        self.turncount+=1
+        for cardboard in self.field:
+            cardboard.tapped = False
+            cardboard.summonsick = False
 
 
 

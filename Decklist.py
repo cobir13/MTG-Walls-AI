@@ -33,7 +33,7 @@ def RootsExecute(gamestate,source):
     newstate,[newsource] = gamestate.CopyAndTrack([source])
     newstate.pool.AddMana("G")
     return [(newstate,newsource)]
-Roots.activated.append( ActivatedAbility("Roots add mana",
+Roots.activated.append( ActivatedAbility("Roots add G",
                                                Cost(None,RootsAfford,RootsPay),
                                                RootsExecute) )
 def RootsUpkeep(gamestate,source):
@@ -49,9 +49,16 @@ def CaryatidAfford(gamestate,source):
     return (not source.tapped and not source.summonsick and 
             source.zone == ZONE.FIELD)
 def CaryatidPay(gamestate,source):
-    source.tapped = True
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newsource.tapped = True
+    return [(newstate,newsource)]
 def CaryatidExecute(gamestate,source):
-    pass
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newstate.pool.AddMana("A")  #add gold mana
+    return [(newstate,newsource)]
+Caryatid.activated.append( ActivatedAbility("Caryatid add Au",
+                                            Cost(None,CaryatidAfford,CaryatidPay),
+                                            CaryatidExecute) )
 
       
 ##---------------------------------------------------------------------------##

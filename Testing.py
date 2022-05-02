@@ -31,25 +31,60 @@ if __name__ == "__main__":
 
 
     options = game.GetValidActions()
-    print(options,"\n")
+    # print(options,"\n")
     [(copygame2,_)] = options[0].Run()
-    print(copygame2,"\n-------------\n")
+    # print(copygame2,"\n-------------\n")
 
     assert(copygame2.GetValidActions() == [] )
     
-    print("I add in an extra mana to see what happens\n")
+    # print("I add in an extra mana to see what happens\n")
     copygame2.pool.AddMana("G")
-    print(copygame2,"\n\n")
+    # print(copygame2,"\n\n")
     
     options = copygame2.GetValidActions()
-    print(options,"\n")
+    # print(options,"\n")
+    assert(len(options)==3)
     
     [(copygame3,_)] = options[0].Run()
-    print(copygame3,"\n\n")
-    print(copygame3.GetValidActions())
+    # print(copygame3,"\n\n")
+    # print(copygame3.GetValidActions())
+    assert(len(copygame3.field)==2)
+    assert(len(copygame3.hand)==2)
+    assert(str(copygame3.pool)=="")
     
-    print("\n-------------\nJust to check, game0 is still unchanged:")
+    # print("\n-------------\nJust to check, game0 is still unchanged:")
+    # print(game,"\n-------------\n")
+    assert(len(game.field)==1)
+    assert(str(game.pool)=="")
+    
+    ###---finished testing wall of Roots.  let's try Caryatid
+    
+    print("\n\n-------------")
+    game.field.append(Cardboard.Cardboard(Decklist.Caryatid,ZONE.FIELD))
     print(game,"\n-------------\n")
+    options = game.GetValidActions()
+    print(options,"\n")
+    [(carygame1,_)] = options[0].Run()
+    assert(len(options)==1)
+    print(carygame1,"\n-------------\n")
+    
+    print("\nuntap and upkeep\n")
+    carygame1.Untap()
+    carygame1.Upkeep()
+    print(carygame1,"\n")
+    options = carygame1.GetValidActions()
+    print(options,"\n")
+    assert(len(options)==2)
+    # print(carygame1,"\n-------------\n")
+    
+    while len(options)>0:
+        (gameN,_) = options[0].Run()[0]
+        options = gameN.GetValidActions()
+        print(options)
+    print("\n\n",gameN,"\n-------------\n")
+    assert(len(gameN.hand)==2)
+    assert(len(gameN.field)==3)
+    assert(gameN.pool == ManaHandler.ManaPool("G"))
     
     
 
