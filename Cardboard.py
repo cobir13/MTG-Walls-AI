@@ -6,7 +6,6 @@ Created on Mon Dec 28 21:13:28 2020
 """
 
 
-from ManaHandler import ManaCost,ManaPool
 import ZONE
 
 
@@ -26,10 +25,7 @@ class Cardboard():
         self.counters = []  #holds counters and also internal effects for tracking once-per-turn abilities
         self.zone = zone
     
-    @property
-    def name(self):
-        return self.cardtype.name
-    
+
 
     def __str__(self):
         s = self.cardtype.name
@@ -53,13 +49,13 @@ class Cardboard():
         return newcard
     
 
-    def GetAbilities(self):
-        ability_list = []
-        for ability in self.cardtype.activated:
-            # name = ability.name
-            func = lambda game,s=self: ability.PayAndExecute(s,game)
-            ability_list.append( func )
-        return ability_list
+    # def GetAbilities(self):
+    #     ability_list = []
+    #     for ability in self.cardtype.activated:
+    #         # name = ability.name
+    #         func = lambda game,s=self: ability.PayAndExecute(s,game)
+    #         ability_list.append( func )
+    #     return ability_list
         
     @property
     def name(self):

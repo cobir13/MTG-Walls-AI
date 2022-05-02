@@ -10,7 +10,6 @@ from ManaHandler import ManaCost,ManaPool
 import ZONE
 import Abilities
 
-import copy
 
 
 
@@ -24,7 +23,7 @@ class CardType():
         self.cost = cost
         self.typelist = [s.lower() for s in typelist]
         #abilities
-        self.activated = []
+        self.activated = []  #make separate for mana abilities?
         #effects
         #FORMAT IS: lambda source_cardboard,gamestate : mutated gamestate
         self.upkeep = []

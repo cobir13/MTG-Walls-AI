@@ -18,14 +18,12 @@ import ZONE
 
 
 
-
+##---------------------------------------------------------------------------##
 
 Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
 
 def RootsAfford(source,gamestate):
-    canuse = (source.cardtype==Roots and "used" not in source.counters)
-    canuse = (canuse and source.zone == ZONE.FIELD)
-    return canuse
+    return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
 def RootsPay(source,gamestate):
     source.counters.append("used")
     source.counters.append("-0/-1")
@@ -39,9 +37,32 @@ def RootsUpkeep(source):
     source.counters = [c for c in source.counters if c!="used"]
 Roots.upkeep.append(RootsUpkeep)
 
+##---------------------------------------------------------------------------##
+      
+Caryatid = Creature("Caryatid",Cost("1G",None,None),["defender","hexproof"],0,3)
 
-            
+def CaryatidAfford(source,gamestate):
+    return (not source.tapped and not source.summonsick and 
+            source.zone == ZONE.FIELD)
+def CaryatidPay(source,gamestate):
+    source.tapped = True
+def CaryatidExecute(source,gamestate):
+    
 
+      
+##---------------------------------------------------------------------------##
+# class Caryatid(CardType.Creature,CardType.ManaSource):
+#     def __init__(self):
+#         super().__init__("Caryatid","1G",0,3,["defender","plant"])
+#     @property
+#     def tapsfor(self):
+#         return [] if self.unavailable else [CardType.ManaPool(c) for c in ["W","U","B","R","G"]]
+#     @property
+#     def unavailable(self):
+#         return self.tapped or self.summonsick
+#     def MakeMana(self,color):
+#         if super().MakeMana(color):  #added mana, so tap or the like
+#             self.tapped = True
     
 
 
