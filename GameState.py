@@ -132,13 +132,10 @@ class GameState():
         return zone
 
 
-    
-
-
 
     def GetValidActions(self):
         class Effect():
-            """nicer wrapper for the actions"""
+            """nicer wrapper for the actions. for ease of human debugging only"""
             def __init__(self,name,func):
                 """When run, the function will mutate a gamestate."""
                 self.name = name
@@ -150,20 +147,30 @@ class GameState():
             def __repr__(self):
                 return("Effect(%s)" %self.name)
         ab_list = []
+        activeobjects = []
         #look for all activated abilities that can be activated (incl. mana ab)
         for cardboard in self.hand + self.field + self.grave:
+            if any([cardboard.EquivTo(ob) for ob in activeobjects]):
+                continue  #skip cards that are equivalent to cards already used
+            addobject = False
             for ability in cardboard.cardtype.activated:
                 #check whether price can be paid
                 if ability.CanAfford(self,cardboard):
                     e = Effect(ability.name,
                                lambda a=ability,g=self,c=cardboard : a.PayAndExecute(g,c))
                     ab_list.append(e)
+                    addobject = True
+            if addobject:  #only add each object once, even if many abilities
+                activeobjects.append(cardboard)
         #look for all cards that can be cast
         for cardboard in self.hand:
+            if any([cardboard.EquivTo(ob) for ob in activeobjects]):
+                continue  #skip cards that are equivalent to cards already used
             if cardboard.cardtype.CanAfford(self,cardboard):
                 e = Effect("cast "+cardboard.name,
                            lambda g=self,c=cardboard : c.cardtype.Cast(g,c) )
                 ab_list.append(e)
+                activeobjects.append(cardboard)
         return ab_list
 
 
@@ -210,6 +217,7 @@ class GameState():
         choices in the untap triggers."""
         self.pool = ManaPool("")
         self.turncount+=1
+        self.playedland = False
         for cardboard in self.field:
             cardboard.tapped = False
             cardboard.summonsick = False

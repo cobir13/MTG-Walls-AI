@@ -59,8 +59,8 @@ def RootsAfford(gamestate,source):
     return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
 def RootsPay(gamestate,source):
     newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newsource.counters.append("used")
-    newsource.counters.append("-0/-1")
+    newsource.AddCounter("used")
+    newsource.AddCounter("-0/-1")
     return [(newstate,newsource)]
 Roots.activated.append(
             ActivatedAbility("Roots add G",
@@ -89,7 +89,7 @@ Caryatid.activated.append(
 
 ##---------------------------------------------------------------------------##
 
-
+###---basic lands
 Forest = Land("Forest",["basic","forest"])
 Forest.activated.append(
             ActivatedAbility("Forest add G",
@@ -108,6 +108,7 @@ Island.activated.append(
                              Cost(None,Land.LandAvailable,TapToPay),
                              lambda g,s : AddColor(g,s,"U") ))
 
+###---shock lands
 TempleGarden = Land("TempleGarden",["forest","plains"])
 TempleGarden.activated.append(
             ActivatedAbility("TempleGarden add W/G",
@@ -129,102 +130,6 @@ HallowedFountain.activated.append(
                              Cost(None,Land.LandAvailable,TapToPay),
                              lambda g,s : AddDual(g,s,"W","U") ))
 HallowedFountain.cast_effect.append(Land.ShockIntoPlay)
-
-
-
-# class WindsweptHeath(CardType.Land):
-#     def __init__(self):
-#         super().__init__("Windswept Heath",["fetch"])
-#     @property
-#     def tapsfor(self):
-#         return []
-#     def Trigger(self,card):
-#         if card == self: #if IT is the thing which just entered the battlefield
-#             self.gamestate.field.remove(self) #sacrifice itself    
-#             self.gamestate.TakeDamage(1)
-#             tutortarget = AI.ChooseFetchTarget(self.gamestate,[Forest,Plains])
-#             if tutortarget is not None: #might be no valid targets
-#                 self.gamestate.deck.remove(tutortarget)
-#                 self.gamestate.field.append(tutortarget)
-#                 if self.gamestate.verbose:
-#                     print("    fetch",tutortarget.name)
-#             self.gamestate.Shuffle()
-#             if tutortarget is not None:
-#                 self.gamestate.ResolveCastingTriggers(tutortarget)
-#     @property
-#     def unavailable(self): #fetches are never available to tap for mana
-#         return True
-# ##---------------------------------------------------------------------------##
-# class Westvale(CardType.Land):
-#     def maketoken(self,gamestate):
-#         gamestate.TakeDamage(1)
-#         gamestate.AddToField( CardType.Creature("Cleric","",1,1,["token"]) )
-#         self.abilitylist = []
-#         self.tapped = True
-#     def flip(self,gamestate):
-#         sacrifices = AI.ChooseSacToOrmendahl(gamestate)
-#         if len(sacrifices)<5: return #not enough fodder to sac!
-#         if gamestate.verbose:
-#             print("sacrificing",[c.name for c in sacrifices],"to Ormendahl")
-#         for critter in sacrifices:
-#             gamestate.field.remove(critter)
-#         #legend rule
-#         alreadythere = [c for c in gamestate.field if c.name == "Ormendahl"]
-#         for ormendahl in alreadythere:
-#             print("LEGEND RULE! SACRIFICING THE OLD ORMENDAHL")
-#             gamestate.field.remove(ormendahl)
-#         gamestate.field.remove(self)
-#         #make the new Ormendahl
-#         ormendahl = CardType.Creature("Ormendahl","",9,7,["legendary","lifelink","flying"])
-#         ormendahl.summonsick = False #hasty
-#         gamestate.AddToField( ormendahl )
-    
-#     def canpayforflip(self):
-#         return len([c for c in self.gamestate.field if isinstance(c,CardType.Creature)])>=5 and not self.tapped
-    
-#     def __init__(self):
-#         super().__init__("Westvale Abbey",[])
-#         self.abilitylist = [CardType.Ability("makecleric",self, "5", self.maketoken),
-#                             CardType.Ability("ormendahl", self, "5", self.flip     )]
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("C")]
-#     def Activate(self):
-#         """Deducts payment for the ability and then performs the ability"""
-#         #overwriting to make sure we actually HAVE the creatures to sacrifice, 
-#         #since I can't check that without a gamestate object and I don't have
-#         #one during init or Untap
-#         if not self.canpayforflip(self.gamestate):
-#             #not actually able to use the ability right now! whoops. remove it from the ability list...
-#             self.abilitylist = [ab for ab in self.abilitylist if ab.name != "ormendahl"]
-#             print("removing ormendahl ability")
-#         else:
-#             super().Activate()
-#     def Trigger(self,card):
-#         #only add the Ormendahl ability when it's usable, so when have 5 creatures
-#         if card == self or isinstance(card,CardType.Creature): #if IT or a creature entered
-#             #if enough creatures to sac, AND we don't already have Ormendahl-maker ability...
-#             if self.canpayforflip(self.gamestate) and len(self.abilitylist)==1:
-#                 self.abilitylist.append( CardType.Ability("ormendahl" ,self, "5", self.flip) )
-#                 print("adding ormendahl ability")
-#     def Untap(self):
-#         super().Untap()
-#         self.abilitylist = [CardType.Ability("makecleric",self, "5", self.maketoken),
-#                             CardType.Ability("ormendahl", self, "5", self.flip     )]
-#     def MakeMana(self,color):
-#         super().MakeMana(color)
-#         if self.tapped:
-#             self.abilitylist = []
-# ##---------------------------------------------------------------------------##
-# class Wildwoods(CardType.Land):
-#     def __init__(self):
-#         super().__init__("Stirring Wildwoods",["manland"])
-#         self.tapped = True
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("W"),CardType.ManaPool("G")]
-# ##---------------------------------------------------------------------------##
-# class LumberingFalls(CardType.Land):
 
 
 

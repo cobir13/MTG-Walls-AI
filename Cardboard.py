@@ -22,7 +22,7 @@ class Cardboard():
         self.cardtype = cardtype
         self.tapped = False
         self.summonsick = True
-        self.counters = []  #holds counters and also internal effects for tracking once-per-turn abilities
+        self.counters = []  #sorted list of counters. Also other trackers
         self.zone = zone
     
 
@@ -48,6 +48,9 @@ class Cardboard():
         newcard.cardtype  = self.cardtype
         return newcard
     
+    def AddCounter(self,addition):
+        self.counters = sorted(self.counters + [addition])
+    
 
     # def GetAbilities(self):
     #     ability_list = []
@@ -63,7 +66,12 @@ class Cardboard():
     @property
     def activated(self):
         return self.cardtype.activated
-        
     
     
+    def EquivTo(self,other):
+        return (self.tapped == other.tapped
+                and self.summonsick == other.summonsick
+                and self.counters == other.counters
+                and self.zone == other.zone
+                and self.cardtype == other.cardtype)
     

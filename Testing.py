@@ -33,7 +33,7 @@ if __name__ == "__main__":
     #add in an extra mana to see what happens
     copygame2.pool.AddMana("G")
     options = copygame2.GetValidActions()
-    assert(len(options)==3)
+    assert(len(options)==1) #all 3 roots only generate 1 option--to cast Roots
     [(copygame3,_)] = options[0].Run()
     assert(len(copygame3.field)==2)
     assert(len(copygame3.hand)==2)
@@ -82,38 +82,81 @@ if __name__ == "__main__":
 
     ###--------------------------------------------------------------------
     
-    #testing basic lands
-    game = GameState.GameState()
-    game.verbose = False
-    game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    game.field.append( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
-    game.hand.append( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game.hand.append( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game.hand.append( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
-    game.hand.append( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
-                      
-    gameN = BasicLoop(game)
-    assert(len(gameN.hand)==1)
-    assert(len(gameN.field)==5)
-    assert(gameN.pool == ManaHandler.ManaPool(""))
-    assert(len(game.field)==2)  #orig game is untouched
-
-    ###--------------------------------------------------------------------
-    
-    #testing shocklands
+    #testing GetValidActions not double-counting duplicate cards
     game = GameState.GameState()
     game.verbose = True
     game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    game.hand.append( Cardboard.Cardboard(Decklist.BreedingPool,ZONE.HAND))
-    game.hand.append( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+    game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
+    forest = Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD)
+    game.field.append( forest )
+    game.hand.append( Cardboard.Cardboard(Decklist.Plains,ZONE.HAND))
+    plains = Cardboard.Cardboard(Decklist.Plains,ZONE.HAND)
+    game.hand.append( plains )
+    
+    print(game.GetValidActions())
+    assert(len(game.GetValidActions())==2)
+    #tap one forest, I'll still have the option to tap more forests
+    [(gameF,forestF)] = forest.cardtype.activated[0].PayAndExecute(game,forest)
+    print(gameF.GetValidActions())
+    assert(len(gameF.GetValidActions())==2)
+    assert(gameF.pool == ManaHandler.ManaPool("G"))
+    assert(forest.tapped == False)  #original forest untouched
+    assert(forestF.tapped == True)  #copy of forest is tapped
+    print("done testing forest")
+    #play one plains, I'll lose option to play plains but get to tap plains now
+    [(gameP,plainsP)] = plains.cardtype.Cast(game,plains)
+    print(gameP.GetValidActions())
+    assert(len(gameP.GetValidActions())==2)
+    assert(len(gameP.hand)==1)
+    assert(len(gameP.field)==4)
+    assert(gameP.pool == ManaHandler.ManaPool(""))
+    #untap and go to next turn, should have 3 options again: play, tap W, tap G
+    gameP.Untap()
+    gameP.Upkeep()
+    print("untap,upkeep...\n",gameP)
+    print(gameP.GetValidActions())
+    assert(len(gameP.GetValidActions())==3)
+    
+    
+    
+    #original game is untouched
+    assert(len(game.hand)==2)
+    assert(game.pool == ManaHandler.ManaPool(""))
+    
+    # ###--------------------------------------------------------------------
+    
+    
+    # #testing basic lands
+    # game = GameState.GameState()
+    # game.verbose = False
+    # game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
+    # game.field.append( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
+    # game.hand.append( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    # game.hand.append( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    # game.hand.append( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
+    # game.hand.append( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
                       
-    gameN = BasicLoop(game)
-    assert(len(gameN.hand)==0)
-    assert(len(gameN.field)==3)
-    assert(gameN.pool == ManaHandler.ManaPool(""))
-    assert(gameN.life == 18)
+    # gameN = BasicLoop(game)
+    # assert(len(gameN.hand)==1)
+    # assert(len(gameN.field)==5)
+    # assert(gameN.pool == ManaHandler.ManaPool(""))
+    # assert(len(game.field)==2)  #orig game is untouched
 
-    print(gameN)
+    # ###--------------------------------------------------------------------
+    
+    # #testing shocklands
+    # game = GameState.GameState()
+    # game.verbose = False
+    # game.field.append( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
+    # game.hand.append( Cardboard.Cardboard(Decklist.BreedingPool,ZONE.HAND))
+    # game.hand.append( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+                      
+    # gameN = BasicLoop(game)
+    # assert(len(gameN.hand)==0)
+    # assert(len(gameN.field)==3)
+    # assert(gameN.pool == ManaHandler.ManaPool(""))
+    # assert(gameN.life == 18)
+
 
 
 
