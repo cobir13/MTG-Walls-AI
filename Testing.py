@@ -166,10 +166,10 @@ if __name__ == "__main__":
     forest2 = forest.copy()
     cp.AddToZone(forest2)
     assert( game == cp )
-    [(cp3,forest3)] = forest2.activated[0].PayAndExecute(cp,forest2)
+    [(cp3,forest3)] = forest2.GetAbilities()[0].PayAndExecute(cp,forest2)
     assert( game != cp3)
     assert( cp != cp3)
-    [(cp4,forest4)] = forest.activated[0].PayAndExecute(game,forest)
+    [(cp4,forest4)] = forest.GetAbilities()[0].PayAndExecute(game,forest)
     assert( game != cp4)
     assert( cp3 == cp4 )
     assert( not (cp3 is cp4) )
@@ -178,6 +178,38 @@ if __name__ == "__main__":
     testset = set([game,cp,cp3])
     assert(len(testset)==2)
     assert(cp4 in testset)
+    
+    #two lands. put into play in opposite order. Should be equivalent.
+    game1 = GameState.GameState()
+    game1.verbose = False
+    game1.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
+    game1.AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.HAND) )
+    game2 = game1.copy()
+    #game 1: [0] into play, then the other
+    game1.MoveZone(game1.hand[0],ZONE.FIELD)
+    game1.Untap()
+    game1.MoveZone(game1.hand[0],ZONE.FIELD)
+    #game 2: [1] into play, then the other
+    game2.MoveZone(game2.hand[1],ZONE.FIELD)
+    game2.Untap()
+    game2.MoveZone(game2.hand[0],ZONE.FIELD)
+    assert(game1==game2)
+    
+    #two creatures. put into play in opposite order. Should NOT be equivalent.
+    game1 = GameState.GameState()
+    game1.verbose = False
+    game1.AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND) )
+    game1.AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND) )
+    game2 = game1.copy()
+    #game 1: [0] into play, then the other
+    game1.MoveZone(game1.hand[0],ZONE.FIELD)
+    game1.Untap()
+    game1.MoveZone(game1.hand[0],ZONE.FIELD)
+    #game 2: [1] into play, then the other
+    game2.MoveZone(game2.hand[1],ZONE.FIELD)
+    game2.Untap()
+    game2.MoveZone(game2.hand[0],ZONE.FIELD)
+    assert(game1!=game2)  #creatures DO get summoning-sick. 
     
     
     ###--------------------------------------------------------------------
@@ -219,7 +251,7 @@ if __name__ == "__main__":
     assert(len(tracker2.allnodes)==7)
     assert(tracker2.traverse_counter == 6)
     
-    # ###--------------------------------------------------------------------
+    ###--------------------------------------------------------------------
     
     #testing PlayTree
     game = GameState.GameState()
@@ -245,6 +277,100 @@ if __name__ == "__main__":
     assert(len(tree.LatestNodes())==4)
     assert(all([len(n.state.hand)==2 for n in tree.LatestNodes()]))
     assert(all([len(n.state.field)==5 for n in tree.LatestNodes()]))
+
+
+    ###--------------------------------------------------------------------
+
+    ###Testing Caretakers
+    game = GameState.GameState()
+    game.verbose = False
+    game.AddToZone( Cardboard.Cardboard(Decklist.Caretaker,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Caretaker,ZONE.HAND))
+    game.MoveZone(game.hand[0],ZONE.FIELD)
+    
+    assert(game.field[0].summonsick)
+    assert(len(game.GetValidActions())==0)
+    #what if I give the caretaker something to tap?
+    caryatid = Cardboard.Cardboard(Decklist.Caryatid,ZONE.FIELD)
+    game.AddToZone(caryatid)
+    assert(len(game.GetValidActions())==0) #no, caretaker still summonsick. good.
+    game.field.remove(caryatid)
+    
+    game.Untap()
+    assert(len(game.GetValidActions())==0)  #nothing to tap
+    
+    #give it something to tap
+    game.AddToZone(caryatid)
+    assert(len(game.GetValidActions())==1)
+    [(univ1,_)] = game.GetValidActions()[0].Run()
+    assert(univ1.pool == ManaHandler.ManaPool("A"))
+    assert(all([c.tapped for c in univ1.field]))
+    
+    #give it TWO things to tap
+    game.MoveZone(game.hand[0],ZONE.FIELD)
+    assert(len(game.GetValidActions())==1)
+    universes = game.GetValidActions()[0].Run()
+    assert(len(universes)==2) #two possible things to tap
+    [(univ2,care2),(univ3,care3)] = universes
+    assert(univ2.pool == ManaHandler.ManaPool("A"))
+    assert(univ3.pool == ManaHandler.ManaPool("A"))
+    assert(care2.tapped and care3.tapped)
+    assert(len(univ2.field)==len(univ3.field))
+    assert([c.tapped for c in univ2.field] != [c.tapped for c in univ3.field])
+
+    #see what happens with two active caretakers
+    game3 = univ3
+    game3.Untap()
+    assert(len(game3.GetValidActions())==2)  #2 caretakers are combined to one action
+    universes = care3.GetAbilities()[0].PayAndExecute(univ3,care3)
+    assert(len(universes)==2)
+    [(univ4,care4),(univ5,care5)] = universes
+    assert(univ4.pool == ManaHandler.ManaPool("A"))
+    assert(univ5.pool == ManaHandler.ManaPool("A"))
+    assert(care4.tapped and care5.tapped)
+    assert(len(univ4.field)==len(univ5.field))
+    assert([c.tapped for c in univ4.field] != [c.tapped for c in univ5.field])
+    #one universe should have 1 action left (caryatid), other doesn't (lone caretaker)
+    assert({len(univ4.GetValidActions()),len(univ5.GetValidActions())}  == {0,1})
+
+
+    #may as well use this setup to test Axebane and Battlement as well
+    axe = Cardboard.Cardboard(Decklist.Axebane,ZONE.FIELD)
+    battle = Cardboard.Cardboard(Decklist.Battlement,ZONE.FIELD)
+    game6 = game3.copy()
+    game6.AddToZone(axe)
+    game6.AddToZone(battle)
+    game6.Untap()
+    [(u_axe,_)] = axe.GetAbilities()[0].PayAndExecute(game6,axe)
+    assert(u_axe.pool == ManaHandler.ManaPool("AAAAA"))
+    [(u_bat,_)] = battle.GetAbilities()[0].PayAndExecute(game6,battle)
+    assert(u_bat.pool == ManaHandler.ManaPool("GGGGG"))
+    
+
+    ###--------------------------------------------------------------------
+
+    #testing PlayTree -- can it find the line for 8 mana on turn 3
+    game = GameState.GameState()
+    game.verbose = False
+    game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Roots ,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Caretaker,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Battlement,ZONE.HAND))
+    for x in range(10):
+        game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.DECK))
+    
+    tree = PlayTree.PlayTree(game,5)
+    assert(len(tree.LatestNodes())==1)
+    tree.PlayATurn()
+    assert(len(tree.LatestNodes())==2)
+    tree.PlayATurn()
+    # tree.PrintLatest()
+    assert(len(tree.LatestNodes())==2)
+    assert(any([n.state.pool.CanAffordCost(ManaHandler.ManaCost("8"))
+                                     for n in tree.LatestNodes()] ))
+
 
 
 

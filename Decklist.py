@@ -6,7 +6,7 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 from CardType import Creature,Spell,Land
-from Abilities import ActivatedAbility
+from Abilities import ActivatedAbility,ManaAbility
 from Costs import Cost
 
 import ZONE
@@ -19,41 +19,13 @@ import ZONE
 
 
 
-def DorkAvailable(gamestate,source):
-    return (not source.tapped and not source.summonsick and 
-            source.zone == ZONE.FIELD)
 
-def TapToPay(gamestate,source):
-    newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newsource.tapped = True
-    return [(newstate,newsource)]
-
-# def AddGreen(gamestate,source):
-#     newstate,[newsource] = gamestate.CopyAndTrack([source])
-#     newstate.pool.AddMana("G")  #add green mana
-#     return [(newstate,newsource)]
-# def AddGold(gamestate,source):
-#     newstate,[newsource] = gamestate.CopyAndTrack([source])
-#     newstate.pool.AddMana("A")  #add gold mana
-#     return [(newstate,newsource)]
-
-def AddColor(gamestate,source,color):
-    newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newstate.pool.AddMana(color)  #add mana
-    return [(newstate,newsource)]
-
-def AddDual(gamestate,source,color1,color2):
-    state1,[source1] = gamestate.CopyAndTrack([source])
-    state2,[source2] = gamestate.CopyAndTrack([source])
-    state1.pool.AddMana(color1)  #add mana
-    state2.pool.AddMana(color2)  #add mana
-    return [(state1,source1),(state2,source2)]
 
 
 
 ##---------------------------------------------------------------------------##
 
-Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
+
 
 def RootsAfford(gamestate,source):
     return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
@@ -62,25 +34,94 @@ def RootsPay(gamestate,source):
     newsource.AddCounter("used")
     newsource.AddCounter("-0/-1")
     return [(newstate,newsource)]
-Roots.activated.append(
-            ActivatedAbility("Roots add G",
-                             Cost(None,RootsAfford,RootsPay),
-                             lambda g,s : AddColor(g,s,"g") ))
 def RootsUpkeep(gamestate,source):
     #remove "used" from the list of counters
     source.counters = [c for c in source.counters if c!="used"]
+    
+Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
+Roots.activated.append(
+                ManaAbility("Roots add G",
+                            Cost(None,RootsAfford,RootsPay),
+                            lambda g,s : ManaAbility.AddColor(g,s,"g") ))
 Roots.upkeep.append(RootsUpkeep)
 
 ##---------------------------------------------------------------------------##
       
 Caryatid = Creature("Caryatid",Cost("1G",None,None),["defender","hexproof"],0,3)
 Caryatid.activated.append(
-            ActivatedAbility("Caryatid add Au",
-                             Cost(None,DorkAvailable,TapToPay),
-                             lambda g,s : AddColor(g,s,"A") ))
-
+                ManaAbility("Caryatid add Au",
+                            Cost(None,
+                                 ManaAbility.DorkAvailable,
+                                 ManaAbility.TapToPay),
+                            lambda g,s : ManaAbility.AddColor(g,s,"A") ))
 
 ##---------------------------------------------------------------------------##
+
+def CaretakerAfford(gamestate,source):
+    if (source.tapped or source.summonsick or source.zone != ZONE.FIELD):
+        return False  #caretaker itself isn't available
+    #also need another untapped creature to tap
+    for c in gamestate.field:
+        if isinstance(c.cardtype,Creature) and not c.tapped and not c is source:
+            return True  #if it's another uptapped creature, we're good!
+    return False  #couldn't find another untapped creature
+def CaretakerPay(gamestate,source):
+    #for each thing that could be tapped to pay, return a gamestate where
+    #THAT target is the one which is tapped (in addition to the caretaker)
+    universes = []
+    for c in gamestate.field:
+        if isinstance(c.cardtype,Creature) and not c.tapped and not c is source:
+            #this is a safe target to tap!
+            newstate,[newsource,target] = gamestate.CopyAndTrack([source,c])
+            newsource.tapped = True
+            target.tapped = True
+            universes.append( (newstate,newsource) )
+    return universes
+
+Caretaker = Creature("Caretaker",Cost("G",None,None),["defender"],0,3)
+Caretaker.activated.append(
+                ManaAbility("Caretaker add Au",
+                            Cost(None,CaretakerAfford,CaretakerPay),
+                            lambda g,s : ManaAbility.AddColor(g,s,"A") ))
+
+##---------------------------------------------------------------------------##
+
+def BattlementAddColor(gamestate,source):
+    num = sum(["defender" in c.cardtype.typelist for c in gamestate.field])
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newstate.pool.AddMana("G"*num)  #add mana
+    return [(newstate,newsource)]
+
+Battlement = Creature("Battlement",Cost("1G",None,None),["defender"],0,4)
+Battlement.activated.append(
+                ManaAbility("Battlement add G",
+                            Cost(None,
+                                 ManaAbility.DorkAvailable,
+                                 ManaAbility.TapToPay),
+                            BattlementAddColor ))
+
+##---------------------------------------------------------------------------##
+
+def AxebaneAddColor(gamestate,source):
+    num = sum(["defender" in c.cardtype.typelist for c in gamestate.field])
+    newstate,[newsource] = gamestate.CopyAndTrack([source])
+    newstate.pool.AddMana("A"*num)  #add mana
+    return [(newstate,newsource)]
+
+Axebane = Creature("Axebane",Cost("2G",None,None),["defender"],0,3)
+Axebane.activated.append(
+                ManaAbility("Axebane add Au",
+                            Cost(None,
+                                 ManaAbility.DorkAvailable,
+                                 ManaAbility.TapToPay),
+                            AxebaneAddColor ))
+
+##---------------------------------------------------------------------------##
+
+
+
+
+
 
 
 
@@ -92,167 +133,49 @@ Caryatid.activated.append(
 ###---basic lands
 Forest = Land("Forest",["basic","forest"])
 Forest.activated.append(
-            ActivatedAbility("Forest add G",
-                             Cost(None,Land.LandAvailable,TapToPay),
-                             lambda g,s : AddColor(g,s,"G") ))
+                ManaAbility("Forest add G",
+                            Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
+                            lambda g,s : ManaAbility.AddColor(g,s,"G") ))
 
 Plains = Land("Plains",["basic","plains"])
 Plains.activated.append(
-            ActivatedAbility("Plains add W",
-                             Cost(None,Land.LandAvailable,TapToPay),
-                             lambda g,s : AddColor(g,s,"W") ))
+                ManaAbility("Plains add W",
+                            Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
+                            lambda g,s : ManaAbility.AddColor(g,s,"W") ))
 
 Island = Land("Island",["basic","island"])
 Island.activated.append(
-            ActivatedAbility("Island add U",
-                             Cost(None,Land.LandAvailable,TapToPay),
-                             lambda g,s : AddColor(g,s,"U") ))
+                ManaAbility("Island add U",
+                            Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
+                            lambda g,s : ManaAbility.AddColor(g,s,"U") ))
 
 ###---shock lands
 TempleGarden = Land("TempleGarden",["forest","plains"])
 TempleGarden.activated.append(
-            ActivatedAbility("TempleGarden add W/G",
-                             Cost(None,Land.LandAvailable,TapToPay),
-                             lambda g,s : AddDual(g,s,"W","G") ))
+                ManaAbility("TempleGarden add W/G",
+                            Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
+                            lambda g,s : ManaAbility.AddDual(g,s,"W","G") ))
 TempleGarden.cast_effect.append(Land.ShockIntoPlay)
 
 
 BreedingPool = Land("BreedingPool",["forest","island"])
 BreedingPool.activated.append(
-            ActivatedAbility("BreedingPool add U/G",
-                             Cost(None,Land.LandAvailable,TapToPay),
-                             lambda g,s : AddDual(g,s,"U","G") ))
+                ManaAbility("BreedingPool add U/G",
+                            Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
+                            lambda g,s : ManaAbility.AddDual(g,s,"U","G") ))
 BreedingPool.cast_effect.append(Land.ShockIntoPlay)
 
 HallowedFountain = Land("HallowedFountain",["plains","island"])
 HallowedFountain.activated.append(
-            ActivatedAbility("HallowedFountain add W/U",
-                             Cost(None,Land.LandAvailable,TapToPay),
-                             lambda g,s : AddDual(g,s,"W","U") ))
+                ManaAbility("HallowedFountain add W/U",
+                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
+                             lambda g,s : ManaAbility.AddDual(g,s,"W","U") ))
 HallowedFountain.cast_effect.append(Land.ShockIntoPlay)
 
 
 
 
 
-# ##---------------------------------------------------------------------------##
-# class Caretaker(CardType.Creature,CardType.ManaSource):
-#     def __init__(self):
-#         super().__init__("Caretaker","G" ,0,3,["defender"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool(c) for c in ["W","U","B","R","G"]]
-#     @property
-#     def unavailable(self):
-#         if self.tapped or self.summonsick:
-#             return True #truly not available
-#         elif self.GetTargetToTap() is None:
-#             return True #can't tap anything else for mana, so not available
-#         else:
-#             return False #available to tap for mana!
-#     def GetTargetToTap(self):
-#         if self.tapped or self.summonsick: return None #no target to tap because SELF can't tap 
-#         safetotap = []
-#         caretakers = []
-#         for perm in self.gamestate.field:
-#             if isinstance(perm,CardType.Creature) and not perm.tapped:
-#                 #can't make mana right now (or ever), so safe to tap
-#                 if perm.summonsick or not isinstance(perm,CardType.ManaSource):
-#                     safetotap.append(perm)
-#                 if isinstance(perm,Caretaker) and not perm.summonsick:
-#                     caretakers.append(perm)
-#         i = caretakers.index(self) #which number usable caretaker are you?
-#         if i<len(safetotap):
-#             return safetotap[i]
-#         elif (i-len(safetotap)) % 2 == 1:
-#             return caretakers[i-1]
-#         else:
-#             return None #you're an even leftover caretaker. sorry, no mana for you
-#     def MakeMana(self,color):
-#         target = self.GetTargetToTap()
-#         assert(target is not None)
-#         if super().MakeMana(color):  #added mana, so tap or the like
-#             target.tapped = True
-#             self.tapped = True
-        
-# ##---------------------------------------------------------------------------##
-# class Caryatid(CardType.Creature,CardType.ManaSource):
-#     def __init__(self):
-#         super().__init__("Caryatid","1G",0,3,["defender","plant"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool(c) for c in ["W","U","B","R","G"]]
-#     @property
-#     def unavailable(self):
-#         return self.tapped or self.summonsick
-#     def MakeMana(self,color):
-#         if super().MakeMana(color):  #added mana, so tap or the like
-#             self.tapped = True
-# ##---------------------------------------------------------------------------##
-# class Roots(CardType.Creature,CardType.ManaSource):
-#     def __init__(self):
-#         super().__init__("Roots","1G",0,5,["defender"])
-#         self.unused = True
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("G")]
-#     @property
-#     def unavailable(self):
-#         return not self.unused
-#     def MakeMana(self,color):
-#         if super().MakeMana(color):  #added mana, so tap or the like
-#             self.unused = False
-#             self.toughness -= 1
-#             if self.toughness == 0:
-#                 self.gamestate.field.remove(self)
-#     def Upkeep(self):
-#         super().Upkeep()
-#         self.unused = True
-# ##---------------------------------------------------------------------------##
-# class Battlement(CardType.Creature,CardType.ManaSource):
-#     def __init__(self):
-#         super().__init__("Battlement","1G",0,4,["defender"])
-#     @property
-#     def tapsfor(self):
-#         if self.unavailable():
-#             return []
-#         numwalls = len([p for p in self.gamestate.field if "defender" in p.typelist])
-#         return [ CardType.ManaPool("G"*numwalls)]
-#     @property
-#     def unavailable(self):
-#         return self.tapped or self.summonsick
-#     def MakeMana(self,color):
-#         if super().MakeMana(color):  #added mana, so tap or the like
-#             self.tapped = True
-# ##---------------------------------------------------------------------------##
-# #####-NOTE: AXEBANE COLORS AREN'T QUITE CORRECT---#--#-#---__###__#_#-#---
-# class Axebane(CardType.Creature,CardType.ManaSource):
-#     def __init__(self):
-#         super().__init__("Axebane","2G",0,3,["defender","human"])
-#     @property
-#     def tapsfor(self):
-#         if self.unavailable:
-#             return []
-#         numwalls = len([perm for perm in self.gamestate.field if "defender" in perm.typelist])
-#         if numwalls==0:
-#             return []
-#         #if reached here, will tap for AT LEAST 1 mana
-#         canmake = [CardType.ManaPool(c) for c in ["W","U","B","R","G"]]
-#         for k in range(numwalls-1):
-#             newoptions = []
-#             for oldpool in canmake:
-#                 for color in ["W","U","B","R","G"]:
-#                     newpool = CardType.ManaPool(str(oldpool)+color)
-#                     if not (newpool in newoptions):
-#                         newoptions.append(newpool)
-#             canmake = newoptions
-#         return canmake
-#     @property
-#     def unavailable(self):
-#         return self.tapped or self.summonsick
-#     def MakeMana(self,color):
-#         if super().MakeMana(color):  #added mana, so tap or the like
-#             self.tapped = True
 # ##---------------------------------------------------------------------------##
 # class Blossoms(CardType.Creature):
 #     def __init__(self):
@@ -359,56 +282,7 @@ HallowedFountain.cast_effect.append(Land.ShockIntoPlay)
 # ##---------------------------------------------------------------------------##
 # ##===========================================================================##
 # ##---------------------------------------------------------------------------##
-# class Forest(CardType.Land):
-#     def __init__(self):
-#         super().__init__("Forest",["basic"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("G")]
-# ##---------------------------------------------------------------------------##
-# class Plains(CardType.Land):
-#     def __init__(self):
-#         super().__init__("Plains",["basic"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("W")]
-# ##---------------------------------------------------------------------------##
-# class Island(CardType.Land):
-#     def __init__(self):
-#         super().__init__("Island",["basic"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("U")]
-# ##---------------------------------------------------------------------------##
-# class TempleGarden(Forest,Plains):
-#     def __init__(self):
-#         CardType.Land.__init__(self, "Temple Garden", ["shock"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("W"),CardType.ManaPool("G")]
-#     def Trigger(self,card):
-#         if card == self:
-#             self.gamestate.TakeDamage(2)
-# ##---------------------------------------------------------------------------##
-# class BreedingPool(Forest,Island):
-#     def __init__(self):
-#         CardType.Land.__init__(self, "Breeding Pool", ["shock"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("U"),CardType.ManaPool("G")]
-#     def Trigger(self,card):
-#         if card == self:
-#             self.gamestate.TakeDamage(2)
-# ##---------------------------------------------------------------------------##
-# class HallowedFountain(Plains,Island):
-#     def __init__(self):
-#         CardType.Land.__init__(self, "Hallowed Fountain", ["shock"])
-#     @property
-#     def tapsfor(self):
-#         return [] if self.unavailable else [CardType.ManaPool("W"),CardType.ManaPool("U")]
-#     def Trigger(self,card):
-#         if card == self:
-#             self.gamestate.TakeDamage(2)
+
 # class WindsweptHeath(CardType.Land):
 #     def __init__(self):
 #         super().__init__("Windswept Heath",["fetch"])

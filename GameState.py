@@ -101,10 +101,12 @@ class GameState():
     def ID(self):
         myturn = "MY" if self.myturn else "OP"
         playedland = "_PL" if self.myturn else ""
-        s = "%i%s_%02ivs%02i%s" %(self.turncount,myturn,self.life,self.opponentlife,playedland)
+        s = "%s%i_%02ivs%02i%s" %(myturn,self.turncount,
+                                  self.life,self.opponentlife,playedland)
         s += "_" + ",".join([c.ID() for c in self.hand])
         s += "_" + ",".join([c.ID() for c in self.field])
         s += "_" + ",".join([c.ID() for c in self.grave])
+        s += "(%s)" %str(self.pool)
         return s
 
     def __hash__(self):
@@ -209,7 +211,7 @@ class GameState():
             if any([cardboard.EquivTo(ob) for ob in activeobjects]):
                 continue  #skip cards that are equivalent to cards already used
             addobject = False
-            for ability in cardboard.cardtype.activated:
+            for ability in cardboard.GetAbilities():  #distinguish activated vs mana?
                 #check whether price can be paid
                 if ability.CanAfford(self,cardboard):
                     e = Effect(ability.name,

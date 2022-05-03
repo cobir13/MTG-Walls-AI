@@ -86,3 +86,30 @@ class ActivatedAbility():
         return self.name
 
 
+
+
+
+class ManaAbility(ActivatedAbility):
+    """No functional difference to ActivatedAbility, just for tracking and
+    as a place to collect some useful functions."""
+    
+    def DorkAvailable(gamestate,source):
+        return (not source.tapped and not source.summonsick and 
+                source.zone == ZONE.FIELD)
+    
+    def TapToPay(gamestate,source):
+        newstate,[newsource] = gamestate.CopyAndTrack([source])
+        newsource.tapped = True
+        return [(newstate,newsource)]
+
+    def AddColor(gamestate,source,color):
+        newstate,[newsource] = gamestate.CopyAndTrack([source])
+        newstate.pool.AddMana(color)  #add mana
+        return [(newstate,newsource)]
+
+    def AddDual(gamestate,source,color1,color2):
+        state1,[source1] = gamestate.CopyAndTrack([source])
+        state2,[source2] = gamestate.CopyAndTrack([source])
+        state1.pool.AddMana(color1)  #add mana
+        state2.pool.AddMana(color2)  #add mana
+        return [(state1,source1),(state2,source2)]

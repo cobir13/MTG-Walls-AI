@@ -7,6 +7,7 @@ Created on Mon Dec 28 21:13:28 2020
 
 
 import ZONE
+import CardType
 
 
 ##---------------------------------------------------------------------------##
@@ -50,21 +51,12 @@ class Cardboard():
     
     def AddCounter(self,addition):
         self.counters = sorted(self.counters + [addition])
-    
-
-    # def GetAbilities(self):
-    #     ability_list = []
-    #     for ability in self.cardtype.activated:
-    #         # name = ability.name
-    #         func = lambda game,s=self: ability.PayAndExecute(s,game)
-    #         ability_list.append( func )
-    #     return ability_list
         
     @property
     def name(self):
         return self.cardtype.name
-    @property
-    def activated(self):
+
+    def GetAbilities(self):
         return self.cardtype.activated
     
     
@@ -83,7 +75,7 @@ class Cardboard():
         s += self.cardtype.name + "_"
         if self.tapped:
             s += "T"
-        if self.summonsick:
+        if self.summonsick and isinstance(self.cardtype,CardType.Creature):
             s += "S"
         s += str(self.zone)
         s += "_"+"_".join(self.counters)

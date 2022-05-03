@@ -47,11 +47,14 @@ class CardType():
         self.cost = cost
         self.typelist = [s.lower() for s in typelist]
         #abilities
-        self.activated = []  #make separate for mana abilities?
+        self.activated = []  #includes mana abilities
         #effects
         #FORMAT IS: lambda source_cardboard,gamestate : mutated gamestate
         self.upkeep = []
         self.cast_effect = []  #also where enter-the-battlefield effects live
+        # triggers: other things entering? eot? add to gamestate?
+        
+        
 
         
     CAST_DESTINATION = ZONE.UNKNOWN  #children should overwrite

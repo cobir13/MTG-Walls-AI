@@ -76,6 +76,7 @@ class TurnTracker():
                     else:
                         self.activenodes.add(newnode)
                         self.allnodes.add(newnode)
+            
    
     def GetFinal(self):
         """Return a list of final nodes. Uses a fancier version of equivalency,
@@ -98,7 +99,31 @@ class TurnTracker():
         for node in self.finalnodes:
             fancyset.add(FancyNode(node))
         return [fn.node for fn in fancyset]
-   
+
+
+    def GetAll(self):
+        """Return a list of all nodes. Uses a fancier version of equivalency,
+        where nodes are equal if their states would be equal IF THEY WERE
+        UNTAPPED. They aren't actually untapped yet, this just checks ahead.
+        I can use this if I want to permit the AI to "stop early" before
+        exhausting all possible moves."""
+        class FancyNode():
+            def __init__(self,node):
+                self.node = node
+            def __eq__(self,other):
+                untapped = self.node.state.copy()
+                untapped.Untap()
+                untapped_other = other.node.state.copy()
+                untapped_other.Untap()
+                return untapped == untapped_other #usual _eq_ for GameStates
+            def __hash__(self):
+                untapped = self.node.state.copy()
+                untapped.Untap()
+                return untapped.__hash__()
+        fancyset = set()
+        for node in self.allnodes:
+            fancyset.add(FancyNode(node))
+        return [fn.node for fn in fancyset]
     
     
     class ActionNode():
