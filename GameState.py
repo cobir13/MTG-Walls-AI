@@ -13,8 +13,10 @@ import ZONE
 from ManaHandler import ManaPool
 
 
-
-
+class WinTheGameError(Exception):
+    pass
+class LoseTheGameError(Exception):
+    pass
 
 
 
@@ -54,11 +56,20 @@ class GameState():
 
 
     def __str__(self):
-        txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
-        txt+= "\n"
-        txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
-        txt+= "\nLife: %i     Opponent: %i     Mana: %s" %(self.life,self.opponentlife,str(self.pool))
+        txt = "HAND:    "+",".join([str(card) for card in self.hand])
+        if len(self.field)>0:
+            txt+= "\nFIELD:   "+",".join([str(card) for card in self.field])
+        if len(self.grave)>0:
+            txt+= "\nGRAVE:   "+",".join([str(card) for card in self.grave])
+        txt+= "\nLife: %2i vs %2i" %(self.life,self.opponentlife)
+        txt+= "    Deck: %2i" %len(self.deck)
+        txt+= "    Mana: (%s)" %str(self.pool)
         return txt
+        # txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
+        # txt+= "\n"
+        # txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
+        # txt+= "\nLife: %i     Opponent: %i     Mana: %s" %(self.life,self.opponentlife,str(self.pool))
+        # return txt
 
     def __eq__(self,other):
         #easy disqualifications first
@@ -89,8 +100,8 @@ class GameState():
     
     def ID(self):
         myturn = "MY" if self.myturn else "OP"
-        playedland = "PL" if self.myturn else "NL"
-        s = "%i%s%02i%s%02i" %(self.turncount,myturn,self.life,playedland,self.opponentlife)
+        playedland = "_PL" if self.myturn else ""
+        s = "%i%s_%02ivs%02i%s" %(self.turncount,myturn,self.life,self.opponentlife,playedland)
         s += "_" + ",".join([c.ID() for c in self.hand])
         s += "_" + ",".join([c.ID() for c in self.field])
         s += "_" + ",".join([c.ID() for c in self.grave])
@@ -261,7 +272,11 @@ class GameState():
             cardboard.tapped = False
             cardboard.summonsick = False
 
-
+    def Draw(self):
+        if len(self.deck)>0:
+            self.MoveZone(self.deck[0],ZONE.HAND)
+        else:
+            raise LoseTheGameError
 
 
         
