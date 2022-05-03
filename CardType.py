@@ -102,6 +102,9 @@ class CardType():
                     executed_list += effect(state,card)
             else:
                 executed_list += [(state,card)]
+        #Check state-based actions, to ensure that returned GameStates are legal
+        for state,card in executed_list:
+            state.StateBasedActions()
         return executed_list
         
     

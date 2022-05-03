@@ -160,7 +160,6 @@ if __name__ == "__main__":
     game.AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
     game.AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
     
-
     assert( game == game.copy() )
     cp = game.copy([forest])
     assert( game != cp )
@@ -175,44 +174,75 @@ if __name__ == "__main__":
     assert( cp3 == cp4 )
     assert( not (cp3 is cp4) )
     
+    #can I put these in a set?
+    testset = set([game,cp,cp3])
+    assert(len(testset)==2)
+    assert(cp4 in testset)
     
     
+    ###--------------------------------------------------------------------
     
+    #testing TurnTracker
+    game = GameState.GameState()
+    game.verbose = False
+    forest = Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD)
+    game.AddToZone( forest )
+    game.AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
+    game.AddToZone( Cardboard.Cardboard(Decklist.HallowedFountain,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
+    game.AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
+    game.AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    # #testing PlayTree
-    # game = GameState.GameState()
-    # game.verbose = False
-    # game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    # game.AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
-    # game.AddToZone( Cardboard.Cardboard(Decklist.HallowedFountain,ZONE.HAND))
-    # game.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    # game.AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
-    # game.AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
-    
-    # root = PlayTree.PlayTree(game,None)
-    
-    # print(root.PrintNicely())
 
-    # print("\n_________________\n")
-
-    # root.TakeNextAction(recurse=True)
+    tracker = PlayTree.TurnTracker(game)
+    tracker.PlayTurn()
     
-    # print("\n_________________\n")
+    assert(len(tracker.finalnodes)==8)
+    assert(len(tracker.allnodes)==57)
+    assert(tracker.traverse_counter == 105)
     
-    # print(root.PrintNicely())
-
+    print(len(tracker.finalnodes))
+    for node in tracker.finalnodes:
+        print("-----------")
+        print(node)
+    print("\n\n")
+    nextnodes = tracker.NodesForNextTurn()
+    print(len(nextnodes))
+    for node in nextnodes:
+        print("-----------")
+        print(node)
+    
+    
+    
+    
+    
+    
+    #fixing TurnTracker history duplication: second minor test
+    game2 = GameState.GameState()
+    game2.verbose = False
+    game2.AddToZone( Cardboard.Cardboard(Decklist.HallowedFountain,ZONE.HAND))
+    game2.AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
+    
+    tracker2 = PlayTree.TurnTracker(game2)
+    tracker2.PlayTurn()
+    
+    assert(len(tracker2.finalnodes)==4)
+    assert(len(tracker2.allnodes)==6)
+    assert(tracker2.traverse_counter == 6)
+    assert(len(tracker2.NodesForNextTurn())==3)
+    
+    
+    
+    
+    
+    # print(len(tracker2.finalnodes))
+    # for node in tracker2.finalnodes:
+    #     print("-----------")
+    #     print(node)
+    # print("\n\n")
+    # for node in tracker2.NodesForNextTurn():
+    #     print("-----------")
+    #     print(node)
 
 
 

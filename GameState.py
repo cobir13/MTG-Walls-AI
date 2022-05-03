@@ -86,16 +86,18 @@ class GameState():
                 return False
         #if got to here, we're good!
         return True
-        
-        
+    
+    def ID(self):
+        myturn = "MY" if self.myturn else "OP"
+        playedland = "PL" if self.myturn else "NL"
+        s = "%i%s%02i%s%02i" %(self.turncount,myturn,self.life,playedland,self.opponentlife)
+        s += "_" + ",".join([c.ID() for c in self.hand])
+        s += "_" + ",".join([c.ID() for c in self.field])
+        s += "_" + ",".join([c.ID() for c in self.grave])
+        return s
 
-
-
-
-
-
-
-
+    def __hash__(self):
+        return self.ID().__hash__() #hash the string of the ID
 
 
     def copy(self,omit=[]):

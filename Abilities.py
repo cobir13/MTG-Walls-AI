@@ -75,7 +75,11 @@ class ActivatedAbility():
             - length >1 if there are options that can be decided differently.
         The original GameState and source Cardboard are NOT mutated.
         """
-        return self.execute_fn(gamestate,source)
+        executed_list = self.execute_fn(gamestate,source)
+        #Check state-based actions, to ensure that returned GameStates are legal
+        for state,card in executed_list:
+            state.StateBasedActions()
+        return executed_list
         
         
     def __str__(self):

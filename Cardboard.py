@@ -79,7 +79,8 @@ class Cardboard():
     
     
     def ID(self):
-        s = self.cardtype.name + "_"
+        s = type(self.cardtype).__name__ #MtG card type (creature, land, etc)
+        s += self.cardtype.name + "_"
         if self.tapped:
             s += "T"
         if self.summonsick:
