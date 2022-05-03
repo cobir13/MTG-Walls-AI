@@ -69,9 +69,23 @@ class Cardboard():
     
     
     def EquivTo(self,other):
-        return (self.tapped == other.tapped
-                and self.summonsick == other.summonsick
-                and self.counters == other.counters
-                and self.zone == other.zone
-                and self.cardtype == other.cardtype)
+        # return (self.tapped == other.tapped
+        #         and self.summonsick == other.summonsick
+        #         and self.counters == other.counters
+        #         and self.zone == other.zone
+        #         and self.cardtype == other.cardtype)
+        return self.ID() == other.ID()
+    
+    
+    
+    def ID(self):
+        s = self.cardtype.name + "_"
+        if self.tapped:
+            s += "T"
+        if self.summonsick:
+            s += "S"
+        s += str(self.zone)
+        s += "_"+"_".join(self.counters)
+        return s
+        
     

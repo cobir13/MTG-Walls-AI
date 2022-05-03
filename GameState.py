@@ -53,25 +53,63 @@ class GameState():
         self.verbose = False
 
 
+    def __str__(self):
+        txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
+        txt+= "\n"
+        txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
+        txt+= "\nLife: %i     Opponent: %i     Mana: %s" %(self.life,self.opponentlife,str(self.pool))
+        return txt
+
+    def __eq__(self,other):
+        #easy disqualifications first
+        if not (len(self.deck)==len(other.deck)
+                and len(self.hand)==len(other.hand)
+                and len(self.field)==len(other.field)
+                and len(self.grave)==len(other.grave)
+                and self.turncount == other.turncount
+                and self.myturn == other.myturn
+                and self.life == other.life
+                and self.opponentlife == other.opponentlife
+                and self.playedland == other.playedland
+                and self.pool == other.pool):
+                    return False
+        #also need to compare hands, fields, etc. We know they are sorted
+        #and have the same length, so just step through them
+        for ii in range(len(self.hand)):
+            if not self.hand[ii].EquivTo( other.hand[ii] ):
+                return False
+        for ii in range(len(self.grave)):
+            if not self.grave[ii].EquivTo( other.grave[ii] ):
+                return False
+        for ii in range(len(self.field)):
+            if not self.field[ii].EquivTo( other.field[ii] ):
+                return False
+        #if got to here, we're good!
+        return True
+        
+        
+
+
+
+
+
+
+
+
+
+
     def copy(self,omit=[]):
         """Return an identical copy.
         The copy has no references to the original.
         Any Cardboard objects in the omit-list are left out of the copy
         """
         state = GameState()
-        #copy all the lists and hands
-        for c in self.deck:
-            if c not in omit:
-                state.deck.append(c.copy())
-        for c in self.hand:
-            if c not in omit:
-                state.hand.append(c.copy())
-        for c in self.field:
-            if c not in omit:
-                state.field.append(c.copy())
-        for c in self.grave:
-            if c not in omit:
-                state.grave.append(c.copy())
+        #copy all the lists and hands. maintains order (except for omitted)
+        state.deck  = [c.copy() for c in self.deck if c not in omit]
+        state.hand  = [c.copy() for c in self.hand if c not in omit]
+        state.field = [c.copy() for c in self.field if c not in omit]
+        state.grave = [c.copy() for c in self.grave if c not in omit]
+        #copy mana pool
         state.pool = self.pool.copy()
         #these are all ints or bools, so safe to copy directly
         state.turncount = self.turncount
@@ -86,7 +124,7 @@ class GameState():
     
     def CopyAndTrack(self,tracklist):
         """Returns a disconnected copy of the gamestate and also a list of
-        Cardboards in the new gamestate corresponding to the list o
+        Cardboards in the new gamestate corresponding to the list of
         Cardboards we were asked to track. This allows tracking "between
         split universes."
         Return signature is: GameState, [Cardboard] """
@@ -94,22 +132,29 @@ class GameState():
         newlist = []
         for c in tracklist:
             new_c = c.copy()
-            newstate.GetZone(new_c.zone).append(new_c)
+            newstate.AddToZone( new_c, new_c.zone )
             newlist.append(new_c)
         return newstate,newlist
-
+    
+    
+    def AddToZone(self,cardboard,zone=None):
+        if zone is None:
+            zone = cardboard.zone
+        zonelist = self.GetZone(zone)
+        zonelist.append(cardboard)
+        zonelist.sort(key=Cardboard.Cardboard.ID)
+    
     
     def MoveZone(self,cardboard,destination):
         """Move the specified piece of cardboard from the zone its currently
         in to the specified destination zone.  Raises IndexError if the
         cardboard is not in the zone it claims to be in."""
         oldlist = self.GetZone(cardboard.zone)
-        newlist = self.GetZone(destination)
         assert(cardboard in oldlist)
         #move from location to destination
         oldlist.remove(cardboard)
-        newlist.append(cardboard)
         cardboard.zone = destination
+        self.AddToZone( cardboard, destination)
         #any time you change zones, reset the cardboard parameters
         cardboard.tapped = False
         cardboard.summonsick = True
@@ -125,8 +170,6 @@ class GameState():
             zone = self.field
         elif zonename == ZONE.GRAVE:
             zone = self.grave
-        elif zonename == ZONE.EXILE:
-            zone = self.exile
         else:
             raise IndexError
         return zone
@@ -176,12 +219,6 @@ class GameState():
 
 
 
-    def __str__(self):
-        txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
-        txt+= "\n"
-        txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
-        txt+= "\nLife: %i     Opponent: %i     Mana: %s" %(self.life,self.opponentlife,str(self.pool))
-        return txt
 
 
     ##-----------------------------------------------------------------------##
