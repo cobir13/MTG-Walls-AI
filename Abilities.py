@@ -20,12 +20,53 @@ import copy
 #distinction between Cardboard and CardType. This distinction makes it much
 #easier to copy and iterate Gamestates.
 
+class TargetBundle():
+    def __init__(self,source,othertargets=[]):
+        """Convenient way to pass around a gamestate being affected,
+        the source (Cardboard) of the effect, and any other targets
+        (Cardboards) that might need to be tracked as well.
+        """
+        self.source = source
+        self.targets = othertargets
+
+    @property
+    def gamestate(self):
+        if self.source is not None:
+            return self.source.owngame
+        elif len(self.targets)>0:
+            return self.targets[0].owngame
+        else:
+            raise ValueError("no Cardboards in TargetBundle!")
+
+    def SplitUniverses(self):
+        """Return a copy of this bundle: a copied gamestate inhabited by
+        copied Cardboards. The source and othertargets list are the
+        equivalent objects as the ones from the source bundle, just in
+        a new gamestate."""
+        
+        
+        newstate = self.gamestate.copy(omit=[self.source]+self.targets)
+        newsource = self.source.copy(newstate)
+        newstate.AddToZone( newsource, newsource.zone)
+        newtargets = []
+        for c in self.targets:
+            new_c = c.copy(newstate)
+            newstate.AddToZone( new_c, new_c.zone )
+            newtargets.append(new_c)
+        return TargetBundle(newsource,newtargets)
+        
+        
+
+
+
+
+
 
 class ActivatedAbility():
     def __init__(self,name,cost,execute_fn):
         """
-        pay_fn: function that takes in a GameState and a source Cardboard.
-            Returns a list of (gamestate,source) pairs giving all possible
+        pay_fn: function that takes in a TargetBundle.
+            Returns a list of TargetBundle pairs giving all possible
             ways the ability could be executed, accounting for all player
             choices and options.  Empty list if impossible to execute.
             DOES NOT MUTATE the original gamestate.
@@ -34,51 +75,51 @@ class ActivatedAbility():
         self.cost = cost
         self.execute_fn = execute_fn
         
-    def PayAndExecute(self,gamestate,source):
-        """Returns list of GameStates where the cost has been paid and the 
+    def PayAndExecute(self,sourcebundle):
+        """Returns list of TargetBundles where the cost has been paid and the 
             abilities have been performed.
-        Takes in the GameState in which the ability is supposed to be performed
-            and also the source Cardboard that is generating the cost.
-        Returns a list of (GameState,Cardboard) pairs in which the cost has
+        Takes in a TargetBundle describing the source Cardboard that is
+            generating the cost.
+        Returns a list of TargetBundles in which the cost has
             been paid and the abilities have been performed. The list is:
             - length 1 if there is exactly one way to do this
             - length 0 if this cannot be done (costs, lack of targets, etc)
             - length >1 if there are options that can be decided differently.
-        The original GameState and source Cardboard are NOT mutated.
+        The original states in the sourcebundle are not mutated.
         """   
         #check to make sure the execution is legal
-        if not self.cost.CanAfford(gamestate,source):
+        if not self.cost.CanAfford(sourcebundle):
             return False
-        if gamestate.verbose:
-            print("Activating: %s" %self.name)
+        # if sourcebundle.gamestate.verbose:
+        #     print("Activating: %s" %self.name)
         #split off universes where costs have been paid
-        paid_list = self.cost.Pay(gamestate,source)
+        paid_list = self.cost.Pay(sourcebundle)
         #for each of these universes, complete the effect
         executed_list = []
-        for state,card in paid_list:
-            executed_list += self.Execute(state,card)
+        for bundle in paid_list:
+            executed_list += self.Execute(bundle)
         return executed_list
         
-    def CanAfford(self,gamestate,source):
-        """Returns boolean: can this gamestate afford the cost?
+    def CanAfford(self,sourcebundle):
+        """Returns boolean: can this TargetBundle afford the cost?
         DOES NOT MUTATE."""
-        return self.cost.CanAfford(gamestate,source)   
+        return self.cost.CanAfford(sourcebundle)   
     
-    def Execute(self,gamestate,source):
-        """
-        Takes in the GameState in which the ability is supposed to be performed
-            and also the source Cardboard that is generating the ability.
-        Returns a list of (GameState,Cardboard) pairs in which the effect
-            has been performed. The list is:
+    def Execute(self,sourcebundle):
+        """Returns list of TargetBundles where the ability has been performed.
+        Takes in a TargetBundle describing the source Cardboard that is
+            generating the cost.
+        Returns a list of TargetBundles in which the cost has
+            been paid and the abilities have been performed. The list is:
             - length 1 if there is exactly one way to do this
             - length 0 if this cannot be done (costs, lack of targets, etc)
             - length >1 if there are options that can be decided differently.
-        The original GameState and source Cardboard are NOT mutated.
-        """
-        executed_list = self.execute_fn(gamestate,source)
+        The original states in the sourcebundle are not mutated.
+        """   
+        executed_list = self.execute_fn(sourcebundle)
         #Check state-based actions, to ensure that returned GameStates are legal
-        for state,card in executed_list:
-            state.StateBasedActions()
+        for bundle in executed_list:
+            bundle.gamestate.StateBasedActions()
         return executed_list
         
         
@@ -93,14 +134,15 @@ class ManaAbility(ActivatedAbility):
     """No functional difference to ActivatedAbility, just for tracking and
     as a place to collect some useful functions."""
     
-    def DorkAvailable(gamestate,source):
-        return (not source.tapped and not source.summonsick and 
-                source.zone == ZONE.FIELD)
+    def DorkAvailable(bundle):
+        return (not bundle.source.tapped
+                and not bundle.source.summonsick
+                and bundle.source.zone == ZONE.FIELD)
     
-    def TapToPay(gamestate,source):
-        newstate,[newsource] = gamestate.CopyAndTrack([source])
-        newsource.tapped = True
-        return [(newstate,newsource)]
+    def TapToPay(bundle):
+        newbundle = bundle.gamestate.CopyAndTrack(bundle)
+        newbundle.source.tapped = True
+        return [newbundle]
 
     def AddColor(gamestate,source,color):
         newstate,[newsource] = gamestate.CopyAndTrack([source])
