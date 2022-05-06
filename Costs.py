@@ -9,38 +9,10 @@ Created on Mon Dec 28 21:13:28 2020
 from ManaHandler import ManaCost
 
 
-
-
-
-
-
-
-# class Effect():
-#     def __init__(self,name,fn):
-#         """wrapper for any function that mutates the targets given by
-#         a TargetBundle.
-#         fn: function that takes in a TargetBundle.
-#             Returns a list of TargetBundles giving all possible
-#             ways the effect could occur, accounting for all player
-#             choices and options.  Returns empty list if impossible to execute.
-#             DOES NOT MUTATE the original gamestate described by TargetBundle.
-#         """
-#         self.fn = fn
-#         self.name = name
-#     def Run(self,targetbundle):
-#         return self.fn(targetbundle)
-#     def __str__(self):
-#         return self.name
-#     def __repr__(self):
-#         return("Effect(%s)" %self.name)
-        
-        
-
-
 class Cost():
     def __init__(self,manacost=None,afford_fn=None,pay_fn=None):
         """
-        afford_fn: function that takes in a TargetBundle.
+        afford_fn: function that takes in a GameState and a source Cardboard.
             Returns a boolean: "can this GameState and this Card afford the
             cost?"  DOES NOT MUTATE. Can include other, non-mana costs.
         pay_fn: function that takes in a GameState and a source Cardboard.

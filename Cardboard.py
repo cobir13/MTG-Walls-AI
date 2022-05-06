@@ -25,8 +25,6 @@ class Cardboard():
         self.summonsick = True
         self.counters = []  #sorted list of counters. Also other trackers
         self.zone = zone
-        self.owngame = None  #the GameState this Cardboard lives in
-        
     
 
 
@@ -38,10 +36,7 @@ class Cardboard():
             s += "[%s]" %",".join(self.counters)
         return s
     
-    
-    def copy(self,newgamestate=None):
-        """if given a newgamestate, sets owngame to the new gamestate rather
-        than to self's original gamestate. Does NOT AddToZone, though."""
+    def copy(self):
         newcard = Cardboard(self.cardtype,self.zone)
         #safe to copy by reference since they're all ints, str, etc
         newcard.tapped    = self.tapped
@@ -49,14 +44,9 @@ class Cardboard():
         newcard.zone      = self.zone
         #counters is a LIST so it needs to be copied carefully, without reference
         newcard.counters = self.counters.copy()
-        #CardType instances don't mutate so it's ok that they're both pointing
-        #at the same instance.
+        #cardtype never mutates so it's ok that they're both pointing at the
+        #same instance of a CardType
         newcard.cardtype  = self.cardtype
-        #set the owngame reference to the correct GameState
-        if newgamestate is not None:
-            newcard.owngame = newgamestate
-        else:
-            newcard.owngame = self.owngame
         return newcard
     
     def AddCounter(self,addition):
@@ -69,8 +59,16 @@ class Cardboard():
     def GetAbilities(self):
         return self.cardtype.activated
     
+    
     def EquivTo(self,other):
+        # return (self.tapped == other.tapped
+        #         and self.summonsick == other.summonsick
+        #         and self.counters == other.counters
+        #         and self.zone == other.zone
+        #         and self.cardtype == other.cardtype)
         return self.ID() == other.ID()
+    
+    
     
     def ID(self):
         s = type(self.cardtype).__name__ #MtG card type (creature, land, etc)

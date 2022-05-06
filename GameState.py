@@ -120,10 +120,10 @@ class GameState():
         """
         state = GameState()
         #copy all the lists and hands. maintains order (except for omitted)
-        state.deck  = [c.copy(self) for c in self.deck if c not in omit]
-        state.hand  = [c.copy(self) for c in self.hand if c not in omit]
-        state.field = [c.copy(self) for c in self.field if c not in omit]
-        state.grave = [c.copy(self) for c in self.grave if c not in omit]
+        state.deck  = [c.copy() for c in self.deck if c not in omit]
+        state.hand  = [c.copy() for c in self.hand if c not in omit]
+        state.field = [c.copy() for c in self.field if c not in omit]
+        state.grave = [c.copy() for c in self.grave if c not in omit]
         #copy mana pool
         state.pool = self.pool.copy()
         #these are all ints or bools, so safe to copy directly
@@ -133,36 +133,31 @@ class GameState():
         state.opponentlife = self.opponentlife
         state.playedland = self.playedland
         state.verbose = self.verbose
-        #copy effects and triggered abilities... and their targets...
-        
         #return
         return state
     
     
-    # def CopyAndTrack(self,tracklist):
-    #     """Returns a disconnected copy of the gamestate and also a list of
-    #     Cardboards in the new gamestate corresponding to the list of
-    #     Cardboards we were asked to track. This allows tracking "between
-    #     split universes."
-    #     Return signature is: GameState, [Cardboard] """
-    #     newstate = self.copy(omit=tracklist)
-    #     newlist = []
-    #     for c in tracklist:
-    #         new_c = c.copy()
-    #         newstate.AddToZone( new_c, new_c.zone )
-    #         newlist.append(new_c)
-    #     return newstate,newlist
+    def CopyAndTrack(self,tracklist):
+        """Returns a disconnected copy of the gamestate and also a list of
+        Cardboards in the new gamestate corresponding to the list of
+        Cardboards we were asked to track. This allows tracking "between
+        split universes."
+        Return signature is: GameState, [Cardboard] """
+        newstate = self.copy(omit=tracklist)
+        newlist = []
+        for c in tracklist:
+            new_c = c.copy()
+            newstate.AddToZone( new_c, new_c.zone )
+            newlist.append(new_c)
+        return newstate,newlist
     
     
     def AddToZone(self,cardboard,zone=None):
         if zone is None:
             zone = cardboard.zone
-        else:
-            cardboard.zone = zone
         zonelist = self.GetZone(zone)
         zonelist.append(cardboard)
         zonelist.sort(key=Cardboard.Cardboard.ID)
-        cardboard.owngame = self
     
     
     def MoveZone(self,cardboard,destination):
@@ -173,6 +168,7 @@ class GameState():
         assert(cardboard in oldlist)
         #move from location to destination
         oldlist.remove(cardboard)
+        cardboard.zone = destination
         self.AddToZone( cardboard, destination)
         #any time you change zones, reset the cardboard parameters
         cardboard.tapped = False
