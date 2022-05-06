@@ -56,19 +56,11 @@ class Cardboard():
     def name(self):
         return self.cardtype.name
 
-    def GetAbilities(self):
-        return self.cardtype.activated
+    # def GetAbilities(self):
+    #     return self.cardtype.activated
     
     
-    def EquivTo(self,other):
-        # return (self.tapped == other.tapped
-        #         and self.summonsick == other.summonsick
-        #         and self.counters == other.counters
-        #         and self.zone == other.zone
-        #         and self.cardtype == other.cardtype)
-        return self.ID() == other.ID()
-    
-    
+
     
     def ID(self):
         s = type(self.cardtype).__name__ #MtG card type (creature, land, etc)
@@ -81,4 +73,7 @@ class Cardboard():
         s += "_"+"_".join(self.counters)
         return s
         
+    def EquivTo(self,other):
+        return self.ID() == other.ID()
+    
     

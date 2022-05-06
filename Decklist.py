@@ -31,12 +31,12 @@ def RootsAfford(gamestate,source):
     return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
 def RootsPay(gamestate,source):
     newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newsource.AddCounter("used")
+    newsource.AddCounter("@used")
     newsource.AddCounter("-0/-1")
     return [(newstate,newsource)]
 def RootsUpkeep(gamestate,source):
     #remove "used" from the list of counters
-    source.counters = [c for c in source.counters if c!="used"]
+    source.counters = [c for c in source.counters if c!="@used"]
     
 Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
 Roots.activated.append(

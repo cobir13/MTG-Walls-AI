@@ -57,8 +57,11 @@ class Cost():
             if self.pay_fn is None:
                 return [(newstate,newsource)]
             else:
-                result_list = self.pay_fn(newstate,newsource)
-            return result_list
+                result_list = []
+                for g,s in self.pay_fn(newstate,newsource):
+                    g = g.StateBasedActions()
+                    result_list.append((g,s))
+                return result_list
         except:
             return []
 
