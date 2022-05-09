@@ -5,4 +5,6 @@ HAND = 1
 FIELD = 2
 GRAVE = 3
 EXILE = 4
+STACK = 5
+NEW = 6
 UNKNOWN = -1

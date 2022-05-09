@@ -84,66 +84,6 @@ class ActivatedAbility():
 
 
 
-class TriggeredAbility():
-    def __init__(self,name,trigger_fn,execute_fn):
-        """
-        trigger_fn: function that takes in a GameState and a source Cardboard.
-            Returns a boolean: "can this GameState and this Card afford the
-            cost?"  DOES NOT MUTATE. Can include other, non-mana costs.
-        
-        execute_fn: function that takes in a GameState and a source Cardboard.
-            Returns a list of (gamestate,source) pairs giving all possible
-            ways the ability could be executed, accounting for all player
-            choices and options.  Empty list if impossible to execute.
-            DOES NOT MUTATE the original gamestate.
-        """
-        self.name = name
-        self.trigger_fn = trigger_fn
-        self.execute_fn = execute_fn
-
-        
-    def CanAfford(self,gamestate,source):
-        """Returns boolean: can this gamestate afford the cost?
-        DOES NOT MUTATE."""
-        pass
-        return self.cost.CanAfford(gamestate,source)   
-    
-    def Execute(self,gamestate,source):
-        """
-        Takes in the GameState in which the ability is supposed to be performed
-            and also the source Cardboard that is generating the ability.
-        Returns a list of (GameState,Cardboard) pairs in which the effect
-            has been performed. The list is:
-            - length 1 if there is exactly one way to do this
-            - length 0 if this cannot be done (costs, lack of targets, etc)
-            - length >1 if there are options that can be decided differently.
-        The original GameState and source Cardboard are NOT mutated.
-        """
-        return self.execute_fn(gamestate,source)
-        
-    def __str__(self):
-        return self.name
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class ManaAbility(ActivatedAbility):
     """No functional difference to ActivatedAbility, just for tracking and
@@ -169,3 +109,70 @@ class ManaAbility(ActivatedAbility):
         state1.pool.AddMana(color1)  #add mana
         state2.pool.AddMana(color2)  #add mana
         return [(state1,source1),(state2,source2)]
+
+
+
+
+class TriggeredByMove():
+    def __init__(self,name,trigger_fn,execute_fn):
+        """
+        trigger_fn: function that takes in a GameState, a source Cardboard,
+            a trigger Cardboard, and the zone the trigger cardboard moved from.
+            Returns a boolean: "in this GameState, did the movement of this
+            trigger Cardboard from the origin Zone cause the source
+            Cardboard's ability to trigger?"  DOES NOT MUTATE.
+        
+        execute_fn: function that takes in a GameState, a source Cardboard,
+            and a trigger Cardboard.
+            Returns a list of (gamestate,source) pairs giving all possible
+            ways the ability could be executed, accounting for all player
+            choices and options.  Empty list if impossible to execute.
+            DOES NOT MUTATE the original gamestate.
+        """
+        
+        self.name = name
+        self.trigger_fn = trigger_fn
+        self.execute_fn = execute_fn
+
+        
+    def IsTriggered(self,gamestate,source,trigger,origin):
+        """Returns a boolean: does this trigger-card cause the ability of this
+        source-card to trigger?
+        gamestate: the GameState where the source and trigger Cardboards live
+        source:    the Cardboard which owns the ability
+        trigger:   the Cardboard which has (potentially) triggered the ability    
+        origin:    the Zone the trigger card moved from
+        DOES NOT MUTATE."""
+        return self.trigger_fn(gamestate,source,trigger,origin)   
+    
+    
+    def Execute(self,gamestate,source,trigger):
+        """
+       takes in a GameState where the ability is supposed to be performed, a
+           source Cardboard causing the ability, and the trigger Cardboard
+           which set off the ability.
+        Returns a list of (GameState,Cardboard) pairs in which the effect
+            has been performed. The list is:
+            - length 1 if there is exactly one way to do this
+            - length 0 if this cannot be done (costs, lack of targets, etc)
+            - length >1 if there are options that can be decided differently.
+        The original GameState and source Cardboard are NOT mutated.
+        """
+        return self.execute_fn(gamestate,source,trigger)
+        
+    def __str__(self):
+        return self.name
+
+
+
+
+
+
+
+
+
+
+
+
+
+

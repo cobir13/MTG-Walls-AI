@@ -20,6 +20,23 @@ class LoseTheGameError(Exception):
 
 
 
+class StackEffect():
+    def __init__(self,name,source,otherlist,effect_fn):
+        self.name = name
+        self.source = source  #Cardboard source of the effect. "Pointer".
+        self.otherlist = []   #list of other relevant Cardboards. "Pointer".
+        self.effect_fn = effect_fn
+        
+    def Apply(self,gamestate): 
+        return self.effect_fn(gamestate,self.source,*self.otherlist)
+        
+    def __str__(self):
+        return self.name
+    
+    def __repr__(self):
+        return self.name
+
+
 
 class GameState():
     """The current state of the game.
@@ -64,7 +81,7 @@ class GameState():
         self.field = [] #list of Cardboard objects
         self.grave = [] #list of Cardboard objects
         self.pool = ManaPool("")
-        self.stack = [] #list of Cardboard or (ref-to-Cardboard,Ability) pairs
+        self.stack = [] #list of Cardboards and StackEffects
         
 
         self.turncount = 1
@@ -87,11 +104,7 @@ class GameState():
         txt+= "    Deck: %2i" %len(self.deck)
         txt+= "    Mana: (%s)" %str(self.pool)
         return txt
-        # txt = "HAND:\n   "+",".join([str(card) for card in self.hand])
-        # txt+= "\n"
-        # txt+= "FIELD:\n   "+",".join([str(card) for card in self.field])
-        # txt+= "\nLife: %i     Opponent: %i     Mana: %s" %(self.life,self.opponentlife,str(self.pool))
-        # return txt
+
 
     def __eq__(self,other):
         #easy disqualifications first
@@ -135,43 +148,6 @@ class GameState():
         return self.ID().__hash__() #hash the string of the ID
 
 
-    # def copy(self,omit=[]):
-    #     """Return an identical copy.
-    #     The copy has no references to the original.
-    #     Any Cardboard objects in the omit-list are left out of the copy
-    #     """
-    #     state = GameState()
-    #     #copy all the lists and hands. maintains order (except for omitted)
-    #     state.deck  = [c.copy() for c in self.deck if c not in omit]
-    #     state.hand  = [c.copy() for c in self.hand if c not in omit]
-    #     state.field = [c.copy() for c in self.field if c not in omit]
-    #     state.grave = [c.copy() for c in self.grave if c not in omit]
-    #     #copy mana pool
-    #     state.pool = self.pool.copy()
-    #     #these are all ints or bools, so safe to copy directly
-    #     state.turncount = self.turncount
-    #     state.myturn = self.myturn
-    #     state.life = self.life
-    #     state.opponentlife = self.opponentlife
-    #     state.playedland = self.playedland
-    #     state.verbose = self.verbose
-    #     #return
-    #     return state
-    
-    
-    # def CopyAndTrack(self,tracklist):
-    #     """Returns a disconnected copy of the gamestate and also a list of
-    #     Cardboards in the new gamestate corresponding to the list of
-    #     Cardboards we were asked to track. This allows tracking "between
-    #     split universes."
-    #     Return signature is: GameState, [Cardboard] """
-    #     newstate = self.copy(omit=tracklist)
-    #     newlist = []
-    #     for c in tracklist:
-    #         new_c = c.copy()
-    #         newstate.AddToZone( new_c, new_c.zone )
-    #         newlist.append(new_c)
-    #     return newstate,newlist
       
     
     def CopyAndTrack(self,tracklist):
@@ -192,12 +168,14 @@ class GameState():
         state.opponentlife = self.opponentlife
         state.playedland = self.playedland
         state.verbose = self.verbose
-        #need to track any pointers in the stack (in GameState,Cardboard pairs)
-        stackpart = len(tracklist)      #index for where stack portion begins
-        tracklist = tracklist + [t[0] for t in stack if isinstance(t,tuple)]
-        #list to fill with corresponding copies of each card in tracklist
+        #need to track any pointers in StackEffects
+        stackindex = len(tracklist)      #index for where stack portion begins
+        for obj in self.stack:
+            if isinstance(obj,StackEffect):
+                tracklist += [obj.source] + obj.otherlist #pointers in StackEffect
+        #blank list to fill with corresponding copies of each card in tracklist
         newtracklist = [None] * len(tracklist)
-        #copy all the lists of cardboards. maintains order so don't need to sort
+        #copy all the lists of Cardboards. Maintains order, no need to re-sort
         def copylist(origl):
             newl = []
             for cardboard in origl:
@@ -211,22 +189,27 @@ class GameState():
         state.hand = copylist(self.hand)
         state.field = copylist(self.field)
         state.grave = copylist(self.grave)
-        #copy the stack. go backwards since stack pointers at end of tracklist
+        #copy the stack, replacing pointers in StackEffects as neede
         for obj in self.stack:
             if isinstance(obj,Cardboard.Cardboard):
                 #card was cast so it's on stack. Copy & track as normal
                 newcardboard = obj.copy()
                 state.stack.append( newcardboard )  
                 for index,tracked in enumerate(tracklist):
-                    if cardboard is tracked:
+                    if obj is tracked:
                         newtracklist[index] = newcardboard
-            elif isinstance(obj,tuple):
-                #obj[0] is pointer to Cardboard that already exists elsewhere
-                #in self. obj[1] is the ability or ability function. We don't
-                #want to copy the Cardboard, just replace it with its
-                #proper reference
-                newpointer = newtracklist.pop(stackpart) #correct pointer b/c order is preserved
-                self.stack.append(  (newpointer,obj[1])  )
+            elif isinstance(obj,StackEffect):
+                #Pointers from this StackEffect are the first thing from the
+                #stack to be put on the tracklist. So source is at
+                #newtracklist[stackindex], and then the remaining otherlist
+                #is the next however-many entries in newtracklist. Remove
+                #all these from tracklist once I've put them back on the stack.
+                source = newtracklist.pop(stackindex)
+                otherlist = []
+                for kk in range(len(obj.otherlist)):
+                    otherlist.append( newtracklist.pop(stackindex) )
+                neweffect = StackEffect(obj.name,source,otherlist,obj.effect_fn)
+                state.stack.append( neweffect )        #add to stack
         #return
         return state,newtracklist
         
@@ -235,34 +218,27 @@ class GameState():
     
     
     
-    def AddToZone(self,cardboard,zone=None):
-        if zone is None:
-            zone = cardboard.zone
-        zonelist = self.GetZone(zone)
-        zonelist.append(cardboard)
-        zonelist.sort(key=Cardboard.Cardboard.ID)
     
     
-    def MoveZone(self,cardboard,destination):
-        """Move the specified piece of cardboard from the zone its currently
-        in to the specified destination zone.  Raises IndexError if the
-        cardboard is not in the zone it claims to be in.
-        MUTATES.  Shoudl it?"""
-        oldlist = self.GetZone(cardboard.zone)
-        assert(cardboard in oldlist)
-        #move from location to destination
-        oldlist.remove(cardboard)
-        cardboard.zone = destination
-        self.AddToZone( cardboard, destination)
-        #any time you change zones, reset the cardboard parameters
+    
+    
+    ###-----MUTATING FUNCTIONS. They all return a list of StackEffects
+    
+    def TapPermanent(self,cardboard):
+        """MUTATES. Returns list of StackEffects that this tapping caused."""
+        cardboard.tapped = True
+        return []
+    
+    def UntapPermanent(self,cardboard):
+        """MUTATES. Returns list of StackEffects that this untapping caused."""
         cardboard.tapped = False
-        cardboard.summonsick = True
-        cardboard.counters = []
-        #raise anything that triggers off of this move!
-        
-        
-
-    def GetZone(self,zonename):
+        return []
+    
+    
+    
+    
+    
+    def _GetZone(self,zonename):
         if zonename == ZONE.DECK:
             zone = self.deck
         elif zonename == ZONE.HAND:
@@ -271,52 +247,59 @@ class GameState():
             zone = self.field
         elif zonename == ZONE.GRAVE:
             zone = self.grave
+        elif zonename == ZONE.STACK:
+            zone = self.stack
         else:
             raise IndexError
         return zone
+    
+    def _AddToZone(self,cardboard,zone=None):
+        """For testing.  Should not be used otherwise"""
+        if zone is None:
+            zone = cardboard.zone
+        zonelist = self._GetZone(zone)
+        zonelist.append(cardboard)
+        zonelist.sort(key=Cardboard.Cardboard.ID)
+    
+    
+    def MoveZone(self,cardboard,destination):
+        """Move the specified piece of cardboard from the zone it is currently
+        in to the specified destination zone.  Raises IndexError if the
+        cardboard is not in the zone it claims to be in.
+        Returns list of StackEffects that this movement caused.
+        MUTATES.
+        """
+        #remove from origin
+        origin = cardboard.zone
+        if origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
+            oldlist = self._GetZone(origin)
+            assert(cardboard in oldlist)
+            oldlist.remove(cardboard)
+        #add to destination
+        cardboard.zone = destination
+        zonelist = self._GetZone(destination)
+        zonelist.append(cardboard)
+        if destination in [ZONE.HAND,ZONE.FIELD,ZONE.GRAVE]: #these zones must
+            zonelist.sort(key=Cardboard.Cardboard.ID)        #always be sorted
+        #any time you change zones, reset the cardboard parameters
+        cardboard.tapped = False
+        cardboard.summonsick = True
+        cardboard.counters = []
+        #return a list of anything that triggers off of this move!
+        triggered = []
+        for source in self.field+self.grave+self.hand:
+            for abil in source.cardtype.trig_move:
+                if abil.IsTriggered(self,source,cardboard,origin):
+                    newEffect = StackEffect(abil.name,
+                                            source,
+                                            [cardboard],
+                                            abil.effect_fn)
+                    triggered.append( newEffect )
+        return triggered
+        
+        
 
-    ##-----------------------------------------------------------------------##
 
-
-    # def GetValidActions(self):
-    #     class Effect():
-    #         """nicer wrapper for the actions. for ease of human debugging only"""
-    #         def __init__(self,name,func):
-    #             """When run, the function will mutate a gamestate."""
-    #             self.name = name
-    #             self.func = func
-    #         def Run(self):
-    #             return self.func()
-    #         def __str__(self):
-    #             return self.name
-    #         def __repr__(self):
-    #             return("Effect(%s)" %self.name)
-    #     ab_list = []
-    #     activeobjects = []
-    #     #look for all activated abilities that can be activated (incl. mana ab)
-    #     for cardboard in self.hand + self.field + self.grave:
-    #         if any([cardboard.EquivTo(ob) for ob in activeobjects]):
-    #             continue  #skip cards that are equivalent to cards already used
-    #         addobject = False
-    #         for ability in cardboard.GetAbilities():  #distinguish activated vs mana?
-    #             #check whether price can be paid
-    #             if ability.CanAfford(self,cardboard):
-    #                 e = Effect(ability.name,
-    #                            lambda a=ability,g=self,c=cardboard : a.PayAndExecute(g,c))
-    #                 ab_list.append(e)
-    #                 addobject = True
-    #         if addobject:  #only add each object once, even if many abilities
-    #             activeobjects.append(cardboard)
-    #     #look for all cards that can be cast
-    #     for cardboard in self.hand:
-    #         if any([cardboard.EquivTo(ob) for ob in activeobjects]):
-    #             continue  #skip cards that are equivalent to cards already used
-    #         if cardboard.cardtype.CanAfford(self,cardboard):
-    #             e = Effect("cast "+cardboard.name,
-    #                        lambda g=self,c=cardboard : c.cardtype.Cast(g,c) )
-    #             ab_list.append(e)
-    #             activeobjects.append(cardboard)
-    #     return ab_list
 
 
 
@@ -327,52 +310,74 @@ class GameState():
 
 
     def StateBasedActions(self):
-        """Performs any state-based actions like killing creatures if
-        toughness is less than 0"""
-        newstate = self.copy()
+        """MUTATES. Performs any state-based actions like killing creatures if
+        toughness is less than 0
+        Returns list of StackEffects that these state-based actions caused.
+        """
+        effects = []
         i = 0
-        while i < len(newstate.field):
-            cardboard = newstate.field[i]
+        while i < len(self.field):
+            cardboard = self.field[i]
             if isinstance(cardboard.cardtype,CardType.Creature):
                 #look for counters with "/", which modify power or toughness
                 modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
                 if cardboard.cardtype.basetoughness + modifier <= 0:
-                    newstate.MoveZone(cardboard,ZONE.GRAVE)
+                    effects += self.MoveZone(cardboard,ZONE.GRAVE)
                     continue
             i += 1
-        #legend rule
-        return newstate
+        #legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
+        return effects
 
 
-    # def Upkeep(self):
-    #     newstate = self.copy()
-    #     for cardboard in newstate.hand + newstate.field + newstate.grave:
-    #         for ability in cardboard.cardtype.upkeep:
-    #             ability(newstate,cardboard)  #apply the ability to mutate self
+    def UpkeepStep(self):
+        """MUTATES. Returns list of StackEffects that trigger during upkeep."""
+        effects = []
+        for cardboard in self.hand + self.field + self.grave:
+            for abil in cardboard.cardtype.upkeep:
+                newEffect = StackEffect(abil.name,cardboard,[],abil.effect_fn)
+                effects.append (newEffect) 
+        return effects
 
 
-    def Untap(self):
-        newstate = self.copy()
+    def UntapStep(self):
+        """MUTATES. Returns list of StackEffects that trigger during untap."""
+        newstate,_ = self.CopyAndTrack([])  #copy, but nothing to track
         newstate.pool = ManaPool("")
         newstate.turncount+=1
         newstate.playedland = False
+        effects = []
         for cardboard in newstate.field:
-            cardboard.tapped = False
+            effects += newstate.UntapPermanent(cardboard)        
             cardboard.summonsick = False
+            cardboard.counters = [c for c in cardboard.counters if c[0]!="@"]
+        return effects
+
+
 
     def Draw(self):
-        newstate = self.copy()
-        if len(newstate.deck)>0:
-            newstate.MoveZone(newstate.deck[0],ZONE.HAND)
+        """MUTATES. Returns list of StackEffects that trigger due to draw."""
+        effects = []
+        if len(self.deck)>0:
+            effects += self.MoveZone(self.deck[0],ZONE.HAND)
+            # #return a list of anything that triggers off of "draw" specifically
+            # for source in self.field+self.grave+self.hand:
+            #     for abil in source.cardtype.trig_draw:
+            #         if abil.IsTriggered(state,source,cardboard,origin):
+            #             newEffect = StackEffect(abil.name,
+            #                                     source,
+            #                                     [cardboard],
+            #                                     abil.effect_fn)
+            #             effects.append( newEffect )
+            return effects
         else:
             raise LoseTheGameError
 
 
 
-    def Cast(self,cardboard):
+    def CastSpell(self,cardboard):
         """
-        source: Cardboard to cast
-        Return a list of (GameState,Cardboard) pairs in which the given
+        Put Cardboard onto the stack, trigger "cast" triggers.
+        Return a list of GameState objects in which the given
             Cardboard has been cast and any effects of that casting have been
             dealth with (including spell effects, moving the Cardboard to new
             zones, triggering other abilities, etc). List is length 0 if
@@ -381,97 +386,114 @@ class GameState():
         #check to make sure the execution is legal
         if not cardboard.cost.CanAfford(self,cardboard):
             return []
-        #split off universes where costs have been paid
         cast_list = []
-        for state,card in cardboard.cost.Pay(self,cardboard): #GameState, Cardboard
-            state = state.StateBasedActions()  #overwrite g with checked version
-            #need to check if this trigger anything???
-            #now cast the spell.
-            #state and s are copies so it is safe to mutate them during casting
-            state.MoveZone(card,card.cardtype.CAST_DESTINATION)
-            #trigger enter-the-battlefield effects or cast effects
-            for source in state.field + state.hand + state.grave:
-                pass 
-            
-            
-            
-            if len(self.cast_effect)>0:
-                for effect in self.cast_effect:
-                    executed_list += effect(state,card)
-            else:
-                executed_list += [(state,card)]
-        #Check state-based actions, to ensure that returned GameStates are legal
-        for state,card in executed_list:
-            state.StateBasedActions()
-        return executed_list
+        for state,card in cardboard.cost.Pay(self,cardboard):
+            #Iterate through all possible ways the cost could have been paid.
+            #Each has a GameState and a Cardboard being cast. Move the card
+            #being cast to the stack, then see if this triggers any effects.
+            #Note: these are COPIES so they are safe to mutate.
+            effects = self.MoveZone(card,ZONE.STACK)
+            state.stack += effects   #------------------------------------------randomize order of triggers? for now, no    
+            #check state-based actions, add any effects from THAT to the stack
+            state.stack += state.StateBasedActions()
+            cast_list.append( state )
+        return cast_list
         
     
-        
-    def Resolve(self):
-        pass
     
-    
-    def ActivateAbility(self,source,ability):
+    def ActivateAbilities(self,cardboard,ability):
         """
-        source: Cardboard which is the source of the ability
-        ability: an ActivatedAbility
-        Return a list of (GameState,Cardboard) pairs in which the ability 
-            has been activated. List is length 0 if ability cannot be activated.
+        DOES NOT MUTATE. Instead returns a list of gamestates.
+        Pay for an ActivatedAbility and put it onto the stack.
+        Return a list of GameState objects in which the given Ability of the
+            given Cardboard has been put onto the stack (as well as any
+            abilities that trigged due to the cost or the activation).
+            List is length 0 if this Ability cannot be activated.
         """
-        if not ability.CanAfford(self,source):
+        #check to make sure the execution is legal
+        if not ability.CanAfford(self,cardboard):
             return []
-        activated_list = []
-        for g,s in ability.PayAndExecute(self,source): #GameState and Cardboard
-            g = g.StateBasedActions()  #overwrite g with checked version
-            # look for triggered abilities triggered by this activation?
-            activated_list.append( (g,s) )
-        return activated_list
+        newlist = ability.PayAndExecute(self,cardboard)
+        return [tup[0] for tup in newlist]  #only need the GameStates of the pairs
         
-    
-    def TriggerAbility(self,source,ability):
-        pass
-    
-    
-    
-    
-    #look for all activated abilities that can be activated (incl. mana ab)
-    #     for cardboard in self.hand + self.field + self.grave:
-    #         if any([cardboard.EquivTo(ob) for ob in activeobjects]):
-    #             continue  #skip cards that are equivalent to cards already used
-    #         addobject = False
-    #         for ability in cardboard.GetAbilities():  #distinguish activated vs mana?
-    #             #check whether price can be paid
-    #             if ability.CanAfford(self,cardboard):
-    #                 e = Effect(ability.name,
-    #                            lambda a=ability,g=self,c=cardboard : a.PayAndExecute(g,c))
-    #                 ab_list.append(e)
-    #                 addobject = True
-    #         if addobject:  #only add each object once, even if many abilities
-    #             activeobjects.append(cardboard)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    def TriggerAbility(self,cardboard):
-        pass
 
 
+    def ResolveTopOfStack(self):
+        """Return a list of GameStates in which the top item of the stack has
+            been resolved. DOES NOT MUTATE SELF.
+        If it was a Cardboard, it has been moved to the appropriate zone. If it
+            was a Spell specifically, the effect has been resolved. Any
+            enter-the-battlefield effects or similar effects that trigger
+            based on motion been placed on the stack.
+        If it was an ability (or really, a tuple of source,trigger,ability), 
+            then the ability has been resolved and any new abilities that
+            triggered as a result have been placed on the stack."""
+        if len(self.stack)==0:
+            return []
+        
+        elif isinstance(self.stack[-1],Cardboard.Cardboard):
+            card = self.stack[-1]
+            universes = card.cardtype.ResolveSpell(self,card)
+            #this already includes moving the card from the stack to a zone
+            #and putting all resulting triggers on the stack
+            return universes
+        
+        elif isinstance(self.stack[-1],StackEffect):
+            newstate,_ = self.CopyAndTrack([])
+            effect = newstate.stack.pop[-1]
+            return effect.Apply(newstate)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
-# #Check state-based actions, to ensure that returned GameStates are legal
-# for state,card in executed_list:
-#     state.StateBasedActions()
-# return executed_list
+    ##-----------------------------------------------------------------------##
+
+
+    def GetValidActions(self):
+        """Return a list of all things that can be put on the stack right now
+        (including Cardboards, StackEffects from activated abilities, and
+        StackEffects from mana abilities)."""
+        effects = []
+        #look for all activated abilities that can be activated (incl. mana ab)
+        activeobjects = []
+        for source in self.hand + self.field + self.grave:
+            if any([source.EquivTo(ob) for ob in activeobjects]):
+                continue  #skip cards that are equivalent to cards already used
+            addobject = False
+            for ability in source.GetAbilities():  #distinguish activated vs mana?
+                #check whether price can be paid
+                if ability.CanAfford(self,source):
+                    e = StackEffect(ability.name,source,[],ability.execute_fn)
+                    effects.append(e)
+                    addobject = True
+            if addobject:  #only add each object once, even if many abilities
+                activeobjects.append(source)
+        #look for all cards that can be cast
+        activeobjects = []
+        for card in self.hand:
+            if any([card.EquivTo(ob) for ob in activeobjects]):
+                continue  #skip cards that are equivalent to cards already used
+            if len(self.stack)>0 and "instant" not in card.cardtype.typelist:
+                continue  #if stack is full, can only cast instants
+            if card.cardtype.CanAfford(self,card):
+                effects.append(card)
+                activeobjects.append(card)
+        return effects
+
+
 
         
-    # def Shuffle(self):
-    #     random.shuffle(self.deck)
+    def Shuffle(self):
+        random.shuffle(self.deck)
 
 
     # ##-----------------------------------------------------------------------##
@@ -751,3 +773,41 @@ class GameState():
 
 
 
+
+    # def copy(self,omit=[]):
+    #     """Return an identical copy.
+    #     The copy has no references to the original.
+    #     Any Cardboard objects in the omit-list are left out of the copy
+    #     """
+    #     state = GameState()
+    #     #copy all the lists and hands. maintains order (except for omitted)
+    #     state.deck  = [c.copy() for c in self.deck if c not in omit]
+    #     state.hand  = [c.copy() for c in self.hand if c not in omit]
+    #     state.field = [c.copy() for c in self.field if c not in omit]
+    #     state.grave = [c.copy() for c in self.grave if c not in omit]
+    #     #copy mana pool
+    #     state.pool = self.pool.copy()
+    #     #these are all ints or bools, so safe to copy directly
+    #     state.turncount = self.turncount
+    #     state.myturn = self.myturn
+    #     state.life = self.life
+    #     state.opponentlife = self.opponentlife
+    #     state.playedland = self.playedland
+    #     state.verbose = self.verbose
+    #     #return
+    #     return state
+    
+    
+    # def CopyAndTrack(self,tracklist):
+    #     """Returns a disconnected copy of the gamestate and also a list of
+    #     Cardboards in the new gamestate corresponding to the list of
+    #     Cardboards we were asked to track. This allows tracking "between
+    #     split universes."
+    #     Return signature is: GameState, [Cardboard] """
+    #     newstate = self.copy(omit=tracklist)
+    #     newlist = []
+    #     for c in tracklist:
+    #         new_c = c.copy()
+    #         newstate._AddToZone( new_c, new_c.zone )
+    #         newlist.append(new_c)
+    #     return newstate,newlist

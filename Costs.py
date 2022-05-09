@@ -73,24 +73,3 @@ class Cost():
 
 
 
-
-
-
-# class Action():
-#     """nicer wrapper for actions which affect a gamestate"""
-#     def __init__(self,name,func):
-#         """
-#         name: name of the action.
-#         func: function that takes in a source Cardboard and a GameState, and
-#             returns a list of (gamestate,source) pairs giving all possible
-#             results of the Action. DOES NOT MUTATE the original gamestate.
-#         """
-#         self.name = name
-#         self.func = func
-#     def Act(self,gamestate,cardboard):
-#         return self.func(gamestate,cardboard)
-#     def __str__(self):
-#         return self.name
-#     def __repr__(self):
-#         return("Action(%s)" %self.name)
-    

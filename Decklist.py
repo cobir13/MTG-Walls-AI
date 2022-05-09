@@ -5,8 +5,8 @@ Created on Tue Dec 29 11:50:12 2020
 @author: Cobi
 """
 
-from CardType import Creature,Spell,Land
-from Abilities import ActivatedAbility,ManaAbility
+from CardType import Creature,Land#,Spell
+from Abilities import ManaAbility #,ActivatedAbility
 from Costs import Cost
 
 import ZONE
@@ -31,19 +31,19 @@ def RootsAfford(gamestate,source):
     return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
 def RootsPay(gamestate,source):
     newstate,[newsource] = gamestate.CopyAndTrack([source])
-    newsource.AddCounter("@used")
+    newsource.AddCounter("@used")  #"@" counters are cleared automatically at untap
     newsource.AddCounter("-0/-1")
     return [(newstate,newsource)]
-def RootsUpkeep(gamestate,source):
-    #remove "used" from the list of counters
-    source.counters = [c for c in source.counters if c!="@used"]
+# def RootsUpkeep(gamestate,source):
+#     #remove "used" from the list of counters
+#     source.counters = [c for c in source.counters if c!="@used"]
     
 Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
 Roots.activated.append(
                 ManaAbility("Roots add G",
                             Cost(None,RootsAfford,RootsPay),
                             lambda g,s : ManaAbility.AddColor(g,s,"g") ))
-Roots.upkeep.append(RootsUpkeep)
+# Roots.upkeep.append(RootsUpkeep)
 
 ##---------------------------------------------------------------------------##
       
@@ -131,11 +131,13 @@ Axebane.activated.append(
 ##---------------------------------------------------------------------------##
 
 ###---basic lands
+
 Forest = Land("Forest",["basic","forest"])
 Forest.activated.append(
                 ManaAbility("Forest add G",
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddColor(g,s,"G") ))
+
 
 Plains = Land("Plains",["basic","plains"])
 Plains.activated.append(
@@ -143,19 +145,22 @@ Plains.activated.append(
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddColor(g,s,"W") ))
 
+
 Island = Land("Island",["basic","island"])
 Island.activated.append(
                 ManaAbility("Island add U",
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddColor(g,s,"U") ))
 
+
 ###---shock lands
+
 TempleGarden = Land("TempleGarden",["forest","plains"])
 TempleGarden.activated.append(
                 ManaAbility("TempleGarden add W/G",
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddDual(g,s,"W","G") ))
-TempleGarden.cast_effect.append(Land.ShockIntoPlay)
+TempleGarden.as_enter = Land.ShockIntoPlay
 
 
 BreedingPool = Land("BreedingPool",["forest","island"])
@@ -163,14 +168,15 @@ BreedingPool.activated.append(
                 ManaAbility("BreedingPool add U/G",
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddDual(g,s,"U","G") ))
-BreedingPool.cast_effect.append(Land.ShockIntoPlay)
+BreedingPool.as_enter = Land.ShockIntoPlay
+
 
 HallowedFountain = Land("HallowedFountain",["plains","island"])
 HallowedFountain.activated.append(
                 ManaAbility("HallowedFountain add W/U",
                              Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                              lambda g,s : ManaAbility.AddDual(g,s,"W","U") ))
-HallowedFountain.cast_effect.append(Land.ShockIntoPlay)
+HallowedFountain.as_enter = Land.ShockIntoPlay
 
 
 

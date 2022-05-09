@@ -26,37 +26,40 @@ class CardType():
         typelist (list(str)):
                       List of lowercase tags describing this card. Includes
                       MtG types as well as relevant keywords.
-        activated (list(Abilities)):
-                      List of Ability objects representing activated abilities.
-        upkeep (list(fn)):
-                      List of functions that should be run on the gamestate and
-                      card every upkeep. For effects that trigger on upkeep.
 
+        on_resolve  : function describing the resolution of spell being cast.
+                      Gamestate, source Cardboard -> list of all (Gamestate,
+                      source Cardboard) pairs where the effect has been
+                      resolved.
+                      This includes moving the card from the stack to other
+                      zones, if relevant.
         
         
-        
+        OTHER THINGS TO FILL IN LATER
         """
-
-        
         self.name = name
         self.cost = cost
         self.typelist = [s.lower() for s in typelist]
         #activated abilities
         self.activated = []  #includes mana abilities
         #triggered abilities
-        self.trig_ebt = []      #includes both cast and enter-the-battlefield
-        self.trig_leaves = []
+        self.trig_move = []
         self.trig_upkeep = []
         self.trig_attack = []
         self.trig_endstep = []
-        # self.trig_activ = []
         #static effects
         self.static = []
 
         
 
+
+        #I don't actually USE these, but in theory I could in the future
+        #self.trig_activate  #abilities that trigger when an ability is activated
+        # self.trig_draw = []
+
         
-    CAST_DESTINATION = ZONE.UNKNOWN  #children should overwrite
+
+        
 
     #abilities and triggers within a card are always called by the gamestate
     #by passing the source Cardboard into the function. Thus, the ability
@@ -71,57 +74,35 @@ class CardType():
         DOES NOT MUTATE."""
         return self.cost.CanAfford(gamestate,source)  
     
-    # def Cast(self,gamestate,source):
-    #     """Returns a copy of the gamestate but with the costs paid and the
-    #     card cast. DOES NOT MUTATE. Returns False if card cannot be cast
-    #     (due to cost, lack of targets, etc.)"""
-        
-    #     """
-    #     Takes in the GameState in which the spell is supposed to be cast
-    #         and also the source Cardboard that is being cast.
-    #     Returns a list of (GameState,Cardboard) pairs in which the spell
-    #         has been cast. The list is:
-    #         - length 1 if there is exactly one way to do this
-    #         - length 0 if this cannot be done (costs, lack of targets, etc)
-    #         - length >1 if there are options that can be decided differently.
-    #     The original GameState and source Cardboard are NOT mutated.
-    #     """
-    #     #check to make sure the execution is legal
-    #     if not self.cost.CanAfford(gamestate,source):
-    #         return False
-    #     #split off universes where costs have been paid
-    #     paid_list = self.cost.Pay(gamestate,source)
-    #     if gamestate.verbose and len(paid_list)>0:
-    #         print("Casting: %s" %self.name)
-    #     #for each of these universes, cast the spell
-    #     executed_list = []
-    #     for state,card in paid_list:
-    #         #these are copies so it is safe to mutate them during casting
-    #         state.MoveZone(card,self.CAST_DESTINATION)
-    #         #trigger enter-the-battlefield effects or cast effects
-    #         if len(self.cast_effect)>0:
-    #             for effect in self.cast_effect:
-    #                 executed_list += effect(state,card)
-    #         else:
-    #             executed_list += [(state,card)]
-    #     #Check state-based actions, to ensure that returned GameStates are legal
-    #     for state,card in executed_list:
-    #         state.StateBasedActions()
-    #     return executed_list
-        
-    
-
-        
-
+    def ResolveSpell(gamestate,cardboard):
+        """function: gamestate,cardboard->[(gamestate,cardboard)]"""
+        return [(gamestate,cardboard)] #placeholder for children to overwrite
     
 
     
 
 class Permanent(CardType):
     
-    CAST_DESTINATION = ZONE.FIELD
-
-
+    
+    def __init__(self,name,cost,typelist):
+        super().__init__(name,cost,typelist)
+        self.as_enter = None  #function: gamestate,cardboard->[(gamestate,cardboard)]
+    
+    def ResolveSpell(gamestate,cardboard):
+        assert(gamestate.stack[-1] is cardboard)
+        newstate,perm = gamestate.CopyAndTrack([cardboard])
+        effects = newstate.MoveZone(perm,ZONE.FIELD)
+        #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
+        newstate.stack += effects
+        #if there is an "as enters" effect function, apply it
+        if perm.cardtype.as_enter is None:
+            return [(newstate,perm)]
+        else:
+            return perm.cardtype.as_enter(newstate,perm)
+        
+        
+        
+        
 
 class Creature(Permanent):
     def __init__(self,name,cost,typelist,power,toughness):
@@ -130,6 +111,8 @@ class Creature(Permanent):
         self.basetoughness = toughness
         if "creature" not in self.typelist:
             self.typelist = ["creature"] + self.typelist
+        
+        
         
 class Land(Permanent):
     def __init__(self,name,typelist):
@@ -147,6 +130,10 @@ class Land(Permanent):
         super().__init__(name,cost,typelist)
         if "land" not in self.typelist:
             self.typelist = ["land"] + self.typelist
+
+
+
+
 
     def EnterTapped(gamestate,source):
         """useful for tap-lands"""
@@ -168,10 +155,28 @@ class Land(Permanent):
 
 
 
-class Spell(CardType):
+# class Spell(CardType):
     
-    CAST_DESTINATION = ZONE.GRAVE
+
+    
+#     def __init__(self,name,cost,typelist,on_resolve):      
+#         super().__init__(name,cost,typelist)
+#         self.on_resolve = on_resolve
 
 
-
-
+    
+#     def ResolveSpell(gamestate,cardboard):
+#         assert(gamestate.stack[-1] is cardboard)
+#         newstate,perm = gamestate.CopyAndTrack([cardboard])
+#         #resolve the effects of the spell as Gamestate,Cardboard pairs
+#         universes = perm.on_resolve(gamestate,perm)
+#         #move the spell to wherever it goes
+        
+        
+        
+#         effects = newstate.MoveZone(perm,ZONE.FIELD)
+#         #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
+#         newstate.stack += effects
+#         return [(newstate,perm)]
+    
+    
