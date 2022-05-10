@@ -59,7 +59,8 @@ class Cost():
             else:
                 result_list = []
                 for g,s in self.pay_fn(newstate,newsource):
-                    g = g.StateBasedActions()
+                    triggers = g.StateBasedActions()
+                    g.stack += triggers
                     result_list.append((g,s))
                 return result_list
         except:

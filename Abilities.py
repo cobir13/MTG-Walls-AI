@@ -21,66 +21,103 @@ import copy
 #easier to copy and iterate Gamestates.
 
 
-class ActivatedAbility():
-    def __init__(self,name,cost,execute_fn):
+
+
+class GenericAbility():
+    
+    def __init__(self,name,cost,trigger_fn,execute_fn):
         """
-        execute_fn: function that takes in a GameState and a source Cardboard.
-            Returns a list of (gamestate,source) pairs giving all possible
-            ways the ability could be executed, accounting for all player
-            choices and options.  Empty list if impossible to execute.
+        name (str):
+            The name of this ability. Meant to be human-readable
+        cost (Cost or None):
+            The mana and non-mana costs of activating this ability. If there
+            is no cost (perhaps because this is a purely triggered ability)
+            then set the cost as None.
+        trigger_fn (function or None):
+            Function that takes in (Gamestate,source,trigger,origin). That is:
+            a GameState, a source Cardboard, a trigger Cardboard, and the Zone
+            the trigger cardboard moved from.
+            Returns a boolean: "in this GameState, did the movement of this
+            trigger Cardboard from the origin Zone cause the source Cardboard's
+            ability to trigger?"  DOES NOT MUTATE.
+            Can also be None, if there is no trigger (perhaps because this is
+            a purely activated ability)
+        execute_fn (function):
+            Function that takes in a GameState and a source Cardboard.
+            Returns a list of GamesStates giving all possible ways the
+            ability could be executed, accounting for all player choices and
+            options.  Empty list if impossible to execute.
             DOES NOT MUTATE the original gamestate.
-            
-        NOTE: ABILITIES ONLY EVER HAVE ONE SOURCE
+        NOTE: ABILITIES ONLY EVER HAVE ONE SOURCE.
         """
         self.name = name
-        self.cost = cost
-        self.execute_fn = execute_fn
-        
-    def PayAndExecute(self,gamestate,source):
-        """Returns list of GameStates,Cardboard pairs where the cost has been
-            paid and the abilities have been performed.
-        Takes in the GameState in which the ability is supposed to be performed
-            and also the source Cardboard that is generating the cost.
-        Returns a list of (GameState,Cardboard) pairs in which the cost has
-            been paid and the abilities have been performed. The list is:
-            - length 1 if there is exactly one way to do this
-            - length 0 if this cannot be done (costs, lack of targets, etc)
-            - length >1 if there are options that can be decided differently.
-        The original GameState and source Cardboard are NOT mutated.
-        """   
-        #check to make sure the execution is legal
-        if not self.cost.CanAfford(gamestate,source):
-            return False
-        if gamestate.verbose:
-            print("Activating: %s" %self.name)
-        #split off universes where costs have been paid
-        paid_list = self.cost.Pay(gamestate,source)
-        #for each of these universes, complete the effect
-        executed_list = []
-        for state,card in paid_list:
-            executed_list += self.Execute(state,card)
-        return executed_list
-        
+        self.cost = cost                #Cost or None
+        self.trigger_fn = trigger_fn    #function: GameState,Cardboard,Cardboard,Zone -> bool
+        self.execute_fn = execute_fn    #function: GameState,Cardboard -> [GameState]
+     
     def CanAfford(self,gamestate,source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
-        return self.cost.CanAfford(gamestate,source)   
+        if self.cost is None:
+            return True
+        else:
+            return self.cost.CanAfford(gamestate,source)   
+    
+    def Pay(self,gamestate,source):
+        """Returns list of GameState,Cardboard pairs in which the cost is paid.
+        Takes in the GameState in which the cost is supposed to be paid and
+            the source Cardboard that is generating the cost.
+        Returns a list of (GameState,Cardboard) pairs in which the cost has
+            been paid. The list is length 1 if there is exactly one way to pay
+            the cost, and the list is length 0 if the cost cannot be paid.
+        The original GameState and Source are NOT mutated.
+        """
+        #check to make sure the execution is legal
+        if not self.cost.CanAfford(gamestate,source):
+            return []
+        #if there IS no cost, then paying the cost changes nothing
+        if self.cost is None:
+            g,[s] = gamestate.CopyAndTrack([source])
+            return [(g,s)]
+        else:
+            return self.cost.Pay(gamestate,source)
+    
+    
+    def IsTriggered(self,gamestate,source,trigger,origin):
+        """Returns a boolean: does this trigger-card cause the ability of this
+        source-card to trigger?
+        gamestate: the GameState where the source and trigger Cardboards live
+        source:    the Cardboard which owns the ability
+        trigger:   the Cardboard which has (potentially) triggered the ability    
+        origin:    the Zone the trigger card moved from
+        DOES NOT MUTATE."""
+        if self.trigger_fn is None:
+            return False    #if no trigger function, is NEVER triggered
+        else:
+            return self.trigger_fn(gamestate,source,trigger,origin)   
     
     def Execute(self,gamestate,source):
         """
         Takes in the GameState in which the ability is supposed to be performed
             and also the source Cardboard that is generating the ability.
-        Returns a list of (GameState,Cardboard) pairs in which the effect
-            has been performed. The list is:
+        Returns a list of GameStates where the effect has been performed:
             - length 1 if there is exactly one way to do this
             - length 0 if this cannot be done (costs, lack of targets, etc)
             - length >1 if there are options that can be decided differently.
         The original GameState and source Cardboard are NOT mutated.
         """
         return self.execute_fn(gamestate,source)
-        
+    
     def __str__(self):
         return self.name
+
+
+
+
+class ActivatedAbility(GenericAbility):
+    
+    def __init__(self,name,cost,execute_fn):
+        super().__init__(name=name,cost=cost,trigger_fn=None,execute_fn=execute_fn)
 
 
 
@@ -95,84 +132,55 @@ class ManaAbility(ActivatedAbility):
     
     def TapToPay(gamestate,source):
         newstate,[newsource] = gamestate.CopyAndTrack([source])
-        newsource.tapped = True
+        sideeffects = newstate.TapPermanent(newsource)
+        newstate.stack += sideeffects
         return [(newstate,newsource)]
 
     def AddColor(gamestate,source,color):
         newstate,[newsource] = gamestate.CopyAndTrack([source])
-        newstate.pool.AddMana(color)  #add mana
-        return [(newstate,newsource)]
+        sideeffects = newstate.AddToPool(color) #add mana
+        newstate.stack += sideeffects
+        return [newstate]
 
     def AddDual(gamestate,source,color1,color2):
+        #make first game state where we choose the first option
         state1,[source1] = gamestate.CopyAndTrack([source])
+        sideeffects = state1.AddToPool(color1) #add mana
+        state1.stack += sideeffects
+        #make second game state where we choose the second option
         state2,[source2] = gamestate.CopyAndTrack([source])
-        state1.pool.AddMana(color1)  #add mana
-        state2.pool.AddMana(color2)  #add mana
-        return [(state1,source1),(state2,source2)]
+        sideeffects = state2.AddToPool(color2) #add mana
+        state2.stack += sideeffects
+        return [state1,state2]
 
 
 
 
-class TriggeredByMove():
-    def __init__(self,name,trigger_fn,execute_fn):
-        """
-        trigger_fn: function that takes in a GameState, a source Cardboard,
-            a trigger Cardboard, and the zone the trigger cardboard moved from.
-            Returns a boolean: "in this GameState, did the movement of this
-            trigger Cardboard from the origin Zone cause the source
-            Cardboard's ability to trigger?"  DOES NOT MUTATE.
-        
-        execute_fn: function that takes in a GameState, a source Cardboard,
-            and a trigger Cardboard.
-            Returns a list of (gamestate,source) pairs giving all possible
-            ways the ability could be executed, accounting for all player
-            choices and options.  Empty list if impossible to execute.
-            DOES NOT MUTATE the original gamestate.
-        """
-        
-        self.name = name
-        self.trigger_fn = trigger_fn
-        self.execute_fn = execute_fn
-
-        
-    def IsTriggered(self,gamestate,source,trigger,origin):
-        """Returns a boolean: does this trigger-card cause the ability of this
-        source-card to trigger?
-        gamestate: the GameState where the source and trigger Cardboards live
-        source:    the Cardboard which owns the ability
-        trigger:   the Cardboard which has (potentially) triggered the ability    
-        origin:    the Zone the trigger card moved from
-        DOES NOT MUTATE."""
-        return self.trigger_fn(gamestate,source,trigger,origin)   
+class TriggeredByMove(GenericAbility):
     
+    def __init__(self,name,cost,trigger_fn):
+        super().__init__(name=name,cost=cost,trigger_fn=trigger_fn,execute_fn=None)
+
+
+
+
+class StackEffect():
     
-    def Execute(self,gamestate,source,trigger):
-        """
-       takes in a GameState where the ability is supposed to be performed, a
-           source Cardboard causing the ability, and the trigger Cardboard
-           which set off the ability.
-        Returns a list of (GameState,Cardboard) pairs in which the effect
-            has been performed. The list is:
-            - length 1 if there is exactly one way to do this
-            - length 0 if this cannot be done (costs, lack of targets, etc)
-            - length >1 if there are options that can be decided differently.
-        The original GameState and source Cardboard are NOT mutated.
-        """
-        return self.execute_fn(gamestate,source,trigger)
+    def __init__(self,source,otherlist,ability):
+        self.source = source  #Cardboard source of the effect. "Pointer".
+        self.otherlist = []   #list of other relevant Cardboards. "Pointers".
+        self.ability = ability  #GenericAbility
+
+    def PutOnStack(self,gamestate):
+        """Returns list of GameStates where ability is paid for and now on stack"""
+        return gamestate.ActivateAbilities(self.source,self.ability)
+    
+    def Enact(self,gamestate):
+        """Returns list of GameStates resulting from performing this effect"""
+        return self.ability.Execute(gamestate,self.source)
         
     def __str__(self):
-        return self.name
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        return self.ability.name
+    
+    def __repr__(self):
+        return "Effect: "+self.ability.name

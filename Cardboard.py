@@ -36,6 +36,9 @@ class Cardboard():
             s += "[%s]" %",".join(self.counters)
         return s
     
+    def __repr__(self):
+        return "Card "+self.ID()
+    
     def copy(self):
         newcard = Cardboard(self.cardtype)
         #safe to copy by reference since they're all ints, str, etc

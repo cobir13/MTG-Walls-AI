@@ -6,8 +6,9 @@ Created on Mon Dec 28 21:13:59 2020
 """
 
 import random
-import Decklist
+# import Decklist
 import Cardboard
+from Abilities import StackEffect
 import CardType
 import ZONE
 from ManaHandler import ManaPool
@@ -19,22 +20,14 @@ class LoseTheGameError(Exception):
     pass
 
 
-
-class StackEffect():
-    def __init__(self,name,source,otherlist,effect_fn):
-        self.name = name
-        self.source = source  #Cardboard source of the effect. "Pointer".
-        self.otherlist = []   #list of other relevant Cardboards. "Pointer".
-        self.effect_fn = effect_fn
-        
-    def Apply(self,gamestate): 
-        return self.effect_fn(gamestate,self.source,*self.otherlist)
-        
-    def __str__(self):
-        return self.name
+"""
+Oddity notes:
+   - Lands use the stack 
+   - must pre-float all mana to pay for a spell
     
-    def __repr__(self):
-        return self.name
+"""
+
+
 
 
 
@@ -63,18 +56,11 @@ class GameState():
     when executed, return copies of the GameState but with the action having
     been executed.
     
-    
-    
     GameState moves Cardboards, Cardboards don't move themselves.
     GameState activates abilities, abilities don't activate themselves.
     GameState triggers abilities, abilities don't trigger themselves.
-    
-             
-
     """
-    
-    
-    
+
     def __init__(self):
         self.deck = []  #list of Cardboard objects
         self.hand = []  #list of Cardboard objects
@@ -83,7 +69,6 @@ class GameState():
         self.pool = ManaPool("")
         self.stack = [] #list of Cardboards and StackEffects
         
-
         self.turncount = 1
         self.myturn = True
         
@@ -100,6 +85,8 @@ class GameState():
             txt+= "\nFIELD:   "+",".join([str(card) for card in self.field])
         if len(self.grave)>0:
             txt+= "\nGRAVE:   "+",".join([str(card) for card in self.grave])
+        if len(self.stack)>0:
+            txt+= "\nSTACK:   "+",".join([str(obj) for obj in self.stack])
         txt+= "\nLife: %2i vs %2i" %(self.life,self.opponentlife)
         txt+= "    Deck: %2i" %len(self.deck)
         txt+= "    Mana: (%s)" %str(self.pool)
@@ -133,6 +120,7 @@ class GameState():
         #if got to here, we're good!
         return True
     
+    
     def ID(self):
         myturn = "MY" if self.myturn else "OP"
         playedland = "_PL" if self.myturn else ""
@@ -144,11 +132,10 @@ class GameState():
         s += "(%s)" %str(self.pool)
         return s
 
+
     def __hash__(self):
         return self.ID().__hash__() #hash the string of the ID
 
-
-      
     
     def CopyAndTrack(self,tracklist):
         """Returns a disconnected copy of the gamestate and also a list of
@@ -208,21 +195,21 @@ class GameState():
                 otherlist = []
                 for kk in range(len(obj.otherlist)):
                     otherlist.append( newtracklist.pop(stackindex) )
-                neweffect = StackEffect(obj.name,source,otherlist,obj.effect_fn)
+                neweffect = StackEffect(source,otherlist,obj.ability)
                 state.stack.append( neweffect )        #add to stack
         #return
         return state,newtracklist
-        
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+    def copy(self):
+        return self.CopyAndTrack([])[0]
     
     ###-----MUTATING FUNCTIONS. They all return a list of StackEffects
+
+    def AddToPool(self,colorstr):
+        """MUTATES. Returns list of StackEffects that adding mana caused."""
+        self.pool.AddMana(colorstr)
+        return []
     
     def TapPermanent(self,cardboard):
         """MUTATES. Returns list of StackEffects that this tapping caused."""
@@ -233,10 +220,6 @@ class GameState():
         """MUTATES. Returns list of StackEffects that this untapping caused."""
         cardboard.tapped = False
         return []
-    
-    
-    
-    
     
     def _GetZone(self,zonename):
         if zonename == ZONE.DECK:
@@ -260,7 +243,7 @@ class GameState():
         zonelist = self._GetZone(zone)
         zonelist.append(cardboard)
         zonelist.sort(key=Cardboard.Cardboard.ID)
-    
+        print("AAAAH SOMEONE USED _AddToZone TO MOVE %s AAAAAH" %str(cardboard))
     
     def MoveZone(self,cardboard,destination):
         """Move the specified piece of cardboard from the zone it is currently
@@ -290,24 +273,11 @@ class GameState():
         for source in self.field+self.grave+self.hand:
             for abil in source.cardtype.trig_move:
                 if abil.IsTriggered(self,source,cardboard,origin):
-                    newEffect = StackEffect(abil.name,
-                                            source,
-                                            [cardboard],
-                                            abil.effect_fn)
+                    newEffect = StackEffect(source,[cardboard],abil)
                     triggered.append( newEffect )
         return triggered
-        
-        
-
-
-
-
-
-
-
 
     ##-----------------------------------------------------------------------##
-
 
     def StateBasedActions(self):
         """MUTATES. Performs any state-based actions like killing creatures if
@@ -328,28 +298,26 @@ class GameState():
         #legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
         return effects
 
+    def UntapStep(self):
+        """MUTATES. Returns list of StackEffects that trigger during untap."""
+        # newstate,_ = self.CopyAndTrack([])  #copy, but nothing to track
+        self.pool = ManaPool("")
+        self.turncount+=1
+        self.playedland = False
+        effects = []
+        for cardboard in self.field:
+            effects += self.UntapPermanent(cardboard)        
+            cardboard.summonsick = False
+            cardboard.counters = [c for c in cardboard.counters if c[0]!="@"]
+        return effects
 
     def UpkeepStep(self):
         """MUTATES. Returns list of StackEffects that trigger during upkeep."""
         effects = []
         for cardboard in self.hand + self.field + self.grave:
-            for abil in cardboard.cardtype.upkeep:
-                newEffect = StackEffect(abil.name,cardboard,[],abil.effect_fn)
+            for abil in cardboard.cardtype.trig_upkeep:
+                newEffect = StackEffect(cardboard,[],abil)
                 effects.append (newEffect) 
-        return effects
-
-
-    def UntapStep(self):
-        """MUTATES. Returns list of StackEffects that trigger during untap."""
-        newstate,_ = self.CopyAndTrack([])  #copy, but nothing to track
-        newstate.pool = ManaPool("")
-        newstate.turncount+=1
-        newstate.playedland = False
-        effects = []
-        for cardboard in newstate.field:
-            effects += newstate.UntapPermanent(cardboard)        
-            cardboard.summonsick = False
-            cardboard.counters = [c for c in cardboard.counters if c[0]!="@"]
         return effects
 
 
@@ -363,10 +331,7 @@ class GameState():
             # for source in self.field+self.grave+self.hand:
             #     for abil in source.cardtype.trig_draw:
             #         if abil.IsTriggered(state,source,cardboard,origin):
-            #             newEffect = StackEffect(abil.name,
-            #                                     source,
-            #                                     [cardboard],
-            #                                     abil.effect_fn)
+            #             newEffect = StackEffect(source,[cardboard],abil)
             #             effects.append( newEffect )
             return effects
         else:
@@ -374,25 +339,26 @@ class GameState():
 
 
 
+
+    ###-----BRANCHING FUNCTIONS. Return a list of gamestates but do not mutate
+
+
     def CastSpell(self,cardboard):
         """
-        Put Cardboard onto the stack, trigger "cast" triggers.
-        Return a list of GameState objects in which the given
-            Cardboard has been cast and any effects of that casting have been
-            dealth with (including spell effects, moving the Cardboard to new
-            zones, triggering other abilities, etc). List is length 0 if
-            this Cardboard cannot be cast.
+        DOES NOT MUTATE. Instead returns a list of GameStates in which the
+            given Cardboard has been cast and any effects of that casting have
+            been put onto the stack.
         """
         #check to make sure the execution is legal
-        if not cardboard.cost.CanAfford(self,cardboard):
+        if not cardboard.cardtype.cost.CanAfford(self,cardboard):
             return []
         cast_list = []
-        for state,card in cardboard.cost.Pay(self,cardboard):
+        for state,card in cardboard.cardtype.cost.Pay(self,cardboard):
             #Iterate through all possible ways the cost could have been paid.
             #Each has a GameState and a Cardboard being cast. Move the card
             #being cast to the stack, then see if this triggers any effects.
             #Note: these are COPIES so they are safe to mutate.
-            effects = self.MoveZone(card,ZONE.STACK)
+            effects = state.MoveZone(card,ZONE.STACK)
             state.stack += effects   #------------------------------------------randomize order of triggers? for now, no    
             #check state-based actions, add any effects from THAT to the stack
             state.stack += state.StateBasedActions()
@@ -400,27 +366,25 @@ class GameState():
         return cast_list
         
     
-    
     def ActivateAbilities(self,cardboard,ability):
         """
-        DOES NOT MUTATE. Instead returns a list of gamestates.
-        Pay for an ActivatedAbility and put it onto the stack.
-        Return a list of GameState objects in which the given Ability of the
-            given Cardboard has been put onto the stack (as well as any
-            abilities that trigged due to the cost or the activation).
-            List is length 0 if this Ability cannot be activated.
+        DOES NOT MUTATE. Instead, returns a list of GameStates in which the
+            ActivatedAbility of the source Cardboard has been paid for and put
+            on the stack.
         """
         #check to make sure the execution is legal
         if not ability.CanAfford(self,cardboard):
             return []
-        newlist = ability.PayAndExecute(self,cardboard)
+        newlist = ability.Pay(self,cardboard)
+        for game,source in newlist:
+            game.stack.append(StackEffect(source,[],ability))
         return [tup[0] for tup in newlist]  #only need the GameStates of the pairs
-        
-
-
+    
+    
     def ResolveTopOfStack(self):
-        """Return a list of GameStates in which the top item of the stack has
-            been resolved. DOES NOT MUTATE SELF.
+        """
+        DOES NOT MUTATE. Instead, returns a list of GameStates in which the
+            top item of the stack has been resolved.
         If it was a Cardboard, it has been moved to the appropriate zone. If it
             was a Spell specifically, the effect has been resolved. Any
             enter-the-battlefield effects or similar effects that trigger
@@ -430,38 +394,52 @@ class GameState():
             triggered as a result have been placed on the stack."""
         if len(self.stack)==0:
             return []
-        
         elif isinstance(self.stack[-1],Cardboard.Cardboard):
             card = self.stack[-1]
-            universes = card.cardtype.ResolveSpell(self,card)
+            universes = card.cardtype.ResolveSpell(self,card)  #[GameStates]
             #this already includes moving the card from the stack to a zone
             #and putting all resulting triggers on the stack
             return universes
-        
         elif isinstance(self.stack[-1],StackEffect):
             newstate,_ = self.CopyAndTrack([])
-            effect = newstate.stack.pop[-1]
-            return effect.Apply(newstate)
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+            effect = newstate.stack.pop(-1)
+            return effect.Enact(newstate)  #[GameStates]
+        
+        
+    # def AddEffectsToStack(self,effectlist):
+    #     """
+    #     DOES NOT MUTATE. Instead, returns a list of GameStates in which the
+    #         list of StackEffects has been added to the top of the stack in
+    #         various orders.
+    #     NOTE: as a shortcut, if effectlist is length 0 or 1 (so the return
+    #         list will be length 1), it DOES mutate self and return [self].
+    #     NOTE: this is buggy and won't actually work yet.
+    #     """
+    #     #we are going to TEMPORARILY mutate self and then undo it
+    #     num = len(effectlist)       
+    #     self.stack += effectlist  #final `num` of stack are a new mutation
+    #     #a shortcut to save time
+    #     if num<=1:
+    #         return [self]
+    #     else:
+    #         newstate,_ = self.CopyAndTrack([])
+    #         #in theory, this is where we'd try all possible permutations-------ADD PERMUTATIONS OF THE EFFECTLIST
+    #         #but for now, just return the one
+    #         returnlist = [newstate]
+    #         self.stack = self.stack[:-num]  #fix the mutation of self
+    #         return returnlist
+        
+        
+        
+        
 
     ##-----------------------------------------------------------------------##
 
-
-    def GetValidActions(self):
-        """Return a list of all things that can be put on the stack right now
-        (including Cardboards, StackEffects from activated abilities, and
-        StackEffects from mana abilities)."""
+    def GetValidActivations(self):
+        """
+        Return a list of all abilities that can be put on the stack right
+        now. Returned as list of StackEffects that have not yet been paid for.
+        """
         effects = []
         #look for all activated abilities that can be activated (incl. mana ab)
         activeobjects = []
@@ -472,11 +450,18 @@ class GameState():
             for ability in source.GetAbilities():  #distinguish activated vs mana?
                 #check whether price can be paid
                 if ability.CanAfford(self,source):
-                    e = StackEffect(ability.name,source,[],ability.execute_fn)
+                    e = StackEffect(source,[],ability)
                     effects.append(e)
                     addobject = True
             if addobject:  #only add each object once, even if many abilities
                 activeobjects.append(source)
+        return effects
+    
+    def GetValidCastables(self):
+        """Return a list of all castable cards that can be put on the stack
+        right now, as a list of Cardboards which have not yet been paid for
+        or moved from their current zones. Think of these like pointers."""
+        cards = []
         #look for all cards that can be cast
         activeobjects = []
         for card in self.hand:
@@ -485,78 +470,15 @@ class GameState():
             if len(self.stack)>0 and "instant" not in card.cardtype.typelist:
                 continue  #if stack is full, can only cast instants
             if card.cardtype.CanAfford(self,card):
-                effects.append(card)
+                cards.append(card)
                 activeobjects.append(card)
-        return effects
-
-
-
+        return cards
         
     def Shuffle(self):
         random.shuffle(self.deck)
 
 
-    # ##-----------------------------------------------------------------------##
-    
-    # def TurnCycle(self):
-    #     if self.verbose:
-    #         if self.turncount == 1:
-    #             print(self)
-    #         print("\n--------------------turn %i------------------\n" %self.turncount)
-    #     self.Upkeep()
-    #     if self.turncount>1:
-    #         self.Draw()
-    #     self.MainPhase()
-    #     self.Attack()
-    #     self.PassTurn()  #pass to opponent
-    #     self.PassTurn()  #pass back to self
-
-    
-    
-    # def Upkeep(self):
-    #     """untap, upkeep, and draw"""
-    #     for permanent in self.field:
-    #         permanent.Untap()
-    #     for permanent in self.field:
-    #         permanent.Upkeep()
-            
-    # def Draw(self):
-    #     if self.deck: #if at least one card left
-    #         card = self.deck.pop(0)
-    #         if self.verbose: print("draw:   ",str(card))
-    #         self.hand.append(card) #removes from 0th index of deck
-    #     else: #ran out of cards
-    #         raise IOError("DRAW FROM AN EMPTY LIBRARY AND LOSE!")
-            
-    # def MainPhase(self):
-    #     while True:
-    #         command,obj = AI.ChooseActionToTake(self) #{"land","spell","ability","pass"}
-    #         if command == "pass":
-    #             break
-    #         elif command == "land":
-    #             assert(isinstance(obj,CardType.Land)) #so obj is a Land object
-    #             if self.verbose: print("playing:",str(obj))
-    #             self.PlayLand(obj)
-    #         elif command in ["spell","ability"]: #casting and activating are very similar
-    #             assert(hasattr(obj,"cost"))    
-    #             #generate the necessary mana.
-    #             firingsolution = self.TappingSolutionForCost(obj.cost)
-    #             if self.verbose:
-    #                 lst = ["(%s,%s)" %(s.name,color) for s,color in firingsolution]
-    #                 print("floating","[ %s ]" %",".join(lst))
-    #             self.GenerateManaForCasting(firingsolution)
-    #             if command == "spell":
-    #                 assert(isinstance(obj,CardType.Card))
-    #                 #cast the chosen spell
-    #                 if self.verbose: print("    cast",str(obj))
-    #                 self.CastSpell(obj)
-    #             if command == "ability":
-    #                 assert(isinstance(obj,CardType.Ability))
-    #                 #activate the chosen ability
-    #                 if self.verbose: print("    use: %s's %s ability" %(obj.card.name,obj.name))
-    #                 obj.Activate(self)
-
-            
+    ##-----------------------------------------------------------------------##
             
             
     # def Attack(self):
@@ -607,165 +529,15 @@ class GameState():
     #         self.turncount += 1
     #         self.playedland = False
     #     self.myturn = not self.myturn
-        
-
-  
-    # ##-----------------------------------------------------------------------##
 
 
-
-##---------------------------------------------------------------------------##      
-  
 #     def TakeDamage(self,damage):
 #         self.life -= damage
 #         if self.life <= 0:
 #             raise IOError("LOSE DUE TO DAMAGE!")
 
 
-#     def PlayLand(self,land):
-#         assert(not self.playedland)
-#         self.hand.remove(land)
-#         self.field.append(land)
-#         self.playedland = True
-#         self.ResolveCastingTriggers(land)
-        
 
-#     def GenerateManaForCasting(self,firingsolution):
-#         """MUTATES SELF BY ADDING MANA AND TAPPING THINGS!!!"""
-#         for source,color in firingsolution:
-#             source.MakeMana(self,color)
-#         #flipped duskwatch recruiter?
-        
-
-#     def CastSpell(self,card):
-#         self.pool.PayCost(card.cost)        
-#         self.hand.remove(card)
-#         if isinstance(card,CardType.Permanent):
-#             self.field.append(card)
-#         self.ResolveCastingTriggers(card)
-    
-    
-#     def ResolveCastingTriggers(self,card):
-#         """When any card is cast (or a permanent enters the field), resolve any
-#         effects that it triggers (including its own ETBs, if any).  Call this
-#         function AFTER the permanent has entered, technically."""
-#         if hasattr(card, "Effect"):
-#             card.Effect(self)
-#         for perm in self.field: #which should include card, too
-#             if hasattr(perm,"Trigger"):
-#                 perm.Trigger(self,card)
-            
-#     def GetAvailableAbilities(self):
-#         """return a list of all abilities which currently can be activated 
-#             (in play already and also affordable)"""
-#         abilities = []
-#         for c in self.field:
-#             if hasattr(c,"abilitylist"):
-#                 for ab in c.abilitylist:
-#                     tappingsolution = self.TappingSolutionForCost(ab.cost)
-#                     if tappingsolution is not None: #possible to pay for ability!
-#                         abilities.append(ab)
-#         return abilities
-    
-#     def ShowHandAsSorted(self):
-#         """returns 3 lists: all lands, all castable spells, and all uncastable
-#         spells.  Every card in the hand will be in one of these three lists."""
-#         lands = []
-#         castables = []
-#         uncastables = []
-#         for card in self.hand:
-#             if isinstance(card,CardType.Land):
-#                 lands.append(card)
-#             else:
-#                 tappingsolution = self.TappingSolutionForCost(card.cost)
-#                 if tappingsolution is None:
-#                     uncastables.append(card)
-#                 else:
-#                     castables.append(card)
-#         return lands,castables,uncastables
-
-
-# ##-------------------Alternate Universe Functions----------------------------##
-
-
-#     def TappingSolutionForCost(self,cost):
-#         """given a gamestate and a cost, can I cover that cost?  Returns None if
-#         no, returns a list of (source,color) tuples to use if yes."""
-#         hypothet = GameState()
-#         hypothet.field = [c.copy() for c in self.field]
-#         hypothet.pool = self.pool.copy()
-        
-#         #check our mana pool, see if we've got any floating
-#         if hypothet.pool.CanAffordCost(cost):
-#             return [] #we can cover the cost with just our floating mana!
-        
-#         #OK, we're going to have to do some REAL work. Get a list of actual mana sources.
-#         sourcelist = [] #list of indices in hypothet.field, b/c index translates across universes
-#         for k,perm in enumerate(hypothet.field):
-#             if isinstance(perm,CardType.ManaSource) and not perm.unavailable:         
-#                 if isinstance(perm,Decklist.Caretaker) and not perm.CanMakeMana(hypothet):
-#                     continue #"unavailable" is unreliable for Caretakers, need special check
-#                 sourcelist.append(k)
-#         #sort the sourcelist: try beginning sources first, save last sources for later
-#         #monocolors at the beginning, pure gold at the end
-#         sourcelist.sort(key=lambda i: AI.RankerMana(hypothet.field[i],hypothet))
-                
-#         #First, can we afford the colors?
-#         colorcost = cost.copy()
-#         colorcost.data["gen"] = 0
-#         colorsolution = []
-#         #Use our mana pool to pay for as much colored bits as we can
-#         for color,amount in hypothet.pool.data.items():
-#             assert(amount>=0) #mana pools should be positive...
-#             colorcost.data[color] = max(colorcost.data[color]-amount,0)
-        
-#         if colorcost.CMC()>0:
-#             #we couldn't cover the colors with just our floating mana. What about mana sources?
-#             colorsolution = AI.FindSolutionForColors(colorcost, sourcelist,hypothet)
-#             if not colorsolution:
-#                 return None #no, we can't cover the cost. couldn't get the colors to work out.
-        
-#         #now time to work out how to cover the non-colored bit
-#         fullsolution = AI.FindSolutionForGeneric(cost,colorsolution,sourcelist,hypothet)
-#         if not fullsolution:
-#             return None #no, we can't cover the cost. don't have enough mana total
-#         else:
-#             return [ ( self.field[index],color ) for index,color in fullsolution]
-
-
-
-#     def CMCAvailable(self):
-#         """How much mana (ignoring color) is available to me right now?"""
-#         hypothet = GameState()
-#         for c in self.field:
-#             hypothet.AddToField(c.copy)
-#         hypothet.pool = self.pool.copy()
-#         for permanent in hypothet.field:
-#             if isinstance(permanent,CardType.ManaSource) and not permanent.unavailable:
-#                 #add mana (by mutating "hypothet" gamestate)
-#                 permanent.MakeMana(permanent.tapsfor[0])
-#         return hypothet.pool.CMC()
-
-
-#     def CMCAvailableIfCast(self,card):
-#         """casting defenders sometimes nets mana back. if I cast this card,
-#         how much mana will I have available afterwards?  Assumes card IS castable"""
-#         #just casts the card in an alternate gamestate and evaluates the result
-#         hypothet = GameState()
-#         for c in self.field:
-#             hypothet.AddToField(c.copy)
-#         coil = card.copy()
-#         hypothet.AddTohand(coil)
-#         hypothet.pool = self.pool.copy()
-#         firingsolution = hypothet.TappingSolutionForCost(card.cost)
-#         hypothet.GenerateManaForCasting(firingsolution)
-#         try:
-#             hypothet.CastSpell(coil)
-#         except IOError: #I didn't bother to populate the fake-gamestate deck, but
-#             pass        #drawing from an empty deck is fine in a fake universe
-#         return hypothet.CMCAvailable()
-#         #flipped duskwatch recruiter?
-        
 
 
 # ##---------------------------------------------------------------------------##

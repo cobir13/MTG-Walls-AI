@@ -19,6 +19,7 @@ import Abilities
 ##---------------------------------------------------------------------------##
 
 class CardType():
+    
     def __init__(self,name,cost,typelist):
         """
         name (str)  : name of this card.
@@ -47,19 +48,10 @@ class CardType():
         self.trig_upkeep = []
         self.trig_attack = []
         self.trig_endstep = []
-        #static effects
-        self.static = []
-
-        
-
-
-        #I don't actually USE these, but in theory I could in the future
-        #self.trig_activate  #abilities that trigger when an ability is activated
-        # self.trig_draw = []
-
-        
-
-        
+        ###---I don't actually USE these, but in theory I could in the future
+        # self.trig_activate   #abilities that trigger when an ability is activated
+        # self.trig_draw = []  #abilities that trigger when a card is drawn
+        # self.static = []     #static effects
 
     #abilities and triggers within a card are always called by the gamestate
     #by passing the source Cardboard into the function. Thus, the ability
@@ -68,55 +60,55 @@ class CardType():
     #distinction between Cardboard and CardType. This distinction makes it much
     #easier to copy and iterate Gamestates.
 
-
     def CanAfford(self,gamestate,source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
         return self.cost.CanAfford(gamestate,source)  
     
-    def ResolveSpell(gamestate,cardboard):
-        """function: gamestate,cardboard->[(gamestate,cardboard)]"""
-        return [(gamestate,cardboard)] #placeholder for children to overwrite
-    
+    def ResolveSpell(self,gamestate,cardboard):
+        """function: gamestate,cardboard->[gamestate]"""
+        return [gamestate] #placeholder for children to overwrite
 
-    
+
+
 
 class Permanent(CardType):
     
-    
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
-        self.as_enter = None  #function: gamestate,cardboard->[(gamestate,cardboard)]
+        self.as_enter = None  #function: GameState,Cardboard->[(GameState,Cardboard)]
     
-    def ResolveSpell(gamestate,cardboard):
+    def ResolveSpell(self,gamestate,cardboard):
         assert(gamestate.stack[-1] is cardboard)
-        newstate,perm = gamestate.CopyAndTrack([cardboard])
+        newstate,[perm] = gamestate.CopyAndTrack([cardboard])
         effects = newstate.MoveZone(perm,ZONE.FIELD)
         #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
         newstate.stack += effects
         #if there is an "as enters" effect function, apply it
         if perm.cardtype.as_enter is None:
-            return [(newstate,perm)]
+            return [newstate]
         else:
-            return perm.cardtype.as_enter(newstate,perm)
-        
-        
-        
-        
+            universes = perm.cardtype.as_enter(newstate,perm)
+            return [tup[0] for tup in universes]
+
+
+
 
 class Creature(Permanent):
+    
     def __init__(self,name,cost,typelist,power,toughness):
         super().__init__(name,cost,typelist)
         self.basepower = power
         self.basetoughness = toughness
         if "creature" not in self.typelist:
             self.typelist = ["creature"] + self.typelist
-        
-        
-        
+
+
+
+
 class Land(Permanent):
+    
     def __init__(self,name,typelist):
-        
         #build the "cost" of casting a land
         def canplayland(gamestate,source):
             return not gamestate.playedland
@@ -130,11 +122,7 @@ class Land(Permanent):
         super().__init__(name,cost,typelist)
         if "land" not in self.typelist:
             self.typelist = ["land"] + self.typelist
-
-
-
-
-
+    
     def EnterTapped(gamestate,source):
         """useful for tap-lands"""
         source.tapped = True     #effect is allowed to mutate
@@ -157,22 +145,16 @@ class Land(Permanent):
 
 # class Spell(CardType):
     
-
-    
 #     def __init__(self,name,cost,typelist,on_resolve):      
 #         super().__init__(name,cost,typelist)
 #         self.on_resolve = on_resolve
 
-
-    
-#     def ResolveSpell(gamestate,cardboard):
+#     def ResolveSpell(self,gamestate,cardboard):
 #         assert(gamestate.stack[-1] is cardboard)
 #         newstate,perm = gamestate.CopyAndTrack([cardboard])
 #         #resolve the effects of the spell as Gamestate,Cardboard pairs
 #         universes = perm.on_resolve(gamestate,perm)
 #         #move the spell to wherever it goes
-        
-        
         
 #         effects = newstate.MoveZone(perm,ZONE.FIELD)
 #         #need to reorder effects???  later ------------------------------------Add reshuffling of effects?

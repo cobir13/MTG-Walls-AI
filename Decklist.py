@@ -28,7 +28,7 @@ import ZONE
 
 
 def RootsAfford(gamestate,source):
-    return ("used" not in source.counters) and (source.zone == ZONE.FIELD)
+    return ("@used" not in source.counters) and (source.zone == ZONE.FIELD)
 def RootsPay(gamestate,source):
     newstate,[newsource] = gamestate.CopyAndTrack([source])
     newsource.AddCounter("@used")  #"@" counters are cleared automatically at untap
@@ -90,7 +90,7 @@ def BattlementAddColor(gamestate,source):
     num = sum(["defender" in c.cardtype.typelist for c in gamestate.field])
     newstate,[newsource] = gamestate.CopyAndTrack([source])
     newstate.pool.AddMana("G"*num)  #add mana
-    return [(newstate,newsource)]
+    return [newstate]
 
 Battlement = Creature("Battlement",Cost("1G",None,None),["defender"],0,4)
 Battlement.activated.append(
@@ -106,7 +106,7 @@ def AxebaneAddColor(gamestate,source):
     num = sum(["defender" in c.cardtype.typelist for c in gamestate.field])
     newstate,[newsource] = gamestate.CopyAndTrack([source])
     newstate.pool.AddMana("A"*num)  #add mana
-    return [(newstate,newsource)]
+    return [newstate]
 
 Axebane = Creature("Axebane",Cost("2G",None,None),["defender"],0,3)
 Axebane.activated.append(

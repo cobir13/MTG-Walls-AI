@@ -8,9 +8,10 @@ Created on Tue Dec 29 22:15:57 2020
 import ZONE
 import GameState
 import ManaHandler
-import CardType
+# import CardType
 import Decklist
 import Cardboard
+import Abilities
 import PlayTree
 # import AI
 
@@ -18,43 +19,91 @@ import PlayTree
 
 if __name__ == "__main__":
 
-
+    print("Testing Wall of Roots...")
+    
     game = GameState.GameState()
     game.verbose = False #True
+    assert(len(game.GetValidActivations())==0)
+    assert(len(game.GetValidCastables())==0)
+    
     for i in range(4):
         game.MoveZone(Cardboard.Cardboard(Decklist.Roots),ZONE.HAND)
     effects = game.MoveZone(game.hand[0],ZONE.FIELD)
     assert(len(effects)==0) #nothing to trigger, yet
 
-    options = game.GetValidActions()
-    [(copygame2,_)] = options[0].Apply(game)
-    assert(copygame2.GetValidActions() == [] )
+    #activate the one ability!
+    assert(len(game.GetValidActivations())==1)  #1 ability to activate
+    assert(len(game.GetValidCastables())==0)    #no castable cards
+    [copygame1] = game.GetValidActivations()[0].PutOnStack(game)
+    assert(copygame1.pool == ManaHandler.ManaPool(""))  #no mana YET
+    assert(len(copygame1.stack)==1)             #one ability on the stack
+    assert(len(copygame1.field[0].counters)>0)  #counters on the Wall of Roots
+    
+    [copygame2] = copygame1.ResolveTopOfStack()
+    assert(len(copygame2.GetValidActivations())==0)
+    assert(len(copygame2.GetValidCastables())==0)
+    assert(len(copygame2.stack)==0)
+    assert(copygame2.pool == ManaHandler.ManaPool("G"))
     
     #add in an extra mana to see what happens
     copygame2.pool.AddMana("G")
-    options = copygame2.GetValidActions()
-    assert(len(options)==1) #all 3 roots only generate 1 option--to cast Roots
-    [(copygame3,_)] = options[0].Run()
-    assert(len(copygame3.field)==2)
-    assert(len(copygame3.hand)==2)
-    assert(str(copygame3.pool)=="")
+    assert(len(copygame2.GetValidActivations())==0)  #no abilities to activate
+    #all 3 roots only generate 1 option--to cast Roots
+    assert(len(copygame2.GetValidCastables())==1)
+    #cast the newly castable spell
+    cardboard = copygame2.GetValidCastables()[0]
+    assert([o is cardboard for o in copygame2.hand] == [True,False,False]) #1st spell in hand
+
+    [copygame3] = copygame2.CastSpell(cardboard)  #puts it on the stack
+    assert(copygame3.pool == ManaHandler.ManaPool(""))  #no mana anymore
+    assert(len(copygame3.stack)==1)  #one spell on the stack
+    assert(len(copygame3.hand)==2)   #two cards in hand
+    assert(len(copygame3.field)==1)  #one card in play
     
-    #Just to check, game0 is still unchanged:
+    [copygame4] = copygame3.ResolveTopOfStack()
+    assert(copygame4.pool == ManaHandler.ManaPool(""))  #no mana anymore
+    assert(len(copygame4.stack)==0)  #nothing on the stack
+    assert(len(copygame4.hand)==2)   #two cards in hand
+    assert(len(copygame4.field)==2)  #two cards in play
+    
+    #should be one ability (new Roots) and no castable spells (not enough mana)
+    assert(len(copygame4.GetValidActivations())==1)
+    assert(len(copygame4.GetValidCastables())==0)  
+    #Stack should be empty, so resolving the stack should be impossible
+    assert([] == copygame4.ResolveTopOfStack() )
+    
+    #Just to check, original game is still unchanged:
     assert(len(game.field)==1)
     assert(str(game.pool)=="")
+
+    
     
     ###---finished testing wall of Roots.  let's try Caryatid
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.FIELD) )
-    options = game.GetValidActions()
-    [(carygame1,_)] = options[0].Run()
-    assert(len(options)==1)
-    carygame1.Untap()
-    carygame1.Upkeep()
-    options = carygame1.GetValidActions()
+    print("Testing Sylvan Caryatid, Untap, and Upkeep...")
+    
+    #add a caryatid to the all-roots game
+    carygame1,_ = game.CopyAndTrack([])
+    carygame1.MoveZone(Cardboard.Cardboard(Decklist.Caryatid),ZONE.FIELD)
+    #should only see one valid ability to activate, since Caryatid not hasty
+    assert(len(carygame1.GetValidActivations())==1)  
+    assert(len(carygame1.GetValidCastables())==0)    #no castable cards
+
+    #try untap and upkeep
+    carygame1.UntapStep()
+    carygame1.UpkeepStep()
+    assert(len(carygame1.GetValidCastables())==0)    #no castable cards
+    gameN = carygame1
+    options = gameN.GetValidActivations()+gameN.GetValidCastables()
     assert(len(options)==2)
     while len(options)>0:
-        (gameN,_) = options[0].Run()[0]
-        options = gameN.GetValidActions()
+        if isinstance(options[0],Abilities.StackEffect):
+            [gameN] = options[0].PutOnStack(gameN)
+        elif isinstance(options[0],Cardboard.Cardboard):
+            [gameN] = gameN.CastSpell(options[0])  #puts it on the stack
+        else:
+            raise ValueError("incorrect type of object on stack!")
+        [gameN] = gameN.ResolveTopOfStack()
+        options = gameN.GetValidActivations()+gameN.GetValidCastables()
     assert(len(gameN.hand)==2)
     assert(len(gameN.field)==3)
     assert(gameN.pool == ManaHandler.ManaPool("G"))
@@ -65,112 +114,135 @@ if __name__ == "__main__":
     #basic game-loop
     def BasicLoop(gamestate):
         gameN = gamestate
-        options = gameN.GetValidActions()
+        options = gameN.GetValidActivations()+gameN.GetValidCastables()
         while len(options)>0:
+            if gameN.verbose:
+                print("\n")
+                print(gameN)
             if len(options)>1 and gameN.verbose:
-                print("Split! options are:",options)
+                print("\nSplit! options are:",options)
                 print("Taking last option in list")
-            universes = options[-1].Run()
+            if isinstance(options[-1],Abilities.StackEffect):
+                universes = options[-1].PutOnStack(gameN)
+            elif isinstance(options[-1],Cardboard.Cardboard):
+                universes = gameN.CastSpell(options[-1])  #puts it on the stack
+            else:
+                raise ValueError("incorrect type of object on stack!")
+            #universes is a list of GameStates
             if len(universes)>1 and gameN.verbose:
-                print("Split! universes are:")
-                for u,_ in universes:
+                print("\nSplit! universes are:")
+                for u in universes:
                     print("     ---\n",u,"\n     ---")
                 print("Taking last option in list")
-            (gameN,_) = universes[-1]
-            options = gameN.GetValidActions()
+            gameN = universes[-1]
+            while len(gameN.stack)>0:
+                universes = gameN.ResolveTopOfStack()
+                if len(universes)>1 and gameN.verbose:
+                    print("Split! universes are:")
+                    for u,_ in universes:
+                        print("     ---\n",u,"\n     ---")
+                    print("Taking last option in list")
+                gameN = universes[-1]
+            options = gameN.GetValidActivations()+gameN.GetValidCastables()
         return gameN
 
-    ###--------------------------------------------------------------------
-    
-    #testing GetValidActions not double-counting duplicate cards
-    game = GameState.GameState()
-    game.verbose = False
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    forest = Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD)
-    game._AddToZone( forest )
-    game._AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.HAND))
-    plains = Cardboard.Cardboard(Decklist.Plains,ZONE.HAND)
-    game._AddToZone( plains )
-    
-    assert(len(game.GetValidActions())==2)
-    #tap one forest, I'll still have the option to tap more forests
-    [(gameF,forestF)] = forest.cardtype.activated[0].PayAndExecute(game,forest)
-    assert(len(gameF.GetValidActions())==2)
-    assert(gameF.pool == ManaHandler.ManaPool("G"))
-    assert(forest.tapped == False)  #original forest untouched
-    assert(forestF.tapped == True)  #copy of forest is tapped
-    #play one plains, I'll lose option to play plains but get to tap plains now
-    [(gameP,plainsP)] = plains.cardtype.Cast(game,plains)
-    assert(len(gameP.GetValidActions())==2)
-    assert(len(gameP.hand)==1)
-    assert(len(gameP.field)==4)
-    assert(gameP.pool == ManaHandler.ManaPool(""))
-    #untap and go to next turn, should have 3 options again: play, tap W, tap G
-    gameP.Untap()
-    gameP.Upkeep()
-    assert(len(gameP.GetValidActions())==3)
-    
-    #original game is untouched
-    assert(len(game.hand)==2)
-    assert(game.pool == ManaHandler.ManaPool(""))
     
     ###--------------------------------------------------------------------
+    print("Testing basic lands and BasicLoop...")
     
-    #testing basic lands
     game = GameState.GameState()
     game.verbose = False
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
-                      
+    #field
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest),ZONE.FIELD)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Plains),ZONE.FIELD)
+    #hand
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest),ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest),ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Roots),ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Caryatid),ZONE.HAND)
+                       
     gameN = BasicLoop(game)
     assert(len(gameN.hand)==1)
     assert(len(gameN.field)==5)
     assert(gameN.pool == ManaHandler.ManaPool(""))
     assert(len(game.field)==2)  #orig game is untouched
 
+
     ###--------------------------------------------------------------------
+    print("Testing shock-lands...")
     
-    #testing shocklands
     game = GameState.GameState()
     game.verbose = False
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD))
-    game._AddToZone( Cardboard.Cardboard(Decklist.BreedingPool,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
-                      
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest),ZONE.FIELD)
+    #hand
+    game.MoveZone(Cardboard.Cardboard(Decklist.BreedingPool),ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Caryatid),ZONE.HAND)
+    
+    #run all the way through, with the settings I've chosen, should end with
+    #shocking in the Breeding Pool and using it to cast the Caryatid                  
     gameN = BasicLoop(game)
     assert(len(gameN.hand)==0)
     assert(len(gameN.field)==3)
     assert(gameN.pool == ManaHandler.ManaPool(""))
     assert(gameN.life == 18)
+    
+    #make sure we have shock and tapped options available
+    options = game.GetValidCastables()
+    assert(len(options)==1)
+    assert(options[0] is game.hand[1]) #only castable is shockland
+    universes = game.CastSpell(options[-1])  #puts it on the stack
+    assert(len(universes)==1)  #only one way to put land on the stack
+    universes = universes[0].ResolveTopOfStack()
+    assert(len(universes)==2)  #shock or tapped
+    
+    #shock-universe
+    assert( not [u for u in universes if u.life==18][0].field[0].tapped )
+    #tapped-universe
+    assert(     [u for u in universes if u.life==20][0].field[0].tapped )
+    
+    
 
     ###--------------------------------------------------------------------
+    print("""Testing equality of gamestates...""")
     
-    #testing equality of gamestates
     game = GameState.GameState()
     game.verbose = False
-    forest = Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD)
-    game._AddToZone( forest )
-    game._AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
-    game._AddToZone( Cardboard.Cardboard(Decklist.HallowedFountain,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
-    game._AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+    #field
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains)          ,ZONE.FIELD)
+    #hand
+    game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest)          ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Roots)           ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caryatid)        ,ZONE.HAND)
     
-    assert( game == game.copy() )
-    cp = game.copy([forest])
+    #try to copy, make sure equality holds
+    cp = game.copy()
+    assert( cp == game )
+    assert( cp is not game)
+
+    #add this forest to one but not the other
+    forest = Cardboard.Cardboard(Decklist.Forest)
+    game.MoveZone( forest, ZONE.FIELD )    
     assert( game != cp )
+    #add a copy of the forst to the other
     forest2 = forest.copy()
-    cp._AddToZone(forest2)
+    forest2.zone = ZONE.NEW
+    cp.MoveZone(forest2, ZONE.FIELD)
+    assert(forest != forest2)  #Cardboard uses "is" for eq  (or else "in list" breaks)
+    assert(forest is not forest2)
     assert( game == cp )
-    [(cp3,forest3)] = forest2.GetAbilities()[0].PayAndExecute(cp,forest2)
-    assert( game != cp3)
+    #tap both of these forests for mana
+    temp1 = game.ActivateAbilities(forest , forest.GetAbilities()[0])[0]
+    assert(temp1 != game)
+    temp2 =   cp.ActivateAbilities(forest2,forest2.GetAbilities()[0])[0]
+    assert(temp1==temp2)  #equality should see the stack
+    #resolve first mana ability
+    cp3 = temp1.ResolveTopOfStack()[0]
+    assert(game != cp3)
     assert( cp != cp3)
-    [(cp4,forest4)] = forest.GetAbilities()[0].PayAndExecute(game,forest)
+    assert( cp3 != temp1)
+    #resolve second mana ability
+    cp4 = temp2.ResolveTopOfStack()[0]
     assert( game != cp4)
     assert( cp3 == cp4 )
     assert( not (cp3 is cp4) )
@@ -183,39 +255,40 @@ if __name__ == "__main__":
     #two lands. put into play in opposite order. Should be equivalent.
     game1 = GameState.GameState()
     game1.verbose = False
-    game1._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
-    game1._AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.HAND) )
+    game1.MoveZone( Cardboard.Cardboard(Decklist.Forest),ZONE.HAND)
+    game1.MoveZone( Cardboard.Cardboard(Decklist.Plains),ZONE.HAND)
     game2 = game1.copy()
     #game 1: [0] into play, then the other
     game1.MoveZone(game1.hand[0],ZONE.FIELD)
-    game1.Untap()
+    game1.UntapStep()
     game1.MoveZone(game1.hand[0],ZONE.FIELD)
     #game 2: [1] into play, then the other
     game2.MoveZone(game2.hand[1],ZONE.FIELD)
-    game2.Untap()
+    game2.UntapStep()
     game2.MoveZone(game2.hand[0],ZONE.FIELD)
     assert(game1==game2)
     
-    #two creatures. put into play in opposite order. Should NOT be equivalent.
+    #two creatures. put into play in opposite order. Should be NOT equivalent
+    #because of summoning sickness
     game1 = GameState.GameState()
     game1.verbose = False
-    game1._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND) )
-    game1._AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND) )
+    game1.MoveZone( Cardboard.Cardboard(Decklist.Caryatid), ZONE.HAND)
+    game1.MoveZone( Cardboard.Cardboard(Decklist.Roots)   , ZONE.HAND)
     game2 = game1.copy()
     #game 1: [0] into play, then the other
     game1.MoveZone(game1.hand[0],ZONE.FIELD)
-    game1.Untap()
+    game1.UntapStep()
     game1.MoveZone(game1.hand[0],ZONE.FIELD)
     #game 2: [1] into play, then the other
     game2.MoveZone(game2.hand[1],ZONE.FIELD)
-    game2.Untap()
+    game2.UntapStep()
     game2.MoveZone(game2.hand[0],ZONE.FIELD)
     assert(game1!=game2)  #creatures DO get summoning-sick. 
     
     
     ###--------------------------------------------------------------------
+    print("Testing TurnTracker...")
     
-    #testing TurnTracker
     game = GameState.GameState()
     game.verbose = False
     forest = Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD)
