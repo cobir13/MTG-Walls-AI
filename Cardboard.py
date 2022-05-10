@@ -73,7 +73,8 @@ class Cardboard():
         if self.summonsick and isinstance(self.cardtype,CardType.Creature):
             s += "S"
         s += str(self.zone)
-        s += "_"+"_".join(self.counters)
+        if len(self.counters)>0:
+            s += "["+",".join(self.counters)+"]"
         return s
         
     def EquivTo(self,other):

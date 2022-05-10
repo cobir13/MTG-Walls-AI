@@ -8,7 +8,7 @@ Created on Mon Dec 28 21:13:59 2020
 import random
 # import Decklist
 import Cardboard
-from Abilities import StackEffect
+from Abilities import StackEffect,ManaAbility
 import CardType
 import ZONE
 from ManaHandler import ManaPool
@@ -22,8 +22,12 @@ class LoseTheGameError(Exception):
 
 """
 Oddity notes:
-   - Lands use the stack 
-   - must pre-float all mana to pay for a spell
+    - must pre-float all mana to pay for a spell
+    
+
+Notes on actually-correct things:
+    - "casting" a land doesn't use the stack
+    - mana abilities don't use the stack
     
 """
 
@@ -95,10 +99,11 @@ class GameState():
 
     def __eq__(self,other):
         #easy disqualifications first
-        if not (len(self.deck)==len(other.deck)
+        if not (    len(self.deck)==len(other.deck)
                 and len(self.hand)==len(other.hand)
                 and len(self.field)==len(other.field)
                 and len(self.grave)==len(other.grave)
+                and len(self.stack)==len(other.stack)
                 and self.turncount == other.turncount
                 and self.myturn == other.myturn
                 and self.life == other.life
@@ -117,6 +122,10 @@ class GameState():
         for ii in range(len(self.field)):
             if not self.field[ii].EquivTo( other.field[ii] ):
                 return False
+        #stack isn't SORTED but it's ORDERED so can treat it the same
+        for ii in range(len(self.stack)):
+            if not self.stack[ii].EquivTo( other.stack[ii] ):
+                return False
         #if got to here, we're good!
         return True
     
@@ -129,6 +138,7 @@ class GameState():
         s += "_" + ",".join([c.ID() for c in self.hand])
         s += "_" + ",".join([c.ID() for c in self.field])
         s += "_" + ",".join([c.ID() for c in self.grave])
+        s += "_" + ",".join([c.ID() for c in self.stack])
         s += "(%s)" %str(self.pool)
         return s
 
@@ -236,14 +246,14 @@ class GameState():
             raise IndexError
         return zone
     
-    def _AddToZone(self,cardboard,zone=None):
-        """For testing.  Should not be used otherwise"""
-        if zone is None:
-            zone = cardboard.zone
-        zonelist = self._GetZone(zone)
-        zonelist.append(cardboard)
-        zonelist.sort(key=Cardboard.Cardboard.ID)
-        print("AAAAH SOMEONE USED _AddToZone TO MOVE %s AAAAAH" %str(cardboard))
+    # def _AddToZone(self,cardboard,zone=None):
+    #     """For testing.  Should not be used otherwise"""
+    #     if zone is None:
+    #         zone = cardboard.zone
+    #     zonelist = self._GetZone(zone)
+    #     zonelist.append(cardboard)
+    #     zonelist.sort(key=Cardboard.Cardboard.ID)
+    #     print("AAAAH SOMEONE USED _AddToZone TO MOVE %s AAAAAH" %str(cardboard))
     
     def MoveZone(self,cardboard,destination):
         """Move the specified piece of cardboard from the zone it is currently
@@ -302,6 +312,7 @@ class GameState():
         """MUTATES. Returns list of StackEffects that trigger during untap."""
         # newstate,_ = self.CopyAndTrack([])  #copy, but nothing to track
         self.pool = ManaPool("")
+        self.stack = []
         self.turncount+=1
         self.playedland = False
         effects = []
@@ -320,8 +331,6 @@ class GameState():
                 effects.append (newEffect) 
         return effects
 
-
-
     def Draw(self):
         """MUTATES. Returns list of StackEffects that trigger due to draw."""
         effects = []
@@ -336,8 +345,6 @@ class GameState():
             return effects
         else:
             raise LoseTheGameError
-
-
 
 
     ###-----BRANCHING FUNCTIONS. Return a list of gamestates but do not mutate
@@ -358,11 +365,15 @@ class GameState():
             #Each has a GameState and a Cardboard being cast. Move the card
             #being cast to the stack, then see if this triggers any effects.
             #Note: these are COPIES so they are safe to mutate.
-            effects = state.MoveZone(card,ZONE.STACK)
-            state.stack += effects   #------------------------------------------randomize order of triggers? for now, no    
-            #check state-based actions, add any effects from THAT to the stack
-            state.stack += state.StateBasedActions()
-            cast_list.append( state )
+            if isinstance(card.cardtype,CardType.Land):
+                #special exception for Lands, which don't use the stack
+                cast_list += card.cardtype.ResolveSpell(state,card) #[GameStates]
+            else:
+                effects = state.MoveZone(card,ZONE.STACK)
+                state.stack += effects   #------------------------------------------randomize order of triggers? for now, no    
+                #check state-based actions, add any effects from THAT to the stack
+                state.stack += state.StateBasedActions()
+                cast_list.append( state )
         return cast_list
         
     
@@ -375,10 +386,18 @@ class GameState():
         #check to make sure the execution is legal
         if not ability.CanAfford(self,cardboard):
             return []
-        newlist = ability.Pay(self,cardboard)
-        for game,source in newlist:
-            game.stack.append(StackEffect(source,[],ability))
-        return [tup[0] for tup in newlist]  #only need the GameStates of the pairs
+        #pay for ability
+        pairlist = ability.Pay(self,cardboard)  #[(GameState,Cardboard)] pairs
+        statelist = []
+        for game,source in pairlist:
+            if isinstance(ability,ManaAbility):
+                #special exception for ManaAbilities, which don't use the stack
+                statelist += ability.Execute(game,source)
+            else:
+                #add ability to stack    
+                game.stack.append(StackEffect(source,[],ability))
+                statelist.append(game)
+        return statelist
     
     
     def ResolveTopOfStack(self):

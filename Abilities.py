@@ -123,8 +123,9 @@ class ActivatedAbility(GenericAbility):
 
 
 class ManaAbility(ActivatedAbility):
-    """No functional difference to ActivatedAbility, just for tracking and
-    as a place to collect some useful functions."""
+    """No functional difference to ActivatedAbility, just for tracking so that
+    ManaAbilities can skip the stack.  Also a good place to collect some
+    useful functions that specific abilities might want to make use of."""
     
     def DorkAvailable(gamestate,source):
         return (not source.tapped and not source.summonsick and 
@@ -184,3 +185,18 @@ class StackEffect():
     
     def __repr__(self):
         return "Effect: "+self.ability.name
+    
+    def ID(self):
+        cards = ",".join([c.ID() for c in [self.source]+self.otherlist])
+        return "E(%s|%s)" %(cards,self.ability.name)
+    
+    def EquivTo(self,other):
+        return self.ID() == other.ID()
+        # return (    type(self) == type(other)
+        #         and self.source == other.source
+        #         and set(self.otherlist) == set(other.otherlist)
+        #         and self.ability.name == other.ability.name)
+
+    @property
+    def name(self):
+        return self.ability.name

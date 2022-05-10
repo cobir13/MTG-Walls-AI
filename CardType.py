@@ -79,7 +79,6 @@ class Permanent(CardType):
         self.as_enter = None  #function: GameState,Cardboard->[(GameState,Cardboard)]
     
     def ResolveSpell(self,gamestate,cardboard):
-        assert(gamestate.stack[-1] is cardboard)
         newstate,[perm] = gamestate.CopyAndTrack([cardboard])
         effects = newstate.MoveZone(perm,ZONE.FIELD)
         #need to reorder effects???  later ------------------------------------Add reshuffling of effects?

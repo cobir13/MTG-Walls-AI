@@ -8,7 +8,7 @@ Created on Tue Dec 29 22:15:57 2020
 import ZONE
 import GameState
 import ManaHandler
-# import CardType
+import CardType
 import Decklist
 import Cardboard
 import Abilities
@@ -18,7 +18,7 @@ import PlayTree
 
 
 if __name__ == "__main__":
-
+    ###--------------------------------------------------------------------
     print("Testing Wall of Roots...")
     
     game = GameState.GameState()
@@ -35,17 +35,15 @@ if __name__ == "__main__":
     assert(len(game.GetValidActivations())==1)  #1 ability to activate
     assert(len(game.GetValidCastables())==0)    #no castable cards
     [copygame1] = game.GetValidActivations()[0].PutOnStack(game)
-    assert(copygame1.pool == ManaHandler.ManaPool(""))  #no mana YET
-    assert(len(copygame1.stack)==1)             #one ability on the stack
+    #remember, mana abilities don't use the stack! so mana is added immediately
     assert(len(copygame1.field[0].counters)>0)  #counters on the Wall of Roots
-    
-    [copygame2] = copygame1.ResolveTopOfStack()
-    assert(len(copygame2.GetValidActivations())==0)
-    assert(len(copygame2.GetValidCastables())==0)
-    assert(len(copygame2.stack)==0)
-    assert(copygame2.pool == ManaHandler.ManaPool("G"))
+    assert(len(copygame1.GetValidActivations())==0)
+    assert(len(copygame1.GetValidCastables())==0)
+    assert(len(copygame1.stack)==0)
+    assert(copygame1.pool == ManaHandler.ManaPool("G"))
     
     #add in an extra mana to see what happens
+    copygame2 = copygame1.copy()
     copygame2.pool.AddMana("G")
     assert(len(copygame2.GetValidActivations())==0)  #no abilities to activate
     #all 3 roots only generate 1 option--to cast Roots
@@ -77,8 +75,7 @@ if __name__ == "__main__":
     assert(str(game.pool)=="")
 
     
-    
-    ###---finished testing wall of Roots.  let's try Caryatid
+    ###--------------------------------------------------------------------
     print("Testing Sylvan Caryatid, Untap, and Upkeep...")
     
     #add a caryatid to the all-roots game
@@ -102,7 +99,8 @@ if __name__ == "__main__":
             [gameN] = gameN.CastSpell(options[0])  #puts it on the stack
         else:
             raise ValueError("incorrect type of object on stack!")
-        [gameN] = gameN.ResolveTopOfStack()
+        while len(gameN.stack)>0:
+            [gameN] = gameN.ResolveTopOfStack()
         options = gameN.GetValidActivations()+gameN.GetValidCastables()
     assert(len(gameN.hand)==2)
     assert(len(gameN.field)==3)
@@ -190,9 +188,7 @@ if __name__ == "__main__":
     options = game.GetValidCastables()
     assert(len(options)==1)
     assert(options[0] is game.hand[1]) #only castable is shockland
-    universes = game.CastSpell(options[-1])  #puts it on the stack
-    assert(len(universes)==1)  #only one way to put land on the stack
-    universes = universes[0].ResolveTopOfStack()
+    universes = game.CastSpell(options[-1])  #puts it into play, b/c lands not on stack
     assert(len(universes)==2)  #shock or tapped
     
     #shock-universe
@@ -232,17 +228,10 @@ if __name__ == "__main__":
     assert(forest is not forest2)
     assert( game == cp )
     #tap both of these forests for mana
-    temp1 = game.ActivateAbilities(forest , forest.GetAbilities()[0])[0]
-    assert(temp1 != game)
-    temp2 =   cp.ActivateAbilities(forest2,forest2.GetAbilities()[0])[0]
-    assert(temp1==temp2)  #equality should see the stack
-    #resolve first mana ability
-    cp3 = temp1.ResolveTopOfStack()[0]
+    cp3 = game.ActivateAbilities(forest , forest.GetAbilities()[0])[0]
     assert(game != cp3)
     assert( cp != cp3)
-    assert( cp3 != temp1)
-    #resolve second mana ability
-    cp4 = temp2.ResolveTopOfStack()[0]
+    cp4 =   cp.ActivateAbilities(forest2,forest2.GetAbilities()[0])[0]
     assert( game != cp4)
     assert( cp3 == cp4 )
     assert( not (cp3 is cp4) )
@@ -291,52 +280,60 @@ if __name__ == "__main__":
     
     game = GameState.GameState()
     game.verbose = False
-    forest = Cardboard.Cardboard(Decklist.Forest,ZONE.FIELD)
-    game._AddToZone( forest )
-    game._AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.FIELD))
-    game._AddToZone( Cardboard.Cardboard(Decklist.HallowedFountain,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
-    game._AddToZone( Cardboard.Cardboard(Decklist.Roots,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+    #field
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest          ),ZONE.FIELD)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains          ),ZONE.FIELD)
+    #hand
+    game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest          ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Roots           ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caryatid        ),ZONE.HAND)
     
-
     tracker = PlayTree.TurnTracker.InitFromGameState(game)
     tracker.PlayTurn()
-    
     assert(len(tracker.finalnodes)==8)
-    assert(len(tracker.allnodes)==58)
-    assert(tracker.traverse_counter == 105)
-    # print(len(tracker.finalnodes))
+    #58  pre-stack. 215 mana on stack.  98 mana off stack.  84 land off stack.
+    assert(len(tracker.allnodes)==84)
+    #105 pre-stack. 340 mana on stack. 170 mana off stack. 146 land off stack.
+    assert(tracker.traverse_counter == 146)
+    assert(len(tracker.GetFinal())==6 )
+    assert(len(tracker.GetAll())  ==18)
     # for node in tracker.finalnodes:
     #     print("-----------")
     #     print(node)
     # print("\n\n")
-    
+
     #fixing TurnTracker history duplication: second minor test
     game2 = GameState.GameState()
-    game2.verbose = False
-    game2._AddToZone( Cardboard.Cardboard(Decklist.HallowedFountain,ZONE.HAND))
-    game2._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND) )
+    game2.verbose = True
+    game2.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain),ZONE.HAND)
+    game2.MoveZone( Cardboard.Cardboard(Decklist.Forest          ),ZONE.HAND)
     
     tracker2 = PlayTree.TurnTracker.InitFromGameState(game2)
     tracker2.PlayTurn()
-    
     assert(len(tracker2.finalnodes)==4)
     assert(len(tracker2.allnodes)==7)
     assert(tracker2.traverse_counter == 6)
+    assert(len(tracker2.GetFinal())==3 )
+    assert(len(tracker2.GetAll())  ==4 )
+    histlength = [0,0,0,0]
+    for n in tracker2.allnodes:
+        histlength[len(n.history)] += 1
+    assert(histlength==[1,3,3,0])  #1 with zero action, 3 with one...
+    
     
     ###--------------------------------------------------------------------
+    print("Testing PlayTree...")
     
-    #testing PlayTree
     game = GameState.GameState()
     game.verbose = False
-    game._AddToZone( Cardboard.Cardboard(Decklist.Plains,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Roots ,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caryatid,ZONE.HAND))
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains   ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest   ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest   ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Roots    ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caryatid ),ZONE.HAND)
     for x in range(10):
-        game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.DECK))
+        game.MoveZone( Cardboard.Cardboard(Decklist.Forest),ZONE.DECK)
 
     tree = PlayTree.PlayTree(game,5)
     # tree.PrintLatest()
@@ -354,93 +351,99 @@ if __name__ == "__main__":
 
 
     ###--------------------------------------------------------------------
+    print("Testing Caretakers, Axebane, Battlement...")
 
-    ###Testing Caretakers
     game = GameState.GameState()
     game.verbose = False
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caretaker,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caretaker,ZONE.HAND))
-    game.MoveZone(game.hand[0],ZONE.FIELD)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
+    effects = game.MoveZone(game.hand[0],ZONE.FIELD)
+    assert(len(effects)==0)  #nothing to trigger off of this move
     
     assert(game.field[0].summonsick)
-    assert(len(game.GetValidActions())==0)
+    assert(len(game.GetValidActivations())==0)
     #what if I give the caretaker something to tap?
-    caryatid = Cardboard.Cardboard(Decklist.Caryatid,ZONE.FIELD)
-    game._AddToZone(caryatid)
-    assert(len(game.GetValidActions())==0) #no, caretaker still summonsick. good.
+    caryatid = Cardboard.Cardboard(Decklist.Caryatid)
+    game.MoveZone(caryatid,ZONE.FIELD)
+    assert(len(game.GetValidActivations())==0) #no, caretaker still summonsick. good.
     game.field.remove(caryatid)
     
-    game.Untap()
-    assert(len(game.GetValidActions())==0)  #nothing to tap
+    game.UntapStep()
+    assert(len(game.GetValidActivations())==0)  #nothing to tap
     
     #give it something to tap
-    game._AddToZone(caryatid)
-    assert(len(game.GetValidActions())==1)
-    [(univ1,_)] = game.GetValidActions()[0].Run()
+    caryatid.zone = ZONE.NEW
+    game.MoveZone(caryatid,ZONE.FIELD)
+    assert(len(game.GetValidActivations())==1)
+    
+    [univ1] = game.GetValidActivations()[0].PutOnStack(game) #mana so just happens
     assert(univ1.pool == ManaHandler.ManaPool("A"))
     assert(all([c.tapped for c in univ1.field]))
     
     #give it TWO things to tap
     game.MoveZone(game.hand[0],ZONE.FIELD)
-    assert(len(game.GetValidActions())==1)
-    universes = game.GetValidActions()[0].Run()
+    assert(len(game.GetValidActivations())==1)  #still only 1 ability even if 2 "targets"   
+    universes = game.GetValidActivations()[0].PutOnStack(game) #mana so just happens
     assert(len(universes)==2) #two possible things to tap
-    [(univ2,care2),(univ3,care3)] = universes
+    [univ2,univ3] = universes
     assert(univ2.pool == ManaHandler.ManaPool("A"))
     assert(univ3.pool == ManaHandler.ManaPool("A"))
-    assert(care2.tapped and care3.tapped)
     assert(len(univ2.field)==len(univ3.field))
+    #check that they are really tapped differently
     assert([c.tapped for c in univ2.field] != [c.tapped for c in univ3.field])
 
     #see what happens with two active caretakers
     game3 = univ3
-    game3.Untap()
-    assert(len(game3.GetValidActions())==2)  #2 caretakers are combined to one action
-    universes = care3.GetAbilities()[0].PayAndExecute(univ3,care3)
+    game3.UntapStep()
+    assert(len(game3.GetValidActivations())==2)  #2 Caretakers combined, Caryatid
+    care3 = [c for c in game3.field if c.cardtype == Decklist.Caretaker][0]
+    universes = game3.ActivateAbilities(care3,care3.GetAbilities()[0])
     assert(len(universes)==2)
-    [(univ4,care4),(univ5,care5)] = universes
+    [univ4,univ5] = universes
     assert(univ4.pool == ManaHandler.ManaPool("A"))
     assert(univ5.pool == ManaHandler.ManaPool("A"))
-    assert(care4.tapped and care5.tapped)
     assert(len(univ4.field)==len(univ5.field))
     assert([c.tapped for c in univ4.field] != [c.tapped for c in univ5.field])
     #one universe should have 1 action left (caryatid), other doesn't (lone caretaker)
-    assert({len(univ4.GetValidActions()),len(univ5.GetValidActions())}  == {0,1})
+    assert({len(univ4.GetValidActivations()),len(univ5.GetValidActivations())}  == {0,1})
 
 
     #may as well use this setup to test Axebane and Battlement as well
-    axe = Cardboard.Cardboard(Decklist.Axebane,ZONE.FIELD)
-    battle = Cardboard.Cardboard(Decklist.Battlement,ZONE.FIELD)
-    game6 = game3.copy()
-    game6._AddToZone(axe)
-    game6._AddToZone(battle)
-    game6.Untap()
-    [(u_axe,_)] = axe.GetAbilities()[0].PayAndExecute(game6,axe)
+    axe = Cardboard.Cardboard(Decklist.Axebane)
+    battle = Cardboard.Cardboard(Decklist.Battlement)
+    game6 = univ2.copy()
+    game6.MoveZone(axe   ,ZONE.FIELD)
+    game6.MoveZone(battle,ZONE.FIELD)
+    assert(len(game6.GetValidActivations())==0) #still summonsick. good.
+    game6.UntapStep()
+    [u_axe] = game6.ActivateAbilities(axe,axe.GetAbilities()[0])
     assert(u_axe.pool == ManaHandler.ManaPool("AAAAA"))
-    [(u_bat,_)] = battle.GetAbilities()[0].PayAndExecute(game6,battle)
+    [u_bat] = game6.ActivateAbilities(battle,battle.GetAbilities()[0])
     assert(u_bat.pool == ManaHandler.ManaPool("GGGGG"))
+
     
 
     ###--------------------------------------------------------------------
+    print("Can PlayTree find 8 mana on turn 3...")
 
     #testing PlayTree -- can it find the line for 8 mana on turn 3
     game = GameState.GameState()
     game.verbose = False
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Roots ,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Caretaker,ZONE.HAND))
-    game._AddToZone( Cardboard.Cardboard(Decklist.Battlement,ZONE.HAND))
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Roots ) ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Battlement),ZONE.HAND)
     for x in range(10):
-        game._AddToZone( Cardboard.Cardboard(Decklist.Forest,ZONE.DECK))
+        game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.DECK)
     
     tree = PlayTree.PlayTree(game,5)
     assert(len(tree.LatestNodes())==1)
     tree.PlayATurn()
     assert(len(tree.LatestNodes())==2)
     tree.PlayATurn()
-    # tree.PrintLatest()
+    tree.PrintLatest()
     assert(len(tree.LatestNodes())==2)
     assert(any([n.state.pool.CanAffordCost(ManaHandler.ManaCost("8"))
                                      for n in tree.LatestNodes()] ))
