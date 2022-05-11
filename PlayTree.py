@@ -161,6 +161,9 @@ class TurnTracker():
             if self.state.verbose:
                 self.history.append(description)
         
+        def copy(self):
+            return TurnTracker.ActionNode(self.state.copy(),
+                                          [s for s in self.history])
         
             
     
@@ -177,17 +180,18 @@ class PlayTree():
 
                                     
     
-    def PlayATurn(self):
+    def PlayNextTurn(self):
         #get final state of previous turn
         prevtracker = self.trackerlist[-1]
         #apply untap, upkeep, and draw to these nodes
         newnodes = set()
         for node in prevtracker.GetFinal():
-            node.AddToHistory("untap,upkeep,draw")
-            node.state.stack += node.state.UntapStep()
-            node.state.stack += node.state.UpkeepStep()
-            node.state.stack += node.state.Draw()
-            newnodes.add(node)
+            newnode = node.copy()
+            newnode.AddToHistory("untap,upkeep,draw")
+            newnode.state.stack += newnode.state.UntapStep()
+            newnode.state.stack += newnode.state.UpkeepStep()
+            newnode.state.stack += newnode.state.Draw()
+            newnodes.add(newnode)
         #use these nodes as starting piont for next turn's tracker
         newtracker = TurnTracker(newnodes)
         self.trackerlist.append(newtracker)

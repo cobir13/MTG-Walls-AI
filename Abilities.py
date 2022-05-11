@@ -113,6 +113,31 @@ class GenericAbility():
 
 
 
+class TriggeredByMove(GenericAbility):
+    """Also a good place to collect some useful functions that specific
+    abilities might want to make use of.
+
+    Remember: trigger_fn has the signature:
+        GameState,source Cardboard, trigger Cardboard, origin Zone -> bool
+    """
+    def __init__(self,name,trigger_fn,execute_fn):
+        super().__init__(name=name,cost=None,trigger_fn=trigger_fn,execute_fn=execute_fn)   
+
+    def ETB_self(gamestate,source,trigger,origin):
+        return (source is trigger and trigger.zone == ZONE.FIELD)
+    
+    def ETB_other(gamestate,source,trigger,origin):
+        return (source.zone == ZONE.FIELD and trigger.zone == ZONE.FIELD)
+    
+    def Cast_self(gamestate,source,trigger,origin):
+        return (source is trigger and trigger.zone == ZONE.STACK)
+
+    def Dies_self(gamestate,source,trigger,origin):
+        return (    source is trigger
+                and trigger.zone == ZONE.GRAVE
+                and origin == ZONE.FIELD)
+
+
 
 class ActivatedAbility(GenericAbility):
     
@@ -156,11 +181,6 @@ class ManaAbility(ActivatedAbility):
 
 
 
-
-class TriggeredByMove(GenericAbility):
-    
-    def __init__(self,name,cost,trigger_fn):
-        super().__init__(name=name,cost=cost,trigger_fn=trigger_fn,execute_fn=None)
 
 
 

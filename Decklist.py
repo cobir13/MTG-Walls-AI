@@ -6,7 +6,7 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 from CardType import Creature,Land#,Spell
-from Abilities import ManaAbility #,ActivatedAbility
+from Abilities import ManaAbility,TriggeredByMove #,ActivatedAbility
 from Costs import Cost
 
 import ZONE
@@ -118,6 +118,98 @@ Axebane.activated.append(
 
 ##---------------------------------------------------------------------------##
 
+def DrawACard(gamestate,source):
+    newstate = gamestate.copy()
+    effects = newstate.Draw()
+    newstate.stack += effects
+    return [newstate]
+
+Blossoms = Creature("Blossoms",Cost("1G",None,None),["defender"],0,4)
+Blossoms.trig_move.append(
+                TriggeredByMove("Blossoms etb draw",
+                                TriggeredByMove.ETB_self,
+                                DrawACard) )
+
+##---------------------------------------------------------------------------##
+
+Omens = Creature("Omens",Cost("1W",None,None),["defender"],0,4)
+Omens.trig_move.append(
+                TriggeredByMove("Omens etb draw",
+                                TriggeredByMove.ETB_self,
+                                DrawACard) )
+
+##---------------------------------------------------------------------------##
+
+def ETB_defender(gamestate,source,trigger,origin):
+    return (    source.zone == ZONE.FIELD
+            and trigger.zone == ZONE.FIELD
+            and "defender" in trigger.cardtype.typelist)
+
+Arcades = Creature("Arcades",Cost("1WUG",None,None),["flying","vigilance"],3,5)
+Arcades.trig_move.append(
+                TriggeredByMove("Arcades draw trigger",
+                                ETB_defender,
+                                DrawACard) )
+
+
+
+
+
+
+
+
+
+
+##---------------------------------------------------------------------------##
+
+
+
+
+# next: CoCo
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ##---------------------------------------------------------------------------##
+# class Blossoms(CardType.Creature):
+#     def __init__(self):
+#         super().__init__("Blossoms","1G",0,4,["defender"])
+#     def Trigger(self,card):
+#         if card == self: #if IT is the thing which just entered the battlefield
+#             self.gamestate.Draw()
+# ##---------------------------------------------------------------------------##
+# ##===========================================================================##
+# ##---------------------------------------------------------------------------##
+# class Arcades(CardType.Creature):
+#     def __init__(self):
+#         super().__init__("Arcades","1GWU",3,5,["legendary","vigilance","flying","dragon"])
+#     def Trigger(self,card):
+#         if "defender" in card.typelist:
+#             self.gamestate.Draw()
+#         if card.name == self.name and card != self:
+#             if self.gamestate.verbose:
+#                 print("LEGEND RULE! SACRIFICING THE NEW ARCADES")
+#             self.gamestate.field.remove(card)
+
+
 
 
 
@@ -182,26 +274,7 @@ HallowedFountain.as_enter = Land.ShockIntoPlay
 
 
 
-# ##---------------------------------------------------------------------------##
-# class Blossoms(CardType.Creature):
-#     def __init__(self):
-#         super().__init__("Blossoms","1G",0,4,["defender"])
-#     def Trigger(self,card):
-#         if card == self: #if IT is the thing which just entered the battlefield
-#             self.gamestate.Draw()
-# ##---------------------------------------------------------------------------##
-# ##===========================================================================##
-# ##---------------------------------------------------------------------------##
-# class Arcades(CardType.Creature):
-#     def __init__(self):
-#         super().__init__("Arcades","1GWU",3,5,["legendary","vigilance","flying","dragon"])
-#     def Trigger(self,card):
-#         if "defender" in card.typelist:
-#             self.gamestate.Draw()
-#         if card.name == self.name and card != self:
-#             if self.gamestate.verbose:
-#                 print("LEGEND RULE! SACRIFICING THE NEW ARCADES")
-#             self.gamestate.field.remove(card)
+
         
 # ##---------------------------------------------------------------------------##
 # class Recruiter(CardType.Creature):

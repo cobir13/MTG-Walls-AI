@@ -332,7 +332,8 @@ class GameState():
         return effects
 
     def Draw(self):
-        """MUTATES. Returns list of StackEffects that trigger due to draw."""
+        """MUTATES. Returns list of StackEffects that trigger due to draw.
+           Draws from index 0 of deck."""
         effects = []
         if len(self.deck)>0:
             effects += self.MoveZone(self.deck[0],ZONE.HAND)

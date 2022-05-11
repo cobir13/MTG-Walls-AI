@@ -13,13 +13,16 @@ import Decklist
 import Cardboard
 import Abilities
 import PlayTree
-# import AI
 
+
+import time
 
 
 if __name__ == "__main__":
+
     ###--------------------------------------------------------------------
     print("Testing Wall of Roots...")
+    startclock = time.perf_counter()
     
     game = GameState.GameState()
     game.verbose = False #True
@@ -74,9 +77,13 @@ if __name__ == "__main__":
     assert(len(game.field)==1)
     assert(str(game.pool)=="")
 
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+
+    
     
     ###--------------------------------------------------------------------
     print("Testing Sylvan Caryatid, Untap, and Upkeep...")
+    startclock = time.perf_counter()
     
     #add a caryatid to the all-roots game
     carygame1,_ = game.CopyAndTrack([])
@@ -105,6 +112,9 @@ if __name__ == "__main__":
     assert(len(gameN.hand)==2)
     assert(len(gameN.field)==3)
     assert(gameN.pool == ManaHandler.ManaPool("G"))
+    
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+    
     
     
     ###--------------------------------------------------------------------
@@ -144,9 +154,11 @@ if __name__ == "__main__":
             options = gameN.GetValidActivations()+gameN.GetValidCastables()
         return gameN
 
-    
+
+
     ###--------------------------------------------------------------------
     print("Testing basic lands and BasicLoop...")
+    startclock = time.perf_counter()
     
     game = GameState.GameState()
     game.verbose = False
@@ -165,9 +177,12 @@ if __name__ == "__main__":
     assert(gameN.pool == ManaHandler.ManaPool(""))
     assert(len(game.field)==2)  #orig game is untouched
 
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+
 
     ###--------------------------------------------------------------------
     print("Testing shock-lands...")
+    startclock = time.perf_counter()
     
     game = GameState.GameState()
     game.verbose = False
@@ -196,10 +211,13 @@ if __name__ == "__main__":
     #tapped-universe
     assert(     [u for u in universes if u.life==20][0].field[0].tapped )
     
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+    
     
 
     ###--------------------------------------------------------------------
     print("""Testing equality of gamestates...""")
+    startclock = time.perf_counter()
     
     game = GameState.GameState()
     game.verbose = False
@@ -274,9 +292,13 @@ if __name__ == "__main__":
     game2.MoveZone(game2.hand[0],ZONE.FIELD)
     assert(game1!=game2)  #creatures DO get summoning-sick. 
     
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+    
+    
     
     ###--------------------------------------------------------------------
     print("Testing TurnTracker...")
+    startclock = time.perf_counter()
     
     game = GameState.GameState()
     game.verbose = False
@@ -321,9 +343,14 @@ if __name__ == "__main__":
         histlength[len(n.history)] += 1
     assert(histlength==[1,3,3,0])  #1 with zero action, 3 with one...
     
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+    
+    
+    
     
     ###--------------------------------------------------------------------
     print("Testing PlayTree...")
+    startclock = time.perf_counter()
     
     game = GameState.GameState()
     game.verbose = False
@@ -338,20 +365,27 @@ if __name__ == "__main__":
     tree = PlayTree.PlayTree(game,5)
     # tree.PrintLatest()
     assert(len(tree.LatestNodes())==2)
-    
-    tree.PlayATurn()
-    # tree.PrintLatest()
-    assert(len(tree.LatestNodes())==4)
 
-    tree.PlayATurn()
+    tree.PlayNextTurn()
+    # tree.PrintLatest()
+
+    tree.PlayNextTurn()
     # tree.PrintLatest()
     assert(len(tree.LatestNodes())==4)
     assert(all([len(n.state.hand)==2 for n in tree.LatestNodes()]))
     assert(all([len(n.state.field)==5 for n in tree.LatestNodes()]))
 
+    assert(all([n.state.turncount == 1 for n in tree.trackerlist[0].allnodes]))
+    assert(all([n.state.turncount == 2 for n in tree.trackerlist[1].allnodes]))
+    assert(all([n.state.turncount == 3 for n in tree.trackerlist[2].allnodes]))
+    
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+    
+    
 
     ###--------------------------------------------------------------------
     print("Testing Caretakers, Axebane, Battlement...")
+    startclock = time.perf_counter()
 
     game = GameState.GameState()
     game.verbose = False
@@ -421,35 +455,193 @@ if __name__ == "__main__":
     [u_bat] = game6.ActivateAbilities(battle,battle.GetAbilities()[0])
     assert(u_bat.pool == ManaHandler.ManaPool("GGGGG"))
 
-    
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+
+
 
     ###--------------------------------------------------------------------
     print("Can PlayTree find 8 mana on turn 3...")
+    startclock = time.perf_counter()
 
-    #testing PlayTree -- can it find the line for 8 mana on turn 3
     game = GameState.GameState()
-    game.verbose = False
+    game.verbose = True
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Roots ) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Battlement),ZONE.HAND)
+    #deck
     for x in range(10):
         game.MoveZone( Cardboard.Cardboard(Decklist.Forest) ,ZONE.DECK)
     
     tree = PlayTree.PlayTree(game,5)
+    assert(len(tree.trackerlist[-1].finalnodes)==1)
     assert(len(tree.LatestNodes())==1)
-    tree.PlayATurn()
+    
+    tree.PlayNextTurn()
+    assert(len(tree.trackerlist[-1].finalnodes)==2)
     assert(len(tree.LatestNodes())==2)
-    tree.PlayATurn()
-    tree.PrintLatest()
+    
+    tree.PlayNextTurn()
+    assert(len(tree.trackerlist[-1].finalnodes)==6)
+    #if I untap, only difference is counters on Roots. I lose track of mana
     assert(len(tree.LatestNodes())==2)
+    #mana not visible in LatestNodes necessarily, but IS visible in finalnodes
     assert(any([n.state.pool.CanAffordCost(ManaHandler.ManaCost("8"))
-                                     for n in tree.LatestNodes()] ))
+                for n in tree.trackerlist[-1].finalnodes] ))
+    
+    # for n in tree.trackerlist[-1].finalnodes:
+    #     print(n)
+    #     print("")
+    # print("-----------\n")
+    
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
 
 
 
+
+    ###--------------------------------------------------------------------
+    print("Testing Wall of Blossoms, Arcades, and ETBs")
+    startclock = time.perf_counter()
+
+    game = GameState.GameState()
+    game.verbose = True
+    #field
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains) ,ZONE.FIELD)
+    #hand
+    game.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.HAND)
+    #deck
+    for x in range(10):
+        game.MoveZone( Cardboard.Cardboard(Decklist.Island) ,ZONE.DECK)
+    
+    tree = PlayTree.PlayTree(game,5)
+    
+    #only option is play Forest, play Blossoms, draw Island
+    assert(len(tree.LatestNodes())==1)
+    assert(len(tree.trackerlist[-1].finalnodes)==1)  
+    [node] = tree.trackerlist[-1].finalnodes
+    final = node.state 
+    assert(len(final.hand )==2)
+    assert(len(final.field)==3)
+    assert(len(final.deck )==9)
+    assert(any([c.cardtype == Decklist.Island for c in final.hand]))
+    assert(not any([c.cardtype == Decklist.Island for c in final.field]))
+    
+    #play next turn: draw Island, play Island, play Blossoms, draw Island
+    tree.PlayNextTurn()
+    assert(len(tree.LatestNodes())==1)
+    assert(len(tree.trackerlist[-1].finalnodes)==2)  #floating W or U
+    [node,_] = tree.trackerlist[-1].finalnodes
+    final = node.state
+    assert(len(final.hand )==2)
+    assert(len(final.field)==5)
+    assert(len(final.deck )==7)
+    
+    assert(any([c.cardtype == Decklist.Island for c in final.hand]))
+    assert(any([c.cardtype == Decklist.Island for c in final.field]))
+    
+    #add Caryatid to hand and cast it, to be sure I didn't make all defenders draw
+    final.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.HAND)
+    final.UntapStep()
+    tree2 = PlayTree.PlayTree(final,5)
+    tree2.PlayNextTurn()
+    assert(len(tree2.LatestNodes())==1)
+    final2 = tree2.LatestNodes()[0].state
+    assert(len(final2.hand )==1)
+    assert(len(final2.field)==8)
+    assert(len(final2.deck )==6)
+    
+    #but what if there was an Arcades in play?
+    gameA = GameState.GameState()
+    #deck
+    for x in range(10):
+        gameA.MoveZone( Cardboard.Cardboard(Decklist.Island) ,ZONE.DECK)
+    efs = gameA.MoveZone( Cardboard.Cardboard(Decklist.Arcades),ZONE.FIELD)
+    assert(len(efs)==0)  #Arcades doesn't trigger itself
+    #add Blossoms to field and hopefully draw 2
+    efs = gameA.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.FIELD)
+    assert(len(efs)==2)
+    assert(len(gameA.hand)==0)  #haven't draw or put triggers on stack
+    assert(len(gameA.deck)==10)  #haven't draw or put triggers on stack
+    gameA.stack += efs
+    while len(gameA.stack)>0:
+        universes = gameA.ResolveTopOfStack()
+        assert(len(universes)==1)
+        gameA = universes[0]
+    #should have drawn 2 cards
+    assert(len(gameA.hand)==2)
+    assert(len(gameA.deck)==8)
+    #now let's try to add a Caryatid to field and hopefully draw 1
+    efs = gameA.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.FIELD)
+    assert(len(efs)==1)
+    assert(len(gameA.hand)==2)  #haven't draw or put triggers on stack
+    assert(len(gameA.deck)==8)  #haven't draw or put triggers on stack
+    gameA.stack += efs
+    while len(gameA.stack)>0:
+        universes = gameA.ResolveTopOfStack()
+        assert(len(universes)==1)
+        gameA = universes[0]
+    #should have drawn 2 cards
+    assert(len(gameA.hand)==3)
+    assert(len(gameA.deck)==7)
+    
+    #set up a sample game and play the first few turns. Should be able to 
+    #cast Arcades on turn 3 and then draw a lot of cards
+    
+    game = GameState.GameState()
+    game.verbose = False
+    #hand
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains  ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Arcades ),ZONE.HAND)
+    #deck
+    for x in range(4):
+        game.MoveZone( Cardboard.Cardboard(Decklist.Roots) ,ZONE.DECK)
+    for x in range(4):
+        game.MoveZone( Cardboard.Cardboard(Decklist.Island) ,ZONE.DECK)
+
+    tree = PlayTree.PlayTree(game,5)
+    tree.PlayNextTurn()  #turn 2
+    tree.PlayNextTurn()  #turn 3
+    waystohaveArcades = 0
+    for n in tree.LatestNodes():
+        if any([c.cardtype == Decklist.Arcades for c in n.state.field]):
+            # print(n.state,"\n")
+            waystohaveArcades += 1
+    assert(waystohaveArcades==2) #use Roots OR Caryatid to cast on T3
+    
+    tree.PlayNextTurn()  #turn 4
+    assert(min( [len(n.state.deck) for n in tree.LatestNodes()] )==0)
+    for n in tree.LatestNodes():
+        if len(n.state.deck)==0:
+            assert(len(n.state.hand)==4)
+            assert(n.state.pool == ManaHandler.ManaPool(""))
 
     
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     print("\n\npasses all tests!")
