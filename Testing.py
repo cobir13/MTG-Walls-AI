@@ -623,11 +623,48 @@ if __name__ == "__main__":
             assert(len(n.state.hand)==4)
             assert(n.state.pool == ManaHandler.ManaPool(""))
 
-    
     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
 
 
 
+    ###--------------------------------------------------------------------
+    print("Testing fetchlands")
+    startclock = time.perf_counter()
+
+
+    #make a game with some fetchable lands in deck and fetchland in hand
+        
+    game = GameState.GameState()
+    game.verbose = False
+    #deck
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.TempleGarden      ),ZONE.DECK)
+    #hand
+    game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.DECK)
+    
+    assert(game.deck[0 ].cardtype == Decklist.Plains)
+    assert(game.deck[-1].cardtype == Decklist.TempleGarden)
+
+    
+
+
+    Decklist.FetchLandType
+
+
+
+    #etb
+    
+    
+    #choices
+    
+    
+    #fail to find
 
 
 
@@ -639,9 +676,7 @@ if __name__ == "__main__":
 
 
 
-
-
-
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
 
 
     print("\n\npasses all tests!")

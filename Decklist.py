@@ -151,16 +151,22 @@ Arcades.trig_move.append(
                                 ETB_defender,
                                 DrawACard) )
 
-
-
-
-
-
-
-
-
-
 ##---------------------------------------------------------------------------##
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -168,46 +174,6 @@ Arcades.trig_move.append(
 # next: CoCo
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# ##---------------------------------------------------------------------------##
-# class Blossoms(CardType.Creature):
-#     def __init__(self):
-#         super().__init__("Blossoms","1G",0,4,["defender"])
-#     def Trigger(self,card):
-#         if card == self: #if IT is the thing which just entered the battlefield
-#             self.gamestate.Draw()
-# ##---------------------------------------------------------------------------##
-# ##===========================================================================##
-# ##---------------------------------------------------------------------------##
-# class Arcades(CardType.Creature):
-#     def __init__(self):
-#         super().__init__("Arcades","1GWU",3,5,["legendary","vigilance","flying","dragon"])
-#     def Trigger(self,card):
-#         if "defender" in card.typelist:
-#             self.gamestate.Draw()
-#         if card.name == self.name and card != self:
-#             if self.gamestate.verbose:
-#                 print("LEGEND RULE! SACRIFICING THE NEW ARCADES")
-#             self.gamestate.field.remove(card)
 
 
 
@@ -269,6 +235,36 @@ HallowedFountain.activated.append(
                              Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                              lambda g,s : ManaAbility.AddDual(g,s,"W","U") ))
 HallowedFountain.as_enter = Land.ShockIntoPlay
+
+
+###---fetch lands
+
+def FetchLandType(gamestate,source,typelist):
+    targets = {}
+    for card in gamestate.deck:
+        if "land" in card.cardtype.typelist:
+            if any([t in typelist for t in card.cardtype.typelist]):
+                targets.add(card)
+    universes = []
+    for landcard in targets:
+        newstate,[newland,fetch] = gamestate.CopyAndTrack([landcard,source])
+        newstate.stack += newstate.MoveZone(fetch,ZONE.GRAVE)
+        newstate.stack += newstate.MoveZone(newland,ZONE.FIELD)
+        newstate.Shuffle()
+        universes.append(newstate)
+    return universes
+        
+
+WindsweptHeath = Land("WindsweptHeath",[])
+WindsweptHeath.as_enter = lambda g,s : FetchLandType(g,s,["forest","plains"])
+
+FloodedStrand = Land("FloodedStrand",[])
+FloodedStrand.as_enter = lambda g,s : FetchLandType(g,s,["island","plains"])
+
+MistyRainforest = Land("MistyRainforest",[])
+MistyRainforest.as_enter = lambda g,s : FetchLandType(g,s,["island","forest"])
+
+
 
 
 

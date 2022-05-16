@@ -76,7 +76,9 @@ class Permanent(CardType):
     
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
-        self.as_enter = None  #function: GameState,Cardboard->[(GameState,Cardboard)]
+        #like ETB except just _happens_, doesn't use stack. Allowed to mutate.
+        self.as_enter = None  #function: GameState,Cardboard->[GameStates]
+        
     
     def ResolveSpell(self,gamestate,cardboard):
         newstate,[perm] = gamestate.CopyAndTrack([cardboard])
@@ -87,8 +89,7 @@ class Permanent(CardType):
         if perm.cardtype.as_enter is None:
             return [newstate]
         else:
-            universes = perm.cardtype.as_enter(newstate,perm)
-            return [tup[0] for tup in universes]
+            return perm.cardtype.as_enter(newstate,perm) #[GameStates]
 
 
 
@@ -123,20 +124,22 @@ class Land(Permanent):
             self.typelist = ["land"] + self.typelist
     
     def EnterTapped(gamestate,source):
-        """useful for tap-lands"""
-        source.tapped = True     #effect is allowed to mutate
-        return [(gamestate,source)]
+        """useful for tap-lands. GameState,Cardboard -> [GameState]. MUTATES."""
+        effects = gamestate.TapPermanent(source)
+        gamestate.stack += effects
+        return [gamestate]
 
     def ShockIntoPlay(gamestate,source):
-        """useful for shock lands"""
+        """useful for shock lands.  GameState,Cardboard -> [GameState]. MUTATES."""
         gamestate2,[source2] = gamestate.CopyAndTrack([source])
         #Either the land enters tapped OR we take 2 damage
         source.tapped = True     #effect is allowed to mutate
         gamestate2.life -= 2
-        return [(gamestate,source),(gamestate2,source2)]
+        return [gamestate,gamestate2]
 
     def LandAvailable(gamestate,source):
-        """useful for abilities checking if the land can be tapped for mana"""
+        """useful for abilities checking if the land can be tapped for mana,
+        GameState,Cardboard -> bool"""
         return (not source.tapped and source.zone == ZONE.FIELD)
 
 

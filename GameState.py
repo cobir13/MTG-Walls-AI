@@ -21,7 +21,7 @@ class LoseTheGameError(Exception):
 
 
 """
-Oddity notes:
+Notes comparing this program to the real Magic:The Gathering rules:
     - must pre-float all mana to pay for a spell
     
 
@@ -278,6 +278,12 @@ class GameState():
         cardboard.tapped = False
         cardboard.summonsick = True
         cardboard.counters = []
+        #if self has an "as enters the battlefield" trigger...
+        
+        
+        
+        
+        
         #return a list of anything that triggers off of this move!
         triggered = []
         for source in self.field+self.grave+self.hand:
