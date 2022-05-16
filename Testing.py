@@ -31,8 +31,8 @@ if __name__ == "__main__":
     
     for i in range(4):
         game.MoveZone(Cardboard.Cardboard(Decklist.Roots),ZONE.HAND)
-    effects = game.MoveZone(game.hand[0],ZONE.FIELD)
-    assert(len(effects)==0) #nothing to trigger, yet
+    game.MoveZone(game.hand[0],ZONE.FIELD)
+    assert(len(game.superstack)==0) #nothing to trigger, yet
 
     #activate the one ability!
     assert(len(game.GetValidActivations())==1)  #1 ability to activate
@@ -391,8 +391,8 @@ if __name__ == "__main__":
     game.verbose = False
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
-    effects = game.MoveZone(game.hand[0],ZONE.FIELD)
-    assert(len(effects)==0)  #nothing to trigger off of this move
+    game.MoveZone(game.hand[0],ZONE.FIELD)
+    assert(len(game.superstack)==0)  #nothing to trigger off of this move
     
     assert(game.field[0].summonsick)
     assert(len(game.GetValidActivations())==0)
@@ -559,27 +559,34 @@ if __name__ == "__main__":
     #deck
     for x in range(10):
         gameA.MoveZone( Cardboard.Cardboard(Decklist.Island) ,ZONE.DECK)
-    efs = gameA.MoveZone( Cardboard.Cardboard(Decklist.Arcades),ZONE.FIELD)
-    assert(len(efs)==0)  #Arcades doesn't trigger itself
+    gameA.MoveZone( Cardboard.Cardboard(Decklist.Arcades),ZONE.FIELD)
+    assert(len(gameA.superstack)==0)  #Arcades doesn't trigger itself
     #add Blossoms to field and hopefully draw 2
-    efs = gameA.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.FIELD)
-    assert(len(efs)==2)
+    gameA.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.FIELD)
+    assert(len(gameA.superstack)==2)
     assert(len(gameA.hand)==0)  #haven't draw or put triggers on stack
     assert(len(gameA.deck)==10)  #haven't draw or put triggers on stack
-    gameA.stack += efs
+    #clear the superstack and then stack. should come to the same thing.
+    gameA,gameA1 = gameA.ClearSuperStack()
+    assert( gameA != gameA1)  #different order of triggers
     while len(gameA.stack)>0:
         universes = gameA.ResolveTopOfStack()
         assert(len(universes)==1)
         gameA = universes[0]
+    while len(gameA1.stack)>0:
+        universes = gameA1.ResolveTopOfStack()
+        assert(len(universes)==1)
+        gameA1 = universes[0]
+    assert(gameA==gameA1)
     #should have drawn 2 cards
     assert(len(gameA.hand)==2)
     assert(len(gameA.deck)==8)
     #now let's try to add a Caryatid to field and hopefully draw 1
-    efs = gameA.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.FIELD)
-    assert(len(efs)==1)
+    gameA.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.FIELD)
+    assert(len(gameA.superstack)==1)
     assert(len(gameA.hand)==2)  #haven't draw or put triggers on stack
     assert(len(gameA.deck)==8)  #haven't draw or put triggers on stack
-    gameA.stack += efs
+    [gameA] = gameA.ClearSuperStack()
     while len(gameA.stack)>0:
         universes = gameA.ResolveTopOfStack()
         assert(len(universes)==1)
@@ -627,56 +634,58 @@ if __name__ == "__main__":
 
 
 
-    ###--------------------------------------------------------------------
-    print("Testing fetchlands")
-    startclock = time.perf_counter()
-
-
-    #make a game with some fetchable lands in deck and fetchland in hand
-        
-    game = GameState.GameState()
-    game.verbose = False
-    #deck
-    game.MoveZone( Cardboard.Cardboard(Decklist.Plains  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain  ),ZONE.DECK)
-    game.MoveZone( Cardboard.Cardboard(Decklist.TempleGarden      ),ZONE.DECK)
-    #hand
-    game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.DECK)
-    
-    assert(game.deck[0 ].cardtype == Decklist.Plains)
-    assert(game.deck[-1].cardtype == Decklist.TempleGarden)
-
-    
-
-
-    Decklist.FetchLandType
-
-
-
-    #etb
-    
-    
-    #choices
-    
-    
-    #fail to find
-
-
-
-
-
-
-
-
-
-
-
-    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+# =============================================================================
+#     ###--------------------------------------------------------------------
+#     print("Testing fetchlands")
+#     startclock = time.perf_counter()
+# 
+# 
+#     #make a game with some fetchable lands in deck and fetchland in hand
+#         
+#     game = GameState.GameState()
+#     game.verbose = False
+#     #deck
+#     game.MoveZone( Cardboard.Cardboard(Decklist.Plains  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain  ),ZONE.DECK)
+#     game.MoveZone( Cardboard.Cardboard(Decklist.TempleGarden      ),ZONE.DECK)
+#     #hand
+#     game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.DECK)
+#     
+#     assert(game.deck[0 ].cardtype == Decklist.Plains)
+#     assert(game.deck[-1].cardtype == Decklist.TempleGarden)
+# 
+#     
+# 
+# 
+#     Decklist.FetchLandType
+# 
+# 
+# 
+#     #etb
+#     
+#     
+#     #choices
+#     
+#     
+#     #fail to find
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+#     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+# =============================================================================
 
 
     print("\n\npasses all tests!")

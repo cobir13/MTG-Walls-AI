@@ -18,7 +18,8 @@ class Cost():
         pay_fn: function that takes in a GameState and a source Cardboard.
             Returns a list of (gamestate,source) pairs giving all possible
             ways the (non-mana) costs could be paid. Empty list if impossible
-            to pay. DOES NOT MUTATE the original gamestate.
+            to pay. DOES NOT MUTATE the original gamestate. superstack of
+            returned GameStates must be empty.
         """
         if manacost is None:
             self.manacost = ManaCost("")
@@ -57,12 +58,17 @@ class Cost():
             if self.pay_fn is None:
                 return [(newstate,newsource)]
             else:
-                result_list = []
-                for g,s in self.pay_fn(newstate,newsource):
-                    triggers = g.StateBasedActions()
-                    g.stack += triggers
-                    result_list.append((g,s))
-                return result_list
+                return self.pay_fn(newstate,newsource)
+                # result_list = []
+                # for g,s in self.pay_fn(newstate,newsource):
+                #     g.StateBasedActions()
+                #     result_list += g.ClearSuperStack()
+                #     #ClearSuperStack only returns [GameState]. I need to return
+                #     #[(GameState,Cardboard)]. I will defer this problem for
+                #     #now by asserting that I don't need to call ClearSuperStack
+                #     assert(len(g.superstack)==0)
+                #     result_list += [(g,s)]
+                # return result_list
         except:
             return []
 

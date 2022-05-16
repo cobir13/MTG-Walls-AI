@@ -106,7 +106,11 @@ class GenericAbility():
             - length >1 if there are options that can be decided differently.
         The original GameState and source Cardboard are NOT mutated.
         """
-        return self.execute_fn(gamestate,source)
+        statelist = []
+        for state in self.execute_fn(gamestate,source):
+            statelist += state.ClearSuperStack()
+        return statelist
+    
     
     def __str__(self):
         return self.name
@@ -138,6 +142,29 @@ class TriggeredByMove(GenericAbility):
                 and origin == ZONE.FIELD)
 
 
+class AsEnterEffect(TriggeredByMove):
+    """A specific type of triggered ability. This represents effects which
+    occur AS a permanent enters the battlefield. This bypasses the normal
+    stack procedure, since it simply OCCURS rather than going onto the stack
+    in the usual fashion. Examples include:
+        A shock-land giving the options to enter tapped or make you pay 2 life;
+        A clone choosing what to copy;
+        A 0/0 entering with +1/+1 counters on it;
+    They are a separate subclass so that they can be treated differently when
+    they are found on the superstack. They are applied immediately rather
+    than being put onto the stack.
+    """
+    def __init__(self,name,execute_fn):
+        super().__init__(name=name,
+                         trigger_fn=TriggeredByMove.ETB_self,
+                         execute_fn=execute_fn)   
+    
+
+
+
+
+
+
 
 class ActivatedAbility(GenericAbility):
     
@@ -157,26 +184,27 @@ class ManaAbility(ActivatedAbility):
                 source.zone == ZONE.FIELD)
     
     def TapToPay(gamestate,source):
+        """Payment function must return states with empty superstacks"""
         newstate,[newsource] = gamestate.CopyAndTrack([source])
-        sideeffects = newstate.TapPermanent(newsource)
-        newstate.stack += sideeffects
+        newstate.TapPermanent(newsource)
+        assert(len(newstate.superstack)==0)
         return [(newstate,newsource)]
 
     def AddColor(gamestate,source,color):
         newstate,[newsource] = gamestate.CopyAndTrack([source])
-        sideeffects = newstate.AddToPool(color) #add mana
-        newstate.stack += sideeffects
+        newstate.AddToPool(color) #add mana
+        assert(len(newstate.superstack)==0)
         return [newstate]
 
     def AddDual(gamestate,source,color1,color2):
         #make first game state where we choose the first option
         state1,[source1] = gamestate.CopyAndTrack([source])
-        sideeffects = state1.AddToPool(color1) #add mana
-        state1.stack += sideeffects
+        state1.AddToPool(color1) #add mana
+        assert(len(state1.superstack)==0)
         #make second game state where we choose the second option
         state2,[source2] = gamestate.CopyAndTrack([source])
-        sideeffects = state2.AddToPool(color2) #add mana
-        state2.stack += sideeffects
+        state2.AddToPool(color2) #add mana
+        assert(len(state2.superstack)==0)
         return [state1,state2]
 
 
@@ -193,7 +221,8 @@ class StackEffect():
         self.ability = ability  #GenericAbility
 
     def PutOnStack(self,gamestate):
-        """Returns list of GameStates where ability is paid for and now on stack"""
+        """Returns list of GameStates where ability is paid for and now on
+        stack.  Note: superstack is empty in returned states."""
         return gamestate.ActivateAbilities(self.source,self.ability)
     
     def Enact(self,gamestate):

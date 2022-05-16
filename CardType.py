@@ -76,20 +76,13 @@ class Permanent(CardType):
     
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
-        #like ETB except just _happens_, doesn't use stack. Allowed to mutate.
-        self.as_enter = None  #function: GameState,Cardboard->[GameStates]
         
     
     def ResolveSpell(self,gamestate,cardboard):
         newstate,[perm] = gamestate.CopyAndTrack([cardboard])
-        effects = newstate.MoveZone(perm,ZONE.FIELD)
-        #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
-        newstate.stack += effects
-        #if there is an "as enters" effect function, apply it
-        if perm.cardtype.as_enter is None:
-            return [newstate]
-        else:
-            return perm.cardtype.as_enter(newstate,perm) #[GameStates]
+        newstate.MoveZone(perm,ZONE.FIELD)
+        return newstate.ClearSuperStack()  #list of GameStates
+
 
 
 

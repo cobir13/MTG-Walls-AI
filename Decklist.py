@@ -6,7 +6,7 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 from CardType import Creature,Land#,Spell
-from Abilities import ManaAbility,TriggeredByMove #,ActivatedAbility
+from Abilities import ManaAbility,TriggeredByMove,AsEnterEffect #,ActivatedAbility
 from Costs import Cost
 
 import ZONE
@@ -120,8 +120,7 @@ Axebane.activated.append(
 
 def DrawACard(gamestate,source):
     newstate = gamestate.copy()
-    effects = newstate.Draw()
-    newstate.stack += effects
+    newstate.Draw() #adds to superstack if necessary
     return [newstate]
 
 Blossoms = Creature("Blossoms",Cost("1G",None,None),["defender"],0,4)
@@ -212,13 +211,14 @@ Island.activated.append(
 
 
 ###---shock lands
+AsEnterShock = AsEnterEffect("ShockIntoPlay",Land.ShockIntoPlay)
 
 TempleGarden = Land("TempleGarden",["forest","plains"])
 TempleGarden.activated.append(
                 ManaAbility("TempleGarden add W/G",
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddDual(g,s,"W","G") ))
-TempleGarden.as_enter = Land.ShockIntoPlay
+TempleGarden.trig_move.append( AsEnterShock )
 
 
 BreedingPool = Land("BreedingPool",["forest","island"])
@@ -226,7 +226,7 @@ BreedingPool.activated.append(
                 ManaAbility("BreedingPool add U/G",
                             Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                             lambda g,s : ManaAbility.AddDual(g,s,"U","G") ))
-BreedingPool.as_enter = Land.ShockIntoPlay
+BreedingPool.trig_move.append( AsEnterShock )
 
 
 HallowedFountain = Land("HallowedFountain",["plains","island"])
@@ -234,7 +234,7 @@ HallowedFountain.activated.append(
                 ManaAbility("HallowedFountain add W/U",
                              Cost(None,Land.LandAvailable,ManaAbility.TapToPay),
                              lambda g,s : ManaAbility.AddDual(g,s,"W","U") ))
-HallowedFountain.as_enter = Land.ShockIntoPlay
+HallowedFountain.trig_move.append( AsEnterShock )
 
 
 ###---fetch lands
@@ -248,21 +248,26 @@ def FetchLandType(gamestate,source,typelist):
     universes = []
     for landcard in targets:
         newstate,[newland,fetch] = gamestate.CopyAndTrack([landcard,source])
-        newstate.stack += newstate.MoveZone(fetch,ZONE.GRAVE)
-        newstate.stack += newstate.MoveZone(newland,ZONE.FIELD)
+        newstate.MoveZone(fetch,ZONE.GRAVE)
+        newstate.MoveZone(newland,ZONE.FIELD)
         newstate.Shuffle()
-        universes.append(newstate)
-    return universes
-        
+        universes += newstate.ClearSuperStack()
+    return universes        
 
 WindsweptHeath = Land("WindsweptHeath",[])
-WindsweptHeath.as_enter = lambda g,s : FetchLandType(g,s,["forest","plains"])
+WindsweptHeath.trig_move.append(
+            AsEnterEffect("Fetch G/W",
+                          lambda g,s : FetchLandType(g,s,["forest","plains"])))
 
 FloodedStrand = Land("FloodedStrand",[])
-FloodedStrand.as_enter = lambda g,s : FetchLandType(g,s,["island","plains"])
+FloodedStrand.trig_move.append(
+            AsEnterEffect("Fetch G/W",
+                          lambda g,s : FetchLandType(g,s,["island","plains"])))
 
 MistyRainforest = Land("MistyRainforest",[])
-MistyRainforest.as_enter = lambda g,s : FetchLandType(g,s,["island","forest"])
+MistyRainforest.trig_move.append(
+            AsEnterEffect("Fetch G/W",
+                          lambda g,s : FetchLandType(g,s,["forest","island"])))
 
 
 

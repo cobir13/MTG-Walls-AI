@@ -186,12 +186,26 @@ class PlayTree():
         #apply untap, upkeep, and draw to these nodes
         newnodes = set()
         for node in prevtracker.GetFinal():
-            newnode = node.copy()
-            newnode.AddToHistory("untap,upkeep,draw")
-            newnode.state.stack += newnode.state.UntapStep()
-            newnode.state.stack += newnode.state.UpkeepStep()
-            newnode.state.stack += newnode.state.Draw()
-            newnodes.add(newnode)
+            oldstate = node.state
+            newstate = oldstate.copy()
+            newstate.UntapStep()
+            newstate.UpkeepStep()
+            newstate.Draw()  #technically should clear superstack FIRST but whatever
+            #clear the super stack, then clear the normal stack
+            activelist = newstate.ClearSuperStack()
+            finalstates = set()
+            while len(activelist)>0:
+                state = activelist.pop(0)
+                if len(state.stack)==0:
+                    finalstates.add(state)
+                else:
+                    activelist += state.ResolveTopOfStack()
+            #all untap/upkeep/draw abilities are done. make nodes for these.
+            for final in finalstates:
+                newnode = node.copy()
+                newnode.AddToHistory("untap,upkeep,draw")
+                newnode.state = final
+                newnodes.add(newnode)
         #use these nodes as starting piont for next turn's tracker
         newtracker = TurnTracker(newnodes)
         self.trackerlist.append(newtracker)
