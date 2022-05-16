@@ -252,6 +252,10 @@ class GameState():
     def UntapPermanent(self,cardboard):
         """MUTATES. Adds any triggered StackEffects to the superstack."""
         cardboard.tapped = False
+        
+    def LoseLife(self,amount):
+        """MUTATES. Adds any triggered StackEffects to the superstack."""
+        self.life -= amount
 
     
     def _GetZone(self,zonename):

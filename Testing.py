@@ -564,6 +564,7 @@ if __name__ == "__main__":
     #add Blossoms to field and hopefully draw 2
     gameA.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.FIELD)
     assert(len(gameA.superstack)==2)
+    assert(len(gameA.stack)==0)
     assert(len(gameA.hand)==0)  #haven't draw or put triggers on stack
     assert(len(gameA.deck)==10)  #haven't draw or put triggers on stack
     #clear the superstack and then stack. should come to the same thing.
@@ -578,6 +579,7 @@ if __name__ == "__main__":
         assert(len(universes)==1)
         gameA1 = universes[0]
     assert(gameA==gameA1)
+    assert(len(gameA.superstack)==0)
     #should have drawn 2 cards
     assert(len(gameA.hand)==2)
     assert(len(gameA.deck)==8)
@@ -634,58 +636,97 @@ if __name__ == "__main__":
 
 
 
-# =============================================================================
-#     ###--------------------------------------------------------------------
-#     print("Testing fetchlands")
-#     startclock = time.perf_counter()
-# 
-# 
-#     #make a game with some fetchable lands in deck and fetchland in hand
-#         
-#     game = GameState.GameState()
-#     game.verbose = False
-#     #deck
-#     game.MoveZone( Cardboard.Cardboard(Decklist.Plains  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain  ),ZONE.DECK)
-#     game.MoveZone( Cardboard.Cardboard(Decklist.TempleGarden      ),ZONE.DECK)
-#     #hand
-#     game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.DECK)
-#     
-#     assert(game.deck[0 ].cardtype == Decklist.Plains)
-#     assert(game.deck[-1].cardtype == Decklist.TempleGarden)
-# 
-#     
-# 
-# 
-#     Decklist.FetchLandType
-# 
-# 
-# 
-#     #etb
-#     
-#     
-#     #choices
-#     
-#     
-#     #fail to find
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-# 
-#     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
-# =============================================================================
+    ###--------------------------------------------------------------------
+    print("Testing fetchlands")
+    startclock = time.perf_counter()
+
+
+    #make a game with some fetchable lands in deck and fetchlands in hand
+    game = GameState.GameState()
+    game.verbose = False
+    #deck
+    game.MoveZone( Cardboard.Cardboard(Decklist.Plains  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.DECK)
+    #hand
+    game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.HAND)
+
+    #pre-shuffle check
+    assert(game.deck[0 ].cardtype == Decklist.Plains)
+    assert(game.deck[-1].cardtype == Decklist.Island)
+    
+    #play the fetch
+    universes = game.CastSpell(game.hand[0])
+    for g in universes:
+        assert(len(g.deck)==5)
+        assert(len(g.hand)==1)
+        assert(len(g.grave)==1)
+        assert(g.life == 19)
+        # print([str(c) for c in g.deck])
+    assert(len(universes)==2)
+    assert(not universes[0].field[0].EquivTo(universes[1].field[0]))
+    
+    #I will MOVE the fetch into play instead. should put onto superstack first
+    game2 = game.copy()
+    game2.MoveZone(game2.hand[0],ZONE.FIELD)
+    assert(game2.stack==[])
+    assert(len(game2.superstack)==1)
+    assert(len(game2.ClearSuperStack())==2)  #same 2 as before
+    
+    #add two shocks to the deck.  should both be fetchable. I expect four
+    #fetchable targets and six total gamestates (due to shocked vs tapped)
+    game.MoveZone( Cardboard.Cardboard(Decklist.HallowedFountain  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.TempleGarden      ),ZONE.DECK)
+    
+    #play the fetch
+    universes = game.CastSpell(game.hand[0])
+    landstrings = []
+    totallife = 0
+    for g in universes:
+        assert(len(g.deck)==7)
+        assert(len(g.hand)==1)
+        assert(len(g.grave)==1)
+        assert(len(g.superstack)==0)
+        assert(len(g.stack)==0)
+        landstrings.append( g.field[0].ID() )
+        totallife += g.life
+    assert(len(universes)==6)
+    assert(landstrings == ["LandPlains_2","LandForest_2",
+                           "LandHallowedFountain_T2","LandHallowedFountain_2",
+                           "LandTempleGarden_T2","LandTempleGarden_2"])
+    assert(totallife == (19*4)+(17*2) )
+    
+    #what if deck has no valid targets?
+    gameE = GameState.GameState()
+    #deck
+    for i in range(10):
+        gameE.MoveZone( Cardboard.Cardboard(Decklist.Island  ),ZONE.DECK)
+    #hand
+    gameE.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.HAND)
+    universes = gameE.CastSpell(gameE.hand[0])
+    assert(len(universes)==1)
+    assert(len(universes[0].deck)==10)
+    assert(len(universes[0].hand)== 0)
+    assert(len(universes[0].grave)==1)
+    
+    
+    #fail to find
+
+
+
+
+
+
+
+
+
+
+
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
 
 
     print("\n\npasses all tests!")

@@ -240,14 +240,24 @@ HallowedFountain.trig_move.append( AsEnterShock )
 ###---fetch lands
 
 def FetchLandType(gamestate,source,typelist):
-    targets = {}
+    targets = []
     for card in gamestate.deck:
         if "land" in card.cardtype.typelist:
+            #if it's the right type of land...
             if any([t in typelist for t in card.cardtype.typelist]):
-                targets.add(card)
+                #and if we don't have it already...
+                if not any([card.EquivTo(ob) for ob in targets]):
+                    targets.append(card)
+    if len(targets)==0:   #fail to find. fetch still sacrificed
+        newstate,[fetch] = gamestate.CopyAndTrack([source])    
+        newstate.LoseLife(1)    
+        newstate.MoveZone(fetch,ZONE.GRAVE)
+        newstate.Shuffle()
+        return newstate.ClearSuperStack()
     universes = []
     for landcard in targets:
         newstate,[newland,fetch] = gamestate.CopyAndTrack([landcard,source])
+        newstate.LoseLife(1)
         newstate.MoveZone(fetch,ZONE.GRAVE)
         newstate.MoveZone(newland,ZONE.FIELD)
         newstate.Shuffle()
