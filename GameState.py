@@ -71,7 +71,7 @@ class GameState():
         self.field = [] #list of Cardboard objects
         self.grave = [] #list of Cardboard objects
         self.pool = ManaPool("")
-        self.stack = [] #list of Cardboards and StackEffects
+        self.stack = [] #list of Cardboards and StackEffects. ordered.
         
         self.turncount = 1
         self.myturn = True
@@ -214,22 +214,25 @@ class GameState():
     def copy(self):
         return self.CopyAndTrack([])[0]
     
-    ###-----MUTATING FUNCTIONS. They all return a list of StackEffects
+    ###------------------------------------------------------------------
 
-    def AddToPool(self,colorstr):
-        """MUTATES. Returns list of StackEffects that adding mana caused."""
-        self.pool.AddMana(colorstr)
-        return []
+    # def AddToPool(self,colorstr):
+    #     """Returns [GameStates] with mana added to pool."""
+    #     newstate = self.copy()
+    #     newstate.pool.AddMana(colorstr)
+    #     return [newstate]
     
-    def TapPermanent(self,cardboard):
-        """MUTATES. Returns list of StackEffects that this tapping caused."""
-        cardboard.tapped = True
-        return []
+    # def TapPermanent(self,cardboard):
+    #     """Returns [GameStates] with the given Cardboard tapped."""
+    #     newstate,[c] = self.CopyAndTrack([cardboard])
+    #     c.tapped = True
+    #     return [newstate]
     
-    def UntapPermanent(self,cardboard):
-        """MUTATES. Returns list of StackEffects that this untapping caused."""
-        cardboard.tapped = False
-        return []
+    # def UntapPermanent(self,cardboard):
+    #     """Returns [GameStates] with mana added to pool."""
+    #     newstate,[c] = self.CopyAndTrack([cardboard])
+    #     c.tapped = False
+    #     return [newstate]
     
     def _GetZone(self,zonename):
         if zonename == ZONE.DECK:
@@ -246,110 +249,110 @@ class GameState():
             raise IndexError
         return zone
     
-    # def _AddToZone(self,cardboard,zone=None):
-    #     """For testing.  Should not be used otherwise"""
-    #     if zone is None:
-    #         zone = cardboard.zone
-    #     zonelist = self._GetZone(zone)
-    #     zonelist.append(cardboard)
-    #     zonelist.sort(key=Cardboard.Cardboard.ID)
-    #     print("AAAAH SOMEONE USED _AddToZone TO MOVE %s AAAAAH" %str(cardboard))
+    
     
     def MoveZone(self,cardboard,destination):
         """Move the specified piece of cardboard from the zone it is currently
         in to the specified destination zone.  Raises IndexError if the
         cardboard is not in the zone it claims to be in.
-        Returns list of StackEffects that this movement caused.
-        MUTATES.
+        Returns [GameStates] with the card moved.
+        DOES NOT MUTATE.
         """
+        newstate,[card] = self.CopyAndTrack([cardboard])
         #remove from origin
         origin = cardboard.zone
         if origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
-            oldlist = self._GetZone(origin)
-            assert(cardboard in oldlist)
-            oldlist.remove(cardboard)
+            oldlist = newstate._GetZone(origin)
+            assert(card in oldlist)
+            oldlist.remove(card)
         #add to destination
-        cardboard.zone = destination
-        zonelist = self._GetZone(destination)
-        zonelist.append(cardboard)
+        card.zone = destination
+        zonelist = newstate._GetZone(destination)
+        zonelist.append(card)
         if destination in [ZONE.HAND,ZONE.FIELD,ZONE.GRAVE]: #these zones must
             zonelist.sort(key=Cardboard.Cardboard.ID)        #always be sorted
         #any time you change zones, reset the cardboard parameters
-        cardboard.tapped = False
-        cardboard.summonsick = True
-        cardboard.counters = []
+        card.tapped = False
+        card.summonsick = True
+        card.counters = []
         #if self has an "as enters the battlefield" trigger...
-        
-        
-        
-        
-        
-        #return a list of anything that triggers off of this move!
-        triggered = []
-        for source in self.field+self.grave+self.hand:
-            for abil in source.cardtype.trig_move:
-                if abil.IsTriggered(self,source,cardboard,origin):
-                    newEffect = StackEffect(source,[cardboard],abil)
-                    triggered.append( newEffect )
-        return triggered
+        if hasattr(card.cardtype,"as_enter") and card.cardtype.as_enter is not None:
+            enterlist = card.cardtype.as_enter(newstate,card)
+        else:
+            enterlist = [newstate]
+        #for each of these GameStates, add to the stack anything that triggers off of this move
+        statelist = []
+        for state in enterlist:
+            effectlist = []
+            for source in newstate.field+newstate.grave+newstate.hand:
+                for abil in source.cardtype.trig_move:
+                    if abil.IsTriggered(newstate,source,card,origin):
+                        effectlist.append( StackEffect(source,[card],abil) )
+            #add these effects to the stack and then return the new GameStates
+            statelist += newstate.AddEffectsToStack(effectlist)
+        return statelist
+
+
 
     ##-----------------------------------------------------------------------##
 
-    def StateBasedActions(self):
-        """MUTATES. Performs any state-based actions like killing creatures if
-        toughness is less than 0
-        Returns list of StackEffects that these state-based actions caused.
-        """
-        effects = []
-        i = 0
-        while i < len(self.field):
-            cardboard = self.field[i]
-            if isinstance(cardboard.cardtype,CardType.Creature):
-                #look for counters with "/", which modify power or toughness
-                modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
-                if cardboard.cardtype.basetoughness + modifier <= 0:
-                    effects += self.MoveZone(cardboard,ZONE.GRAVE)
-                    continue
-            i += 1
-        #legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
-        return effects
+    # def StateBasedActions(self):
+    #     """MUTATES. Performs any state-based actions like killing creatures if
+    #     toughness is less than 0
+    #     Returns list of StackEffects that these state-based actions caused.
+    #     """
+    #     effects = []
+    #     i = 0
+    #     while i < len(self.field):
+    #         cardboard = self.field[i]
+    #         if isinstance(cardboard.cardtype,CardType.Creature):
+    #             #look for counters with "/", which modify power or toughness
+    #             modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
+    #             if cardboard.cardtype.basetoughness + modifier <= 0:
+    #                 effects += self.MoveZone(cardboard,ZONE.GRAVE)
+    #                 continue
+    #         i += 1
+    #     #legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
+    #     return effects
 
     def UntapStep(self):
-        """MUTATES. Returns list of StackEffects that trigger during untap."""
-        # newstate,_ = self.CopyAndTrack([])  #copy, but nothing to track
-        self.pool = ManaPool("")
-        self.stack = []
-        self.turncount+=1
-        self.playedland = False
-        effects = []
-        for cardboard in self.field:
-            effects += self.UntapPermanent(cardboard)        
+        """Returns [GameStates] where the game has gone through the untap step."""
+        newstate = self.copy()
+        newstate.pool = ManaPool("")
+        newstate.stack = []
+        newstate.turncount+=1
+        newstate.playedland = False
+        #untap everything.  right now, nothing triggers on untapping, so I don't
+        #use a dedicated untap function.
+        for cardboard in newstate.field:
+            cardboard.tapped = False     
             cardboard.summonsick = False
             cardboard.counters = [c for c in cardboard.counters if c[0]!="@"]
-        return effects
+        return [newstate]
+
 
     def UpkeepStep(self):
-        """MUTATES. Returns list of StackEffects that trigger during upkeep."""
+        """Returns [GameStates] where the game has gone through the upkeep step."""
         effects = []
         for cardboard in self.hand + self.field + self.grave:
             for abil in cardboard.cardtype.trig_upkeep:
                 newEffect = StackEffect(cardboard,[],abil)
-                effects.append (newEffect) 
-        return effects
+                effects.append (newEffect)
+        return self.AddEffectsToStack(effects)
+
 
     def Draw(self):
-        """MUTATES. Returns list of StackEffects that trigger due to draw.
+        """Returns [GameStates] where the game has drawn a card.
            Draws from index 0 of deck."""
-        effects = []
         if len(self.deck)>0:
-            effects += self.MoveZone(self.deck[0],ZONE.HAND)
+            statelist = self.MoveZone(self.deck[0],ZONE.HAND)
             # #return a list of anything that triggers off of "draw" specifically
             # for source in self.field+self.grave+self.hand:
             #     for abil in source.cardtype.trig_draw:
             #         if abil.IsTriggered(state,source,cardboard,origin):
             #             newEffect = StackEffect(source,[cardboard],abil)
             #             effects.append( newEffect )
-            return effects
+            return statelist
         else:
             raise LoseTheGameError
 
@@ -370,17 +373,12 @@ class GameState():
         for state,card in cardboard.cardtype.cost.Pay(self,cardboard):
             #Iterate through all possible ways the cost could have been paid.
             #Each has a GameState and a Cardboard being cast. Move the card
-            #being cast to the stack, then see if this triggers any effects.
-            #Note: these are COPIES so they are safe to mutate.
+            #being cast to the stack.
             if isinstance(card.cardtype,CardType.Land):
                 #special exception for Lands, which don't use the stack
                 cast_list += card.cardtype.ResolveSpell(state,card) #[GameStates]
             else:
-                effects = state.MoveZone(card,ZONE.STACK)
-                state.stack += effects   #------------------------------------------randomize order of triggers? for now, no    
-                #check state-based actions, add any effects from THAT to the stack
-                state.stack += state.StateBasedActions()
-                cast_list.append( state )
+                cast_list += state.MoveZone(card,ZONE.STACK)
         return cast_list
         
     
@@ -402,8 +400,8 @@ class GameState():
                 statelist += ability.Execute(game,source)
             else:
                 #add ability to stack    
-                game.stack.append(StackEffect(source,[],ability))
-                statelist.append(game)
+                effect = StackEffect(source,[],ability)
+                statelist += game.AddEffectsToStack( [effect] )
         return statelist
     
     
@@ -432,30 +430,37 @@ class GameState():
             return effect.Enact(newstate)  #[GameStates]
         
         
-    # def AddEffectsToStack(self,effectlist):
-    #     """
-    #     DOES NOT MUTATE. Instead, returns a list of GameStates in which the
-    #         list of StackEffects has been added to the top of the stack in
-    #         various orders.
-    #     NOTE: as a shortcut, if effectlist is length 0 or 1 (so the return
-    #         list will be length 1), it DOES mutate self and return [self].
-    #     NOTE: this is buggy and won't actually work yet.
-    #     """
-    #     #we are going to TEMPORARILY mutate self and then undo it
-    #     num = len(effectlist)       
-    #     self.stack += effectlist  #final `num` of stack are a new mutation
-    #     #a shortcut to save time
-    #     if num<=1:
-    #         return [self]
-    #     else:
-    #         newstate,_ = self.CopyAndTrack([])
-    #         #in theory, this is where we'd try all possible permutations-------ADD PERMUTATIONS OF THE EFFECTLIST
-    #         #but for now, just return the one
-    #         returnlist = [newstate]
-    #         self.stack = self.stack[:-num]  #fix the mutation of self
-    #         return returnlist
         
-        
+    def AddEffectsToStack(self,effectlist):
+        """
+        DOES NOT MUTATE. Instead, returns a list of GameStates in which the
+            list of StackEffects has been added to the top of the stack in
+            various orders.
+        """
+        #base case: if effectslist is length 0, just return self
+        if len(effectlist)==0:
+            return [self]  #return [self.copy()]
+        #otherwise: copy the gamestate, add 1, then add the rest
+        #TEMPORARILY mutate self, to avoid re-implementing StackEffect copying
+        num = len(effectlist)       
+        self.stack += effectlist  #final `num` of stack are a new mutation
+        statelist = []
+        for ii in range(num):  #for each effect:
+            newstate = self.copy()
+            neweffects = newstate.stack[-num:]
+            #add the ii-th effect to the stack first, then all the rest
+            first = neweffects.pop(ii)
+            newstate.stack = newstate.stack[:-num] + [first]
+            #recurse over the remainder of the Effects list
+            if len(neweffects)==0:
+                statelist += [newstate]  #a shortcut, if num==1
+            else:
+                statelist += newstate.AddEffectsToStack(neweffects)
+        #undo the mutation and return the list of states
+        self.stack = self.stack[:-num]  #undo the mutation
+        return statelist
+        ### Do something clever with sets in case of identical triggers?
+        ### Not yet. I don't need that optimization yet because unlikely.
         
         
 

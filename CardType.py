@@ -81,15 +81,8 @@ class Permanent(CardType):
         
     
     def ResolveSpell(self,gamestate,cardboard):
-        newstate,[perm] = gamestate.CopyAndTrack([cardboard])
-        effects = newstate.MoveZone(perm,ZONE.FIELD)
-        #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
-        newstate.stack += effects
-        #if there is an "as enters" effect function, apply it
-        if perm.cardtype.as_enter is None:
-            return [newstate]
-        else:
-            return perm.cardtype.as_enter(newstate,perm) #[GameStates]
+        return gamestate.MoveZone(cardboard,ZONE.FIELD)
+ 
 
 
 
@@ -158,9 +151,7 @@ class Land(Permanent):
 #         universes = perm.on_resolve(gamestate,perm)
 #         #move the spell to wherever it goes
         
-#         effects = newstate.MoveZone(perm,ZONE.FIELD)
-#         #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
-#         newstate.stack += effects
-#         return [(newstate,perm)]
+#         return newstate.MoveZone(perm,ZONE.FIELD)
+
     
     

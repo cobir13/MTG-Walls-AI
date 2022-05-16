@@ -240,18 +240,22 @@ HallowedFountain.as_enter = Land.ShockIntoPlay
 ###---fetch lands
 
 def FetchLandType(gamestate,source,typelist):
+    #step 0: move fetchland to graveyard
+    [gamestate] = gamestate.MoveZone(source,ZONE.GRAVE)  #I am assuming length 1
+    #step 1: find fetchable targets
     targets = {}
     for card in gamestate.deck:
         if "land" in card.cardtype.typelist:
             if any([t in typelist for t in card.cardtype.typelist]):
                 targets.add(card)
+    #step 2: move targets to field
     universes = []
     for landcard in targets:
-        newstate,[newland,fetch] = gamestate.CopyAndTrack([landcard,source])
-        newstate.stack += newstate.MoveZone(fetch,ZONE.GRAVE)
-        newstate.stack += newstate.MoveZone(newland,ZONE.FIELD)
-        newstate.Shuffle()
-        universes.append(newstate)
+        newstates = gamestate.MoveZone(landcard,ZONE.FIELD)
+        #step 3: shuffle
+        for n in newstates:
+            n.Shuffle() #mutates!
+        universes += newstates
     return universes
         
 
