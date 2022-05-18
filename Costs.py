@@ -78,5 +78,6 @@ class Cost():
             s += " %s" %self.pay_fn.__name__
         return s
 
-
+    # def CMC(self):
+    #     return self.manacost.CMC()
 

@@ -59,18 +59,15 @@ class Cardboard():
     def name(self):
         return self.cardtype.name
 
-    def GetAbilities(self):
+    def GetActivated(self):
         return self.cardtype.activated
-    
-    
-
     
     def ID(self):
         s = type(self.cardtype).__name__ #MtG card type (creature, land, etc)
         s += self.cardtype.name + "_"
         if self.tapped:
             s += "T"
-        if self.summonsick and isinstance(self.cardtype,CardType.Creature):
+        if self.summonsick and self.HasType(CardType.Creature):
             s += "S"
         s += str(self.zone)
         if len(self.counters)>0:
@@ -78,7 +75,10 @@ class Cardboard():
         return s
         
     def EquivTo(self,other):
-        return self.ID() == other.ID()
+        if not isinstance(other,Cardboard):
+            return False
+        else:
+            return self.ID() == other.ID()
     
     def __eq__(self,other):
         return self is other  #pointer equality. 
@@ -86,3 +86,11 @@ class Cardboard():
         #to care about same-object not just whether two cardboards are
         #equivalent or not. I defined EquivTo as a more intuitive, descriptive
         #definition of equality that I use for comparing two GameStates.
+        
+    def HasType(self,cardtype):
+        """Returns bool: "this Cardboard refers to a card which is the given
+        CardType type (in addition to possibly other types as well)" """
+        return isinstance(self.cardtype,cardtype)
+        
+    def CMC(self):
+        return self.cardtype.cost.manacost.CMC()

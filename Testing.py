@@ -246,10 +246,10 @@ if __name__ == "__main__":
     assert(forest is not forest2)
     assert( game == cp )
     #tap both of these forests for mana
-    cp3 = game.ActivateAbilities(forest , forest.GetAbilities()[0])[0]
+    cp3 = game.ActivateAbilities(forest , forest.GetActivated()[0])[0]
     assert(game != cp3)
     assert( cp != cp3)
-    cp4 =   cp.ActivateAbilities(forest2,forest2.GetAbilities()[0])[0]
+    cp4 =   cp.ActivateAbilities(forest2,forest2.GetActivated()[0])[0]
     assert( game != cp4)
     assert( cp3 == cp4 )
     assert( not (cp3 is cp4) )
@@ -431,7 +431,7 @@ if __name__ == "__main__":
     game3.UntapStep()
     assert(len(game3.GetValidActivations())==2)  #2 Caretakers combined, Caryatid
     care3 = [c for c in game3.field if c.cardtype == Decklist.Caretaker][0]
-    universes = game3.ActivateAbilities(care3,care3.GetAbilities()[0])
+    universes = game3.ActivateAbilities(care3,care3.GetActivated()[0])
     assert(len(universes)==2)
     [univ4,univ5] = universes
     assert(univ4.pool == ManaHandler.ManaPool("A"))
@@ -450,9 +450,9 @@ if __name__ == "__main__":
     game6.MoveZone(battle,ZONE.FIELD)
     assert(len(game6.GetValidActivations())==0) #still summonsick. good.
     game6.UntapStep()
-    [u_axe] = game6.ActivateAbilities(axe,axe.GetAbilities()[0])
+    [u_axe] = game6.ActivateAbilities(axe,axe.GetActivated()[0])
     assert(u_axe.pool == ManaHandler.ManaPool("AAAAA"))
-    [u_bat] = game6.ActivateAbilities(battle,battle.GetAbilities()[0])
+    [u_bat] = game6.ActivateAbilities(battle,battle.GetActivated()[0])
     assert(u_bat.pool == ManaHandler.ManaPool("GGGGG"))
 
     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
@@ -713,20 +713,139 @@ if __name__ == "__main__":
     assert(len(universes[0].hand)== 0)
     assert(len(universes[0].grave)==1)
     
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+
+
+    ###--------------------------------------------------------------------
+    print("Testing Collected Company and simultaneous ETBs")
+    startclock = time.perf_counter()
+
+    game = GameState.GameState()
+    #deck of 6 cards
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Axebane   ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Battlement),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.DECK)
+    #put Collected Company directly onto the stack
+    game.MoveZone( Cardboard.Cardboard(Decklist.Company   ),ZONE.STACK)
+    assert(len(game.superstack)==0)
     
-    #fail to find
+    #resolve Collected Company
+    universes = game.ResolveTopOfStack()
+    assert(len(universes)==4)
+    for u in universes:
+        assert(len(u.deck)==4)
+        assert(len(u.field)==2)
+        assert(len(u.grave)==1)
+        if any([c.cardtype==Decklist.Axebane for c in u.field]):
+            assert(not any([c.cardtype==Decklist.Axebane for c in u.deck]))
+        if any([c.cardtype==Decklist.Battlement for c in u.field]):
+            assert(not any([c.cardtype==Decklist.Battlement for c in u.deck]))
+        assert(not any(["land" in c.cardtype.typelist for c in u.field]))
 
-
-
-
-
-
-
-
-
-
+    #deck of 6 forests on top, then 10 islands
+    gameF = GameState.GameState()
+    for _ in range(6):
+        gameF.MoveZone( Cardboard.Cardboard(Decklist.Forest ),ZONE.DECK)
+    for _ in range(10):
+        gameF.MoveZone( Cardboard.Cardboard(Decklist.Island ),ZONE.DECK)
+    #should be forests on top
+    assert( all([c.cardtype==Decklist.Forest for c in gameF.deck[:6]]))
+    gameF.MoveZone( Cardboard.Cardboard(Decklist.Company    ),ZONE.STACK)
+    universes = gameF.ResolveTopOfStack()
+    assert(len(universes)==1)
+    u = universes[0]
+    #now should be islands on top, forests on bottom
+    assert( all([c.cardtype==Decklist.Island for c in u.deck[:10]]))
+    assert( all([c.cardtype==Decklist.Forest for c in u.deck[-6:]]))
+    assert(len(u.field)==0)
+    assert(len(u.grave)==1)
+    
+    #deck of 5 forests on top, one Caretaker, then 10 islands
+    game1 = GameState.GameState()
+    for _ in range(5):
+        game1.MoveZone( Cardboard.Cardboard(Decklist.Forest ),ZONE.DECK)
+    game1.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.DECK)
+    for _ in range(10):
+        game1.MoveZone( Cardboard.Cardboard(Decklist.Island ),ZONE.DECK)
+    assert(len(game1.deck)==16)
+    game1.MoveZone( Cardboard.Cardboard(Decklist.Company    ),ZONE.STACK)
+    universes = game1.ResolveTopOfStack()
+    assert(len(universes)==1)
+    u = universes[0]
+    #now should be islands on top, forests on bottom
+    assert( all([c.cardtype==Decklist.Island for c in u.deck[:10]]))
+    assert( all([c.cardtype==Decklist.Forest for c in u.deck[-5:]]))
+    assert( u.deck[-6].cardtype==Decklist.Island )
+    assert(len(u.field)==1)
+    assert(len(u.grave)==1)
+    
+    #deck of only 4 cards total, all Caretakers
+    game4 = GameState.GameState()
+    for _ in range(4):
+        game4.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.DECK)
+    #should be forests on top
+    assert( len(game4.deck)==4)
+    game4.MoveZone( Cardboard.Cardboard(Decklist.Company    ),ZONE.STACK)
+    universes = game4.ResolveTopOfStack()
+    assert(len(universes)==1)
+    u = universes[0]
+    assert(len(u.deck )==2)
+    assert(len(u.field)==2)
+    assert(len(u.grave)==1)
+ 
+    #Does Blossoms trigger correctly? start with 12 cards in deck
+    game = GameState.GameState()
+    game.MoveZone( Cardboard.Cardboard(Decklist.Blossoms  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Omens     ),ZONE.DECK)
+    for _ in range(10):
+        game.MoveZone( Cardboard.Cardboard(Decklist.Forest),ZONE.DECK)
+    #put Collected Company directly onto the stack
+    game.MoveZone( Cardboard.Cardboard(Decklist.Company   ),ZONE.STACK)
+    universes = game.ResolveTopOfStack()
+    assert(len(universes)==2)  #the two draws could be on stack in either order
+    u0,u1 = universes
+    assert(u0 != u1)
+    while len(u0.stack)>0:
+        [u0] = u0.ResolveTopOfStack()
+    while len(u1.stack)>0:
+        [u1] = u1.ResolveTopOfStack()
+    assert(u0==u1)
+    assert(len(u0.hand)==2 and len(u0.deck)==8)
+    
+    #Note: if I put two identical Blossoms into play simultaneously, I STILL
+    #will get two GameStates even though they are identical! And that's ok.
+    #it's not worth the effort to optimize this out, right now.
+    game = GameState.GameState()
+    game.MoveZone( Cardboard.Cardboard(Decklist.Blossoms  ),ZONE.DECK)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Blossoms  ),ZONE.DECK)
+    for _ in range(10):
+        game.MoveZone( Cardboard.Cardboard(Decklist.Forest),ZONE.DECK)
+    #put Collected Company directly onto the stack
+    game.MoveZone( Cardboard.Cardboard(Decklist.Company   ),ZONE.STACK)
+    universes = game.ResolveTopOfStack()
+    assert(len(universes)==2)  #the two draws could be on stack in either order
+    u0,u1 = universes
+    assert(u0 == u1)
+    while len(u0.stack)>0:
+        [u0] = u0.ResolveTopOfStack()
+    while len(u1.stack)>0:
+        [u1] = u1.ResolveTopOfStack()
+    assert(u0==u1)
+    assert(len(u0.hand)==2 and len(u0.deck)==8)
 
     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
+
+    ###--------------------------------------------------------------------
+
+
+
+
+
+
+
 
 
     print("\n\npasses all tests!")

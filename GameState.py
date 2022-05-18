@@ -158,7 +158,6 @@ class GameState():
         Cardboards we were asked to track. This allows tracking "between
         split universes."
         Return signature is: GameState, [Cardboard] """
-
         #make new Gamestate and start copying attributes by value
         state = GameState()
         #copy mana pool
@@ -324,7 +323,7 @@ class GameState():
         i = 0
         while i < len(self.field):
             cardboard = self.field[i]
-            if isinstance(cardboard.cardtype,CardType.Creature):
+            if cardboard.HasType(CardType.Creature):
                 #look for counters with "/", which modify power or toughness
                 modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
                 if cardboard.cardtype.basetoughness + modifier <= 0:
@@ -392,13 +391,15 @@ class GameState():
             #Iterate through all possible ways the cost could have been paid.
             #Each has a GameState and a Cardboard being cast. Move the card
             #being cast to the stack, which adds any triggers to superstack.
-            if isinstance(card.cardtype,CardType.Land):
-                #special exception for Lands, which don't use the stack
-                cast_list += card.cardtype.ResolveSpell(state,card) #[GameStates]
+            if card.HasType(CardType.Land):
+                #special exception for Lands, which don't use the stack. Just
+                #move it directly to play and then resolve superstack
+                #state is a copy so can mutate it safely.
+                state.MoveZone(card,ZONE.FIELD)
             else:
                 state.MoveZone(card,ZONE.STACK)
-                state.StateBasedActions() #check state-based actions
-                cast_list += state.ClearSuperStack()
+            state.StateBasedActions() #check state-based actions
+            cast_list += state.ClearSuperStack()  #list of GameStates
         return cast_list
         
     
@@ -425,7 +426,6 @@ class GameState():
         return statelist
     
     
-    
     def ResolveTopOfStack(self):
         """
         DOES NOT MUTATE. Instead, returns a list of GameStates in which the
@@ -441,10 +441,19 @@ class GameState():
             return []
         elif isinstance(self.stack[-1],Cardboard.Cardboard):
             card = self.stack[-1]
-            universes = card.cardtype.ResolveSpell(self,card)  #[GameStates]
-            #this already includes moving the card from the stack to a zone,
-            #putting resulting triggers on the stack, and clearing superstack
-            return universes
+            #Copy the gamestate so that we can mutate the copy safely.
+            #Move the card to its destination zone. This will probably put
+            #some effect on the superstack, which we will then resolve
+            newstate = self.copy()
+            card = newstate.stack[-1]
+            if card.HasType(CardType.Spell):
+                #returns [GameStates]. Card also moved to destination zone.
+                return card.cardtype.ResolveSpell(newstate)
+            elif card.HasType(CardType.Permanent):
+                newstate.MoveZone(card,ZONE.FIELD) #adds effects to superstack
+                return newstate.ClearSuperStack()  #[GameStates]
+            else:
+                raise IOError("not permanent, instant, OR sorcery???")
         elif isinstance(self.stack[-1],StackEffect):
             newstate,_ = self.CopyAndTrack([])
             effect = newstate.stack.pop(-1)
@@ -500,7 +509,7 @@ class GameState():
             if any([source.EquivTo(ob) for ob in activeobjects]):
                 continue  #skip cards that are equivalent to cards already used
             addobject = False
-            for ability in source.GetAbilities():  #distinguish activated vs mana?
+            for ability in source.GetActivated():  #distinguish activated vs mana?
                 #check whether price can be paid
                 if ability.CanAfford(self,source):
                     e = StackEffect(source,[],ability)

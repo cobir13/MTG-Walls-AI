@@ -5,7 +5,7 @@ Created on Tue Dec 29 11:50:12 2020
 @author: Cobi
 """
 
-from CardType import Creature,Land#,Spell
+from CardType import Creature,Land,Spell
 from Abilities import ManaAbility,TriggeredByMove,AsEnterEffect #,ActivatedAbility
 from Costs import Cost
 
@@ -62,7 +62,7 @@ def CaretakerAfford(gamestate,source):
         return False  #caretaker itself isn't available
     #also need another untapped creature to tap
     for c in gamestate.field:
-        if isinstance(c.cardtype,Creature) and not c.tapped and not c is source:
+        if c.HasType(Creature) and not c.tapped and not c is source:
             return True  #if it's another uptapped creature, we're good!
     return False  #couldn't find another untapped creature
 def CaretakerPay(gamestate,source):
@@ -70,7 +70,7 @@ def CaretakerPay(gamestate,source):
     #THAT target is the one which is tapped (in addition to the caretaker)
     universes = []
     for c in gamestate.field:
-        if isinstance(c.cardtype,Creature) and not c.tapped and not c is source:
+        if c.HasType(Creature) and not c.tapped and not c is source:
             #this is a safe target to tap!
             newstate,[newsource,target] = gamestate.CopyAndTrack([source,c])
             newsource.tapped = True
@@ -152,6 +152,50 @@ Arcades.trig_move.append(
 
 ##---------------------------------------------------------------------------##
 
+def ResolveCompany(gamestate,source):
+    """NOTE: puts bottom in same order as they were on top of deck. Also always
+    takes as many creatures as possible, there is no "choose not to" mode"""
+    #get all valid Collected Company targets from top 6 cards of deck
+    targets = [ii for ii,card in enumerate(gamestate.deck[:6])
+                                 if card.HasType(Creature) and card.CMC()<=3]
+    #get all pairs of targets to put into play
+    if len(targets) == 0:
+        pairs = [()]
+    elif len(targets) == 1:
+        pairs = [ (targets[0],) ]
+    else:
+        pairs = []
+        for ii in range(len(targets)):
+            for jj in range(ii+1,len(targets)):
+                obj0 = gamestate.deck[ targets[ii] ]
+                obj1 = gamestate.deck[ targets[jj] ]
+                alreadygotone = False
+                for ind0,ind1 in pairs:
+                    p0 = gamestate.deck[ind0]
+                    p1 = gamestate.deck[ind1]
+                    if (       (obj0.EquivTo(p0) and obj1.EquivTo(p1)) 
+                            or (obj0.EquivTo(p1) and obj1.EquivTo(p0))):
+                        alreadygotone = True
+                        continue
+                if not alreadygotone:
+                    pairs.append((ii,jj))
+    #make that many gamestates. 
+    statelist = []
+    for tup in pairs:
+        state = gamestate.copy()
+        notchosen = []
+        for index in range( min(6,len(state.deck)) ):
+            #always pop 0. index still says where this card USED to be b/4 pop
+            if index in tup:
+                card = state.deck[0]
+                state.MoveZone(card,ZONE.FIELD) #move CHOSEN to play
+            else:
+                notchosen.append( state.deck.pop(0) )
+        state.deck = state.deck + notchosen #all 6 gone from top, now.
+        statelist.append(state)
+    return statelist
+
+Company = Spell("Company",Cost("3G",None,None),["instant"],ResolveCompany)
 
 
 
@@ -169,8 +213,6 @@ Arcades.trig_move.append(
 
 
 
-
-# next: CoCo
 
 
 
@@ -373,28 +415,6 @@ MistyRainforest.trig_move.append(
 # ##===========================================================================##
 # ##---------------------------------------------------------------------------##
 
-# class WindsweptHeath(CardType.Land):
-#     def __init__(self):
-#         super().__init__("Windswept Heath",["fetch"])
-#     @property
-#     def tapsfor(self):
-#         return []
-#     def Trigger(self,card):
-#         if card == self: #if IT is the thing which just entered the battlefield
-#             self.gamestate.field.remove(self) #sacrifice itself    
-#             self.gamestate.TakeDamage(1)
-#             tutortarget = AI.ChooseFetchTarget(self.gamestate,[Forest,Plains])
-#             if tutortarget is not None: #might be no valid targets
-#                 self.gamestate.deck.remove(tutortarget)
-#                 self.gamestate.field.append(tutortarget)
-#                 if self.gamestate.verbose:
-#                     print("    fetch",tutortarget.name)
-#             self.gamestate.Shuffle()
-#             if tutortarget is not None:
-#                 self.gamestate.ResolveCastingTriggers(tutortarget)
-#     @property
-#     def unavailable(self): #fetches are never available to tap for mana
-#         return True
 # ##---------------------------------------------------------------------------##
 # class Westvale(CardType.Land):
 #     def maketoken(self,gamestate):

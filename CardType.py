@@ -27,16 +27,6 @@ class CardType():
         typelist (list(str)):
                       List of lowercase tags describing this card. Includes
                       MtG types as well as relevant keywords.
-
-        on_resolve  : function describing the resolution of spell being cast.
-                      Gamestate, source Cardboard -> list of all (Gamestate,
-                      source Cardboard) pairs where the effect has been
-                      resolved.
-                      This includes moving the card from the stack to other
-                      zones, if relevant.
-        
-        
-        OTHER THINGS TO FILL IN LATER
         """
         self.name = name
         self.cost = cost
@@ -52,6 +42,8 @@ class CardType():
         # self.trig_activate   #abilities that trigger when an ability is activated
         # self.trig_draw = []  #abilities that trigger when a card is drawn
         # self.static = []     #static effects
+        self.cast_destination = ZONE.UNKNOWN
+        
 
     #abilities and triggers within a card are always called by the gamestate
     #by passing the source Cardboard into the function. Thus, the ability
@@ -64,28 +56,17 @@ class CardType():
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
         return self.cost.CanAfford(gamestate,source)  
-    
-    def ResolveSpell(self,gamestate,cardboard):
-        """function: gamestate,cardboard->[gamestate]"""
-        return [gamestate] #placeholder for children to overwrite
 
 
+###----------------------------------------------------------------------------
 
 
 class Permanent(CardType):
     
     def __init__(self,name,cost,typelist):
         super().__init__(name,cost,typelist)
+        self.cast_destination = ZONE.FIELD
         
-    
-    def ResolveSpell(self,gamestate,cardboard):
-        newstate,[perm] = gamestate.CopyAndTrack([cardboard])
-        newstate.MoveZone(perm,ZONE.FIELD)
-        return newstate.ClearSuperStack()  #list of GameStates
-
-
-
-
 
 class Creature(Permanent):
     
@@ -95,8 +76,6 @@ class Creature(Permanent):
         self.basetoughness = toughness
         if "creature" not in self.typelist:
             self.typelist = ["creature"] + self.typelist
-
-
 
 
 class Land(Permanent):
@@ -136,24 +115,43 @@ class Land(Permanent):
         return (not source.tapped and source.zone == ZONE.FIELD)
 
 
+###----------------------------------------------------------------------------
 
 
-# class Spell(CardType):
+class Spell(CardType):
     
-#     def __init__(self,name,cost,typelist,on_resolve):      
-#         super().__init__(name,cost,typelist)
-#         self.on_resolve = on_resolve
-
-#     def ResolveSpell(self,gamestate,cardboard):
-#         assert(gamestate.stack[-1] is cardboard)
-#         newstate,perm = gamestate.CopyAndTrack([cardboard])
-#         #resolve the effects of the spell as Gamestate,Cardboard pairs
-#         universes = perm.on_resolve(gamestate,perm)
-#         #move the spell to wherever it goes
+    def __init__(self,name,cost,typelist,resolve_fn,dest_zone=ZONE.GRAVE):      
+        """
+        name (str)  : name of this card.
+        cost (Cost) : mana and additional cost to cast this card.
+        typelist (list(str)):
+                      List of lowercase tags describing this card. Includes
+                      MtG types as well as relevant keywords.
+        resolve_fn  : gamestate,source -> [GameStates]
+                      Applies the effect of the card.
+                      NOTE: the card itself should still be on the stack when
+                      resolve_fn is done. It will be moved automatically later.
+                      NOTE: the superstack should NOT be cleared by resolve_fn.
+                      
+        dest_zone   : The ZONE the Cardboard is moved to after resolution.
+        """
+        super().__init__(name,cost,typelist)
+        self.dest_zone = dest_zone
+        self.resolve_fn = resolve_fn
         
-#         effects = newstate.MoveZone(perm,ZONE.FIELD)
-#         #need to reorder effects???  later ------------------------------------Add reshuffling of effects?
-#         newstate.stack += effects
-#         return [(newstate,perm)]
-    
+        
+    def ResolveSpell(self,gamestate):
+        """Note: assumes that the relevant Cardboard is the final element of
+        the stack."""
+        card = gamestate.stack[-1]
+        assert(self is card.cardtype)
+        statelist = []
+        for state in self.resolve_fn(gamestate,card): #[GameStates]
+            #nothing new on stack. triggers go to SUPERstack, not stack.
+            assert(card.EquivTo(state.stack[-1]))
+            state.MoveZone(state.stack[-1],self.dest_zone)
+            statelist += state.ClearSuperStack()
+        return statelist
+        
+
     
