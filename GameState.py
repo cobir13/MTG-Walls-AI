@@ -509,7 +509,7 @@ class GameState():
             if any([source.EquivTo(ob) for ob in activeobjects]):
                 continue  #skip cards that are equivalent to cards already used
             addobject = False
-            for ability in source.GetActivated():  #distinguish activated vs mana?
+            for ability in source.GetActivated():
                 #check whether price can be paid
                 if ability.CanAfford(self,source):
                     e = StackEffect(source,[],ability)

@@ -10,6 +10,7 @@ from Abilities import ManaAbility,TriggeredByMove,AsEnterEffect #,ActivatedAbili
 from Costs import Cost
 
 import ZONE
+import Choices
 
 
 # from ManaHandler import ManaPool
@@ -34,16 +35,12 @@ def RootsPay(gamestate,source):
     newsource.AddCounter("@used")  #"@" counters are cleared automatically at untap
     newsource.AddCounter("-0/-1")
     return [(newstate,newsource)]
-# def RootsUpkeep(gamestate,source):
-#     #remove "used" from the list of counters
-#     source.counters = [c for c in source.counters if c!="@used"]
     
 Roots = Creature("Roots",Cost("1G",None,None),["defender"],0,5)
 Roots.activated.append(
                 ManaAbility("Roots add G",
                             Cost(None,RootsAfford,RootsPay),
                             lambda g,s : ManaAbility.AddColor(g,s,"g") ))
-# Roots.upkeep.append(RootsUpkeep)
 
 ##---------------------------------------------------------------------------##
       
@@ -60,22 +57,23 @@ Caryatid.activated.append(
 def CaretakerAfford(gamestate,source):
     if (source.tapped or source.summonsick or source.zone != ZONE.FIELD):
         return False  #caretaker itself isn't available
-    #also need another untapped creature to tap
-    for c in gamestate.field:
-        if c.HasType(Creature) and not c.tapped and not c is source:
-            return True  #if it's another uptapped creature, we're good!
-    return False  #couldn't find another untapped creature
+    #if there is at least one other available creature to tap, we're good!
+    return any([ (c.HasType(Creature) and not c.tapped and not c is source)
+                                for c in gamestate.field])
+
 def CaretakerPay(gamestate,source):
-    #for each thing that could be tapped to pay, return a gamestate where
-    #THAT target is the one which is tapped (in addition to the caretaker)
+    #need to tap a second creature. find all possible options
+    targets = [c for c in gamestate.field if 
+               (c.HasType(Creature) and not c.tapped and not c is source)]
+    #choose which one of these options to use
+    chosenlist = Choices.ChooseExactlyOne(targets)
+    #make GameState where each option is the chosen creature to be tapped
     universes = []
-    for c in gamestate.field:
-        if c.HasType(Creature) and not c.tapped and not c is source:
-            #this is a safe target to tap!
-            newstate,[newsource,target] = gamestate.CopyAndTrack([source,c])
-            newsource.tapped = True
-            target.tapped = True
-            universes.append( (newstate,newsource) )
+    for c in chosenlist:
+        newstate,[newsource,newchoice] = gamestate.CopyAndTrack([source,c])
+        newstate.TapPermanent(newsource)
+        newstate.TapPermanent(newchoice)
+        universes.append( (newstate,newsource) )
     return universes
 
 Caretaker = Creature("Caretaker",Cost("G",None,None),["defender"],0,3)

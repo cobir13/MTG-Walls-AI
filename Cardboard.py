@@ -8,6 +8,9 @@ Created on Mon Dec 28 21:13:28 2020
 
 import ZONE
 import CardType
+import tkinter as tk
+
+
 
 
 ##---------------------------------------------------------------------------##
@@ -94,3 +97,78 @@ class Cardboard():
         
     def CMC(self):
         return self.cardtype.cost.manacost.CMC()
+
+
+
+    def TkDisplay(self,parentframe,):
+        #string for mana cost (if any)
+        coststr = ""
+        if self.CMC()>0:
+            coststr = "(" + str(self.cardtype.cost.manacost) + ")"
+        #string for name
+        # text += "".join([l if l.islower() else " "+l for l in self.name])[1:]
+        namestr = self.name
+        #string for power and toughness, if any
+        ptstr = ""
+        if self.HasType(CardType.Creature):
+            ptstr = "%i/%i" %(self.cardtype.basepower,self.cardtype.basetoughness)    
+        #string for counters, if any
+        countstr = ""
+        for c in set(self.counters):
+            if c[0] != "@":
+                countstr += "[%s]" %c
+                if self.counters.count(c)>1:
+                    countstr += "x%i" %self.counters.count(c)
+                countstr += "\n"
+        #configure text. tapped and untapped display differently
+        if self.tapped:
+            text = " "*(27-len(namestr)) + namestr + "\n"
+            text += countstr
+            while text.count("\n")<3:
+                text += "\n"
+            text += ptstr 
+            text += " "*(30-len(ptstr)-len(coststr))
+            text += coststr
+        else:
+            text = " "*(20-len(coststr)) + coststr + "\n"
+            text += namestr + "\n"
+            text += countstr
+            while text.count("\n")<6:
+                text += "\n"
+            text += " "*(20-len(ptstr)) + ptstr
+        #build the button and return it
+        button = tk.Button(parentframe,
+                           text=text,anchor="w",
+                           height=4 if self.tapped else 7,
+                           width=15 if self.tapped else 10,
+                           wraplength=110 if self.tapped else 80,
+                           padx=3,pady=3,
+                           relief="raised",bg="lightgreen")
+        return button
+    
+    
+    
+if __name__ == "__main__":
+    import Decklist
+    window = tk.Tk()
+    frame = tk.Frame(window)
+    frame.grid(padx=5,pady=5)
+    
+    c1 = Cardboard(Decklist.Roots)
+    c1.TkDisplay(frame).grid(row=0,column=0,padx=5)
+    c2 = Cardboard(Decklist.Caretaker)
+    c2.TkDisplay(frame).grid(row=0,column=1,padx=5)
+    
+    c4 = Cardboard(Decklist.Caretaker)
+    c4.tapped = True
+    c4.TkDisplay(frame).grid(row=0,column=2,padx=5)
+    
+    
+    c3 = Cardboard(Decklist.WindsweptHeath)
+    c3.tapped = True
+    c3.TkDisplay(frame).grid(row=0,column=3,padx=5)
+    
+    
+    
+    window.mainloop()
+    

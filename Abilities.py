@@ -6,10 +6,8 @@ Created on Mon Dec 28 21:13:28 2020
 """
 
 
-from ManaHandler import ManaCost,ManaPool
 import ZONE
-import copy
-
+import tkinter as tk
 
 
 
@@ -249,3 +247,12 @@ class StackEffect():
     @property
     def name(self):
         return self.ability.name
+    
+    
+    def TkDisplay(self,parentframe,):
+        return tk.Button(parentframe,
+                           text="Effect: %s" %self.name,
+                           anchor="w",
+                           height=7,width=10,wraplength=80,
+                           padx=3,pady=3,
+                           relief="solid",bg="lightblue")
