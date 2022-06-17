@@ -12,6 +12,7 @@ from Abilities import StackEffect,ManaAbility,AsEnterEffect
 import CardType
 import ZONE
 from ManaHandler import ManaPool
+import Choices
 import tkinter as tk
 
 
@@ -465,12 +466,9 @@ class GameState():
             return [self]
         results = []
         #pick a superstack effect to move to the stack
-        
-        # for chosen_item in Choice.ChooseE
-        
-        
-        #move one item from superstack onto stack.
-        for ii in range(len(self.superstack)):
+        for item in Choices.ChooseExactlyOne(list(enumerate(self.superstack)),
+                                             "Add to stack"):
+            ii = item[0] #index first, then object second
             newstate = self.copy()
             effect = newstate.superstack.pop(ii)
             if isinstance(effect.ability,AsEnterEffect):

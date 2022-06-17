@@ -26,9 +26,9 @@ def ChooseExactlyOne(options,sourcename="Choose from:"):
     Either way, returns a list of selections. Each selection is a single one
         of the given options.
     NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the first element of
+        selection. However, in user-controlled mode, only the last element of
         the tuple will be shown to the user. This allows the code to pass a
-        tuple of (user-viewable info, backend info).
+        tuple of (backend info, user-viewable info).
     """
     assert(len(options)>0)
     if AUTOMATION:
@@ -51,9 +51,9 @@ def ChooseExactlyN(options,N, sourcename="Choose from:"):
         cannot select 5 elements from a list of 3.  In that case, it will
         return selections of the maximal possible length.
     NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the first element of
+        selection. However, in user-controlled mode, only the last element of
         the tuple will be shown to the user. This allows the code to pass a
-        tuple of (user-viewable info, backend info).
+        tuple of (backend info, user-viewable info).
     """
     if AUTOMATION:
         if N>len(options):
@@ -77,9 +77,9 @@ def ChooseNOrFewer(options,N,sourcename="Choose from:"):
     Either way, returns a list of selections, each of which is a tuple
         containing N or fewer options from the list.
     NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the first element of
+        selection. However, in user-controlled mode, only the last element of
         the tuple will be shown to the user. This allows the code to pass a
-        tuple of (user-viewable info, backend info).
+        tuple of (backend info, user-viewable info).
     """
     if AUTOMATION:
         #get all tuples with N things. Then also all tuples with N-1.
@@ -109,9 +109,9 @@ def SelecterGUI(options,name,numtoselect,canbeless):
         whether they can choose fewer options.
     Returns: a list of selected elements from `options`.
     NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the first element of
+        selection. However, in user-controlled mode, only the last element of
         the tuple will be shown to the user. This allows the code to pass a
-        tuple of (user-viewable info, backend info).
+        tuple of (backend info, user-viewable info).
     """
     assert(not (not canbeless and len(options)<numtoselect))
     #make a floating display window
@@ -139,7 +139,7 @@ def SelecterGUI(options,name,numtoselect,canbeless):
     #add buttons (and highlight-frames) for each of the options
     for ii,obj in enumerate(options):
         if isinstance(obj,tuple):
-            obj = tuple[0]
+            obj = obj[-1]
         frame = tk.Frame(disp,borderwidth=0,background="lightgrey")
         frame.grid(row=1,column=ii,padx=2,pady=2)
         framelist[ii] = frame

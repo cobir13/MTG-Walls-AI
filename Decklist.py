@@ -231,10 +231,14 @@ def ResolveCompany(gamestate,source):
     # return statelist
     
     #get all valid Collected Company targets from top 6 cards of deck
-    targets = [(card,ii) for ii,card in enumerate(gamestate.deck[:6])
+    targets = [(ii,card) for ii,card in enumerate(gamestate.deck[:6])
                                   if card.HasType(Creature) and card.CMC()<=3]
     #list choices as pairs of targets. Each target is (Cardboard, deck index)
-    chosen = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
+    # chosen = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
+    chosen = Choices.ChooseNOrFewer(targets,2,sourcename="Collected Company")
+    #only take the options which put the most creatures into play
+    maxhits = max([len(option) for option in chosen])
+    chosen = [option for option in chosen if len(option)==maxhits]
     #check for duplicate choices
     checked = []
     def equivchoices(a,b):  #check if two choices are equivalent
@@ -243,10 +247,12 @@ def ResolveCompany(gamestate,source):
         if len(a)==0:
             return True #there is only one empty list
         elif len(a)==1:
-            return a[0][0].EquivTo(b[0][0])
+            cardA = a[-1]
+            cardB = b[-1]
+            return cardA.EquivTo(cardB)
         elif len(a)==2:
-            cardA0,cardA1 = [t[0] for t in a]
-            cardB0,cardB1 = [t[0] for t in b]
+            cardA0,cardA1 = [t[-1] for t in a]
+            cardB0,cardB1 = [t[-1] for t in b]
             return (    (cardA0.EquivTo(cardB0) and cardA1.EquivTo(cardB1))
                      or (cardA0.EquivTo(cardB1) and cardA1.EquivTo(cardB0)) )
     while len(chosen)>0:
@@ -255,12 +261,12 @@ def ResolveCompany(gamestate,source):
             checked.append(p0) #make it mutable for later
     #for each choice, copy the gamestate and we move chosen cards to field
     statelist = []
-    for tup in checked:
+    for chosen_tuple in checked:
         state = gamestate.copy()
         notchosen = []
         for index in range( min(6,len(state.deck)) ):
             #always pop 0. index still says where this card USED to be b/4 pop
-            if any([index==ii for card,ii in tup]):
+            if any([index==ii for ii,card in chosen_tuple]):
                 card = state.deck[0]
                 state.MoveZone(card,ZONE.FIELD) #move top card into play
             else:
