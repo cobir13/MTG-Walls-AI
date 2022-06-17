@@ -245,8 +245,10 @@ def ResolveCompany(gamestate,source):
         elif len(a)==1:
             return a[0][0].EquivTo(b[0][0])
         elif len(a)==2:
-            return (   (a[0][0].EquivTo(b[0][0]) and a[0][1].EquivTo(b[0][1]))
-                    or (a[0][0].EquivTo(b[0][1]) and a[0][1].EquivTo(b[0][0])) )
+            cardA0,cardA1 = [t[0] for t in a]
+            cardB0,cardB1 = [t[0] for t in b]
+            return (    (cardA0.EquivTo(cardB0) and cardA1.EquivTo(cardB1))
+                     or (cardA0.EquivTo(cardB1) and cardA1.EquivTo(cardB0)) )
     while len(chosen)>0:
         p0 = chosen.pop()
         if not any( [equivchoices(p0,p1) for p1 in checked] ):
@@ -258,7 +260,7 @@ def ResolveCompany(gamestate,source):
         notchosen = []
         for index in range( min(6,len(state.deck)) ):
             #always pop 0. index still says where this card USED to be b/4 pop
-            if any([index==ii for ii,card in tup]):
+            if any([index==ii for card,ii in tup]):
                 card = state.deck[0]
                 state.MoveZone(card,ZONE.FIELD) #move top card into play
             else:
