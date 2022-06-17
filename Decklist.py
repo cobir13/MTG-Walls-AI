@@ -151,44 +151,118 @@ Arcades.trig_move.append(
 ##---------------------------------------------------------------------------##
 
 def ResolveCompany(gamestate,source):
-    """NOTE: puts bottom in same order as they were on top of deck. Also always
-    takes as many creatures as possible, there is no "choose not to" mode"""
+    """NOTE: puts bottom in same order as they were on top of deck.
+    Note: in automated mode, there's no point in looking at suboptimal choices.
+    Always take as many creatures as possible, even if choosing fewer is
+    technically legal."""
+    # #get all valid Collected Company targets from top 6 cards of deck
+    # targets = [ii for ii,card in enumerate(gamestate.deck[:6])
+    #                              if card.HasType(Creature) and card.CMC()<=3]
+    # #get all pairs of targets to put into play
+    # if len(targets) == 0:
+    #     pairs = [()]
+    # elif len(targets) == 1:
+    #     pairs = [ (targets[0],) ]
+    # else:
+    #     pairs = []
+    #     for ii in range(len(targets)):
+    #         for jj in range(ii+1,len(targets)):
+    #             obj0 = gamestate.deck[ targets[ii] ]
+    #             obj1 = gamestate.deck[ targets[jj] ]
+    #             alreadygotone = False
+    #             for ind0,ind1 in pairs:
+    #                 p0 = gamestate.deck[ind0]
+    #                 p1 = gamestate.deck[ind1]
+    #                 if (       (obj0.EquivTo(p0) and obj1.EquivTo(p1)) 
+    #                         or (obj0.EquivTo(p1) and obj1.EquivTo(p0))):
+    #                     alreadygotone = True
+    #                     continue
+    #             if not alreadygotone:
+    #                 pairs.append((ii,jj))
+    # #make a copy of the gamestate where we choose each good pair
+    # statelist = []
+    # for tup in goodpairs:
+    #     state = gamestate.copy()
+    #     notchosen = []
+    #     for index in range( min(6,len(state.deck)) ):
+    #         #always pop 0. index still says where this card USED to be b/4 pop
+    #         if index in tup:
+    #             card = state.deck[0]
+    #             state.MoveZone(card,ZONE.FIELD) #move CHOSEN to play
+    #         else:
+    #             notchosen.append( state.deck.pop(0) )
+    #     state.deck = state.deck + notchosen #all 6 gone from top, now.
+    #     statelist.append(state)
+    # return statelist
+    
+    # targets = [card for card in gamestate.deck[:6]
+    #                              if card.HasType(Creature) and card.CMC()<=3]
+    # pairs = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
+    # #check for duplicates. NOT guaranteed to all be length 2, but YES
+    # #guaranteed to all be the same length
+    # goodpairs = []
+    # def duplicatepair(a,b):
+    #     if len(a)!=len(b):  #in case the "pair" is actually 1 or 0 cards chosen
+    #         return False
+    #     if len(a)==0:
+    #         return True #there is only one empty list
+    #     elif len(a)==1:
+    #         return a[0].EquivTo(b[0])
+    #     elif len(a)==2:
+    #         return (   (a[0].EquivTo(b[0]) and a[1].EquivTo(b[1]))
+    #                 or (a[0].EquivTo(b[1]) and a[1].EquivTo(b[0])) )
+    # while len(pairs)>0:
+    #     p0 = pairs.pop()
+    #     if not any( [duplicatepair(p0,p1) for p1 in goodpairs] ):
+    #         goodpairs.append(p0) #make it mutable for later
+    # #make a copy of the gamestate where we choose each good pair
+    # statelist = []
+    # for tup in goodpairs:
+    #     state = gamestate.copy()
+    #     #look six cards deep, move all chosen cards from deck to field
+    #     digdeep = 6
+    #     for chosen in tup:
+    #         card = [c for c in state.deck[:digdeep] if c.EquivTo(chosen)][0]
+    #         state.MoveZone(card,ZONE.FIELD)     #move chosen card to field
+    #         digdeep -= 1    #look slightly less deep, deck is smaller now
+    #     #any remaining cards need to be put to the bottom (end of list)
+    #     state.deck = state.deck[digdeep:] + state.deck[:digdeep]
+    #     statelist.append(state)
+    # return statelist
+    
     #get all valid Collected Company targets from top 6 cards of deck
-    targets = [ii for ii,card in enumerate(gamestate.deck[:6])
-                                 if card.HasType(Creature) and card.CMC()<=3]
-    #get all pairs of targets to put into play
-    if len(targets) == 0:
-        pairs = [()]
-    elif len(targets) == 1:
-        pairs = [ (targets[0],) ]
-    else:
-        pairs = []
-        for ii in range(len(targets)):
-            for jj in range(ii+1,len(targets)):
-                obj0 = gamestate.deck[ targets[ii] ]
-                obj1 = gamestate.deck[ targets[jj] ]
-                alreadygotone = False
-                for ind0,ind1 in pairs:
-                    p0 = gamestate.deck[ind0]
-                    p1 = gamestate.deck[ind1]
-                    if (       (obj0.EquivTo(p0) and obj1.EquivTo(p1)) 
-                            or (obj0.EquivTo(p1) and obj1.EquivTo(p0))):
-                        alreadygotone = True
-                        continue
-                if not alreadygotone:
-                    pairs.append((ii,jj))
-    #make that many gamestates. 
+    targets = [(card,ii) for ii,card in enumerate(gamestate.deck[:6])
+                                  if card.HasType(Creature) and card.CMC()<=3]
+    #list choices as pairs of targets. Each target is (Cardboard, deck index)
+    chosen = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
+    #check for duplicate choices
+    checked = []
+    def equivchoices(a,b):  #check if two choices are equivalent
+        if len(a)!=len(b):  #in case the "pair" is actually 1 or 0 cards chosen
+            return False
+        if len(a)==0:
+            return True #there is only one empty list
+        elif len(a)==1:
+            return a[0][0].EquivTo(b[0][0])
+        elif len(a)==2:
+            return (   (a[0][0].EquivTo(b[0][0]) and a[0][1].EquivTo(b[0][1]))
+                    or (a[0][0].EquivTo(b[0][1]) and a[0][1].EquivTo(b[0][0])) )
+    while len(chosen)>0:
+        p0 = chosen.pop()
+        if not any( [equivchoices(p0,p1) for p1 in checked] ):
+            checked.append(p0) #make it mutable for later
+    #for each choice, copy the gamestate and we move chosen cards to field
     statelist = []
-    for tup in pairs:
+    for tup in checked:
         state = gamestate.copy()
         notchosen = []
         for index in range( min(6,len(state.deck)) ):
             #always pop 0. index still says where this card USED to be b/4 pop
-            if index in tup:
+            if any([index==ii for ii,card in tup]):
                 card = state.deck[0]
-                state.MoveZone(card,ZONE.FIELD) #move CHOSEN to play
+                state.MoveZone(card,ZONE.FIELD) #move top card into play
             else:
-                notchosen.append( state.deck.pop(0) )
+                notchosen.append( state.deck.pop(0) )  #pop top card
         state.deck = state.deck + notchosen #all 6 gone from top, now.
         statelist.append(state)
     return statelist

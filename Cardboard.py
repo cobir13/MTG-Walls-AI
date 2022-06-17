@@ -19,6 +19,10 @@ class Cardboard():
     """Represents the physical piece of cardboard that is a Magic card.
     """
     
+    #needs to not overwrite equality, because I often check if a card is in
+    #a list and I need the `in` functionality to use `is` rather than `==`.
+    #Unfortunately, this also means I can't drop Cardboards into sets to sort.
+    
     
     
     def __init__(self,cardtype):
@@ -101,6 +105,13 @@ class Cardboard():
 
 
     def TkDisplay(self,parentframe,):
+        """Returns a tkinter button representing the Cardboard.
+        Note: clicking the button won't do anything yet. Setting up the button
+        so that clicking it will cast the card or activate its abilities is
+        the responsibility of whatever is building the GUI.
+        Similarly, whatever calls this function is responsible for adding the
+        button to the tkinter frame so that it actually appears on screen.
+        """
         #string for mana cost (if any)
         coststr = ""
         if self.CMC()>0:
