@@ -9,7 +9,7 @@ import random
 # import Decklist
 import Cardboard
 from Abilities import StackEffect,ManaAbility,AsEnterEffect
-import CardType
+import RulesText
 import ZONE
 from ManaHandler import ManaPool
 import Choices
@@ -122,17 +122,17 @@ class GameState():
         #also need to compare hands, fields, etc. We know they are sorted
         #and have the same length, so just step through them
         for ii in range(len(self.hand)):
-            if not self.hand[ii].EquivTo( other.hand[ii] ):
+            if not self.hand[ii].is_equiv_to(other.hand[ii]):
                 return False
         for ii in range(len(self.grave)):
-            if not self.grave[ii].EquivTo( other.grave[ii] ):
+            if not self.grave[ii].is_equiv_to(other.grave[ii]):
                 return False
         for ii in range(len(self.field)):
-            if not self.field[ii].EquivTo( other.field[ii] ):
+            if not self.field[ii].is_equiv_to(other.field[ii]):
                 return False
         #stack isn't SORTED but it's ORDERED so can treat it the same
         for ii in range(len(self.stack)):
-            if not self.stack[ii].EquivTo( other.stack[ii] ):
+            if not self.stack[ii].is_equiv_to(other.stack[ii]):
                 return False
         #if got to here, we're good!
         return True
@@ -143,16 +143,16 @@ class GameState():
         playedland = "_PL" if self.myturn else ""
         s = "%s%i_%02ivs%02i%s" %(myturn,self.turncount,
                                   self.life,self.opponentlife,playedland)
-        s += "_" + ",".join([c.ID() for c in self.hand])
-        s += "_" + ",".join([c.ID() for c in self.field])
-        s += "_" + ",".join([c.ID() for c in self.grave])
-        s += "_" + ",".join([c.ID() for c in self.stack])
+        s += "_" + ",".join([c.get_id() for c in self.hand])
+        s += "_" + ",".join([c.get_id() for c in self.field])
+        s += "_" + ",".join([c.get_id() for c in self.grave])
+        s += "_" + ",".join([c.get_id() for c in self.stack])
         s += "(%s)" %str(self.pool)
         return s
 
 
     def __hash__(self):
-        return self.ID().__hash__() #hash the string of the ID
+        return self.ID().__hash__() #hash the string of the get_id
 
     
     def CopyAndTrack(self,tracklist):
@@ -294,15 +294,15 @@ class GameState():
         zonelist = self._GetZone(destination)
         zonelist.append(cardboard)
         if destination in [ZONE.HAND,ZONE.FIELD,ZONE.GRAVE]: #these zones must
-            zonelist.sort(key=Cardboard.Cardboard.ID)        #always be sorted
+            zonelist.sort(key=Cardboard.Cardboard.get_id)        #always be sorted
         #any time you change zones, reset the cardboard parameters
         cardboard.tapped = False
-        cardboard.summonsick = True
+        cardboard.summon_sick = True
         cardboard.counters = []
         #return a list of anything that triggers off of this move! (this
         #includes "as enters" abilities as well as normal etbs)
         for source in self.field+self.grave+self.hand:
-            for abil in source.cardtype.trig_move:
+            for abil in source.rules_text.trig_move:
                 if abil.IsTriggered(self,source,cardboard,origin):
                     newEffect = StackEffect(source,[cardboard],abil)
                     self.superstack.append( newEffect )
@@ -317,10 +317,10 @@ class GameState():
         i = 0
         while i < len(self.field):
             cardboard = self.field[i]
-            if cardboard.HasType(CardType.Creature):
+            if cardboard.has_type(CardType.Creature):
                 #look for counters with "/", which modify power or toughness
                 modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
-                if cardboard.cardtype.basetoughness + modifier <= 0:
+                if cardboard.rules_text.basetoughness + modifier <= 0:
                     self.MoveZone(cardboard,ZONE.GRAVE)
                     continue
             i += 1
@@ -339,14 +339,14 @@ class GameState():
         self.playedland = False
         for cardboard in self.field:
             self.UntapPermanent(cardboard) #adds effects to self's superstack
-            cardboard.summonsick = False
+            cardboard.summon_sick = False
             cardboard.counters = [c for c in cardboard.counters if c[0]!="@"]
             
 
     def UpkeepStep(self):
         """MUTATES. Adds any triggered StackEffects to the superstack."""
         for cardboard in self.hand + self.field + self.grave:
-            for abil in cardboard.cardtype.trig_upkeep:
+            for abil in cardboard.rules_text.trig_upkeep:
                 newEffect = StackEffect(cardboard,[],abil)
                 self.superstack.append (newEffect) 
 
@@ -378,14 +378,14 @@ class GameState():
             been put onto the superstack.
         """
         #check to make sure the execution is legal
-        if not cardboard.cardtype.cost.CanAfford(self,cardboard):
+        if not cardboard.rules_text.cost.CanAfford(self, cardboard):
             return []
         cast_list = []
-        for state,card in cardboard.cardtype.cost.Pay(self,cardboard):
+        for state,card in cardboard.rules_text.cost.Pay(self, cardboard):
             #Iterate through all possible ways the cost could have been paid.
             #Each has a GameState and a Cardboard being cast. Move the card
             #being cast to the stack, which adds any triggers to superstack.
-            if card.HasType(CardType.Land):
+            if card.has_type(CardType.Land):
                 #special exception for Lands, which don't use the stack. Just
                 #move it directly to play and then resolve superstack
                 #state is a copy so can mutate it safely.
@@ -440,10 +440,10 @@ class GameState():
             #some effect on the superstack, which we will then resolve
             newstate = self.copy()
             card = newstate.stack[-1]
-            if card.HasType(CardType.Spell):
+            if card.has_type(CardType.Spell):
                 #returns [GameStates]. Card also moved to destination zone.
-                return card.cardtype.ResolveSpell(newstate)
-            elif card.HasType(CardType.Permanent):
+                return card.rules_text.ResolveSpell(newstate)
+            elif card.has_type(CardType.Permanent):
                 newstate.MoveZone(card,ZONE.FIELD) #adds effects to superstack
                 return newstate.ClearSuperStack()  #[GameStates]
             else:
@@ -502,10 +502,10 @@ class GameState():
         #look for all activated abilities that can be activated (incl. mana ab)
         activeobjects = []
         for source in self.hand + self.field + self.grave:
-            if any([source.EquivTo(ob) for ob in activeobjects]):
+            if any([source.is_equiv_to(ob) for ob in activeobjects]):
                 continue  #skip cards that are equivalent to cards already used
             addobject = False
-            for ability in source.GetActivated():
+            for ability in source.get_activated():
                 #check whether price can be paid
                 if ability.CanAfford(self,source):
                     e = StackEffect(source,[],ability)
@@ -523,11 +523,11 @@ class GameState():
         #look for all cards that can be cast
         activeobjects = []
         for card in self.hand:
-            if any([card.EquivTo(ob) for ob in activeobjects]):
+            if any([card.is_equiv_to(ob) for ob in activeobjects]):
                 continue  #skip cards that are equivalent to cards already used
-            if len(self.stack)>0 and "instant" not in card.cardtype.typelist:
+            if len(self.stack)>0 and "instant" not in card.rules_text.typelist:
                 continue  #if stack is full, can only cast instants
-            if card.cardtype.CanAfford(self,card):
+            if card.rules_text.CanAfford(self, card):
                 cards.append(card)
                 activeobjects.append(card)
         return cards
@@ -547,9 +547,9 @@ class GameState():
     #     haveArcades = any( [isinstance(c,Decklist.Arcades) for c in self.field])
     #     #attack with everything that can
     #     for critter in self.field:
-    #         if not isinstance(critter,CardType.Creature): #only attack with creatures
+    #         if not isinstance(critter,RulesText.Creature): #only attack with creatures
     #             continue
-    #         if critter.summonsick or critter.tapped: #creature needs to be able to attack
+    #         if critter.summon_sick or critter.tapped: #creature needs to be able to attack
     #             continue
     #         if "defender" in critter.typelist:
     #             if haveArcades: #have an Arcades, so can attack with the defenders!
@@ -695,9 +695,9 @@ class ManualGame(tk.Tk):
             widgets.destroy()
         for ii,card in enumerate(self.game.hand):
             butt = card.TkDisplay(self.hand)
-            abils = [a for a in card.GetActivated() if a.CanAfford(self.game,card)]
+            abils = [a for a in card.get_activated() if a.CanAfford(self.game, card)]
             assert(len(abils)==0)  #activated abilities in hand not yet implemented
-            if card.cardtype.CanAfford(self.game,card):
+            if card.rules_text.CanAfford(self.game, card):
                 butt.config(state="normal",
                             command = lambda c=card: self.CastSpell(c) )
             else:
@@ -713,7 +713,7 @@ class ManualGame(tk.Tk):
         for card in self.game.field:
             butt = card.TkDisplay(self.field)
             #make the button activate this card's abilities
-            abils = [a for a in card.GetActivated() if a.CanAfford(self.game,card)]
+            abils = [a for a in card.get_activated() if a.CanAfford(self.game, card)]
             if len(abils)==0:
                 butt.config(state="disabled")  #nothing to activate
             elif len(abils)==1:
@@ -723,7 +723,7 @@ class ManualGame(tk.Tk):
                 #ask the user which one to use
                 print("ask the user which ability to use, I guess")
             #add card-button to the GUI. Lands on bottom, cards on top
-            if card.HasType(CardType.Creature):
+            if card.has_type(CardType.Creature):
                 butt.grid(row=1,column=toprow,padx=5,pady=3)
                 toprow += 1
             else:

@@ -7,7 +7,7 @@ Created on Mon Dec 28 21:13:59 2020
 
 import random
 
-import CardType
+import RulesText
 import ZONE
 from ManaHandler import ManaPool
 import GameState

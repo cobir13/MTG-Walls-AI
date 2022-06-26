@@ -15,7 +15,7 @@ import tkinter as tk
 #by passing the source Cardboard into the function. Thus, the ability
 #doesn't need to know parent Cardboard ahead of time.  This allows me to
 #make CardTypes that are generic and never mutated and maintain the
-#distinction between Cardboard and CardType. This distinction makes it much
+#distinction between Cardboard and RulesText. This distinction makes it much
 #easier to copy and iterate Gamestates.
 
 
@@ -178,7 +178,7 @@ class ManaAbility(ActivatedAbility):
     useful functions that specific abilities might want to make use of."""
     
     def DorkAvailable(gamestate,source):
-        return (not source.tapped and not source.summonsick and 
+        return (not source.tapped and not source.summon_sick and
                 source.zone == ZONE.FIELD)
     
     def TapToPay(gamestate,source):
@@ -234,11 +234,11 @@ class StackEffect():
         return "Effect: "+self.ability.name
     
     def ID(self):
-        cards = ",".join([c.ID() for c in [self.source]+self.otherlist])
+        cards = ",".join([c.get_id() for c in [self.source] + self.otherlist])
         return "E(%s|%s)" %(cards,self.ability.name)
     
     def EquivTo(self,other):
-        return self.ID() == other.ID()
+        return self.ID() == other.get_id()
         # return (    type(self) == type(other)
         #         and self.source == other.source
         #         and set(self.otherlist) == set(other.otherlist)

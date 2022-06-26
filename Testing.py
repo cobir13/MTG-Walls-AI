@@ -8,7 +8,7 @@ Created on Tue Dec 29 22:15:57 2020
 import ZONE
 import GameState
 import ManaHandler
-import CardType
+import RulesText
 import Decklist
 import Cardboard
 import Abilities
@@ -246,10 +246,10 @@ if __name__ == "__main__":
     assert(forest is not forest2)
     assert( game == cp )
     #tap both of these forests for mana
-    cp3 = game.ActivateAbilities(forest , forest.GetActivated()[0])[0]
+    cp3 = game.ActivateAbilities(forest, forest.get_activated()[0])[0]
     assert(game != cp3)
     assert( cp != cp3)
-    cp4 =   cp.ActivateAbilities(forest2,forest2.GetActivated()[0])[0]
+    cp4 =   cp.ActivateAbilities(forest2, forest2.get_activated()[0])[0]
     assert( game != cp4)
     assert( cp3 == cp4 )
     assert( not (cp3 is cp4) )
@@ -394,12 +394,12 @@ if __name__ == "__main__":
     game.MoveZone(game.hand[0],ZONE.FIELD)
     assert(len(game.superstack)==0)  #nothing to trigger off of this move
     
-    assert(game.field[0].summonsick)
+    assert(game.field[0].summon_sick)
     assert(len(game.GetValidActivations())==0)
     #what if I give the caretaker something to tap?
     caryatid = Cardboard.Cardboard(Decklist.Caryatid)
     game.MoveZone(caryatid,ZONE.FIELD)
-    assert(len(game.GetValidActivations())==0) #no, caretaker still summonsick. good.
+    assert(len(game.GetValidActivations())==0) #no, caretaker still summon_sick. good.
     game.field.remove(caryatid)
     
     game.UntapStep()
@@ -430,8 +430,8 @@ if __name__ == "__main__":
     game3 = univ3
     game3.UntapStep()
     assert(len(game3.GetValidActivations())==2)  #2 Caretakers combined, Caryatid
-    care3 = [c for c in game3.field if c.cardtype == Decklist.Caretaker][0]
-    universes = game3.ActivateAbilities(care3,care3.GetActivated()[0])
+    care3 = [c for c in game3.field if c.rules_text == Decklist.Caretaker][0]
+    universes = game3.ActivateAbilities(care3, care3.get_activated()[0])
     assert(len(universes)==2)
     [univ4,univ5] = universes
     assert(univ4.pool == ManaHandler.ManaPool("A"))
@@ -448,11 +448,11 @@ if __name__ == "__main__":
     game6 = univ2.copy()
     game6.MoveZone(axe   ,ZONE.FIELD)
     game6.MoveZone(battle,ZONE.FIELD)
-    assert(len(game6.GetValidActivations())==0) #still summonsick. good.
+    assert(len(game6.GetValidActivations())==0) #still summon_sick. good.
     game6.UntapStep()
-    [u_axe] = game6.ActivateAbilities(axe,axe.GetActivated()[0])
+    [u_axe] = game6.ActivateAbilities(axe, axe.get_activated()[0])
     assert(u_axe.pool == ManaHandler.ManaPool("AAAAA"))
-    [u_bat] = game6.ActivateAbilities(battle,battle.GetActivated()[0])
+    [u_bat] = game6.ActivateAbilities(battle, battle.get_activated()[0])
     assert(u_bat.pool == ManaHandler.ManaPool("GGGGG"))
 
     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
@@ -527,8 +527,8 @@ if __name__ == "__main__":
     assert(len(final.hand )==2)
     assert(len(final.field)==3)
     assert(len(final.deck )==9)
-    assert(any([c.cardtype == Decklist.Island for c in final.hand]))
-    assert(not any([c.cardtype == Decklist.Island for c in final.field]))
+    assert(any([c.rules_text == Decklist.Island for c in final.hand]))
+    assert(not any([c.rules_text == Decklist.Island for c in final.field]))
     
     #play next turn: draw Island, play Island, play Blossoms, draw Island
     tree.PlayNextTurn()
@@ -540,8 +540,8 @@ if __name__ == "__main__":
     assert(len(final.field)==5)
     assert(len(final.deck )==7)
     
-    assert(any([c.cardtype == Decklist.Island for c in final.hand]))
-    assert(any([c.cardtype == Decklist.Island for c in final.field]))
+    assert(any([c.rules_text == Decklist.Island for c in final.hand]))
+    assert(any([c.rules_text == Decklist.Island for c in final.field]))
     
     #add Caryatid to hand and cast it, to be sure I didn't make all defenders draw
     final.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.HAND)
@@ -620,7 +620,7 @@ if __name__ == "__main__":
     tree.PlayNextTurn()  #turn 3
     waystohaveArcades = 0
     for n in tree.LatestNodes():
-        if any([c.cardtype == Decklist.Arcades for c in n.state.field]):
+        if any([c.rules_text == Decklist.Arcades for c in n.state.field]):
             # print(n.state,"\n")
             waystohaveArcades += 1
     assert(waystohaveArcades==2) #use Roots OR Caryatid to cast on T3
@@ -656,8 +656,8 @@ if __name__ == "__main__":
     game.MoveZone( Cardboard.Cardboard(Decklist.WindsweptHeath    ),ZONE.HAND)
 
     #pre-shuffle check
-    assert(game.deck[0 ].cardtype == Decklist.Plains)
-    assert(game.deck[-1].cardtype == Decklist.Island)
+    assert(game.deck[0 ].rules_text == Decklist.Plains)
+    assert(game.deck[-1].rules_text == Decklist.Island)
     
     #play the fetch
     universes = game.CastSpell(game.hand[0])
@@ -668,7 +668,7 @@ if __name__ == "__main__":
         assert(g.life == 19)
         # print([str(c) for c in g.deck])
     assert(len(universes)==2)
-    assert(not universes[0].field[0].EquivTo(universes[1].field[0]))
+    assert(not universes[0].field[0].is_equiv_to(universes[1].field[0]))
     
     #I will MOVE the fetch into play instead. should put onto superstack first
     game2 = game.copy()
@@ -692,7 +692,7 @@ if __name__ == "__main__":
         assert(len(g.grave)==1)
         assert(len(g.superstack)==0)
         assert(len(g.stack)==0)
-        landstrings.append( g.field[0].ID() )
+        landstrings.append(g.field[0].get_id())
         totallife += g.life
     assert(len(universes)==6)
     assert(landstrings == ["LandPlains_2","LandForest_2",
@@ -739,11 +739,11 @@ if __name__ == "__main__":
         assert(len(u.deck)==4)
         assert(len(u.field)==2)
         assert(len(u.grave)==1)
-        if any([c.cardtype==Decklist.Axebane for c in u.field]):
-            assert(not any([c.cardtype==Decklist.Axebane for c in u.deck]))
-        if any([c.cardtype==Decklist.Battlement for c in u.field]):
-            assert(not any([c.cardtype==Decklist.Battlement for c in u.deck]))
-        assert(not any(["land" in c.cardtype.typelist for c in u.field]))
+        if any([c.rules_text == Decklist.Axebane for c in u.field]):
+            assert(not any([c.rules_text == Decklist.Axebane for c in u.deck]))
+        if any([c.rules_text == Decklist.Battlement for c in u.field]):
+            assert(not any([c.rules_text == Decklist.Battlement for c in u.deck]))
+        assert(not any(["land" in c.rules_text.typelist for c in u.field]))
 
     #deck of 6 forests on top, then 10 islands
     gameF = GameState.GameState()
@@ -752,14 +752,14 @@ if __name__ == "__main__":
     for _ in range(10):
         gameF.MoveZone( Cardboard.Cardboard(Decklist.Island ),ZONE.DECK)
     #should be forests on top
-    assert( all([c.cardtype==Decklist.Forest for c in gameF.deck[:6]]))
+    assert(all([c.rules_text == Decklist.Forest for c in gameF.deck[:6]]))
     gameF.MoveZone( Cardboard.Cardboard(Decklist.Company    ),ZONE.STACK)
     universes = gameF.ResolveTopOfStack()
     assert(len(universes)==1)
     u = universes[0]
     #now should be islands on top, forests on bottom
-    assert( all([c.cardtype==Decklist.Island for c in u.deck[:10]]))
-    assert( all([c.cardtype==Decklist.Forest for c in u.deck[-6:]]))
+    assert(all([c.rules_text == Decklist.Island for c in u.deck[:10]]))
+    assert(all([c.rules_text == Decklist.Forest for c in u.deck[-6:]]))
     assert(len(u.field)==0)
     assert(len(u.grave)==1)
     
@@ -776,9 +776,9 @@ if __name__ == "__main__":
     assert(len(universes)==1)
     u = universes[0]
     #now should be islands on top, forests on bottom
-    assert( all([c.cardtype==Decklist.Island for c in u.deck[:10]]))
-    assert( all([c.cardtype==Decklist.Forest for c in u.deck[-5:]]))
-    assert( u.deck[-6].cardtype==Decklist.Island )
+    assert(all([c.rules_text == Decklist.Island for c in u.deck[:10]]))
+    assert(all([c.rules_text == Decklist.Forest for c in u.deck[-5:]]))
+    assert(u.deck[-6].rules_text == Decklist.Island)
     assert(len(u.field)==1)
     assert(len(u.grave)==1)
     
