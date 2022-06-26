@@ -179,7 +179,7 @@ class PlayTree():
             newstate = oldstate.copy()
             newstate.UntapStep()
             newstate.UpkeepStep()
-            newstate.Draw()  #technically should clear superstack FIRST but whatever
+            newstate.Draw()  #technically should clear super_stack FIRST but whatever
             #clear the super stack, then clear the normal stack
             activelist = newstate.ClearSuperStack()
             finalstates = set()

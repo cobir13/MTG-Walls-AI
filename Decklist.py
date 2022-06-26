@@ -25,7 +25,7 @@ def RootsAfford(gamestate, source):
 
 
 def RootsPay(gamestate, source):
-    newstate, [newsource] = gamestate.CopyAndTrack([source])
+    newstate, [newsource] = gamestate.copy_and_track([source])
     newsource.add_counter("@used")  # "@" counters are cleared automatically at untap
     newsource.add_counter("-0/-1")
     return [(newstate, newsource)]
@@ -67,7 +67,7 @@ def CaretakerPay(gamestate, source):
     # make GameState where each option is the chosen creature to be tapped
     universes = []
     for c in chosenlist:
-        newstate, [newsource, newchoice] = gamestate.CopyAndTrack([source, c])
+        newstate, [newsource, newchoice] = gamestate.copy_and_track([source, c])
         newstate.TapPermanent(newsource)
         newstate.TapPermanent(newchoice)
         universes.append((newstate, newsource))
@@ -85,7 +85,7 @@ Caretaker.activated.append(
 
 def BattlementAddColor(gamestate, source):
     num = sum(["defender" in c.rules_text.typelist for c in gamestate.field])
-    newstate, [newsource] = gamestate.CopyAndTrack([source])
+    newstate, [newsource] = gamestate.copy_and_track([source])
     newstate.pool.AddMana("G" * num)  # add mana
     return [newstate]
 
@@ -103,7 +103,7 @@ Battlement.activated.append(
 
 def AxebaneAddColor(gamestate, source):
     num = sum(["defender" in c.rules_text.typelist for c in gamestate.field])
-    newstate, [newsource] = gamestate.CopyAndTrack([source])
+    newstate, [newsource] = gamestate.copy_and_track([source])
     newstate.pool.AddMana("A" * num)  # add mana
     return [newstate]
 
@@ -121,7 +121,7 @@ Axebane.activated.append(
 
 def DrawACard(gamestate, source):
     newstate = gamestate.copy()
-    newstate.Draw()  # adds to superstack if necessary
+    newstate.Draw()  # adds to super_stack if necessary
     return [newstate]
 
 
@@ -164,7 +164,7 @@ def ResolveCompany(gamestate, source):
     technically legal."""
     # #get all valid Collected Company targets from top 6 cards of deck
     # targets = [ii for ii,card in enumerate(gamestate.deck[:6])
-    #                              if card.HasType(Creature) and card.CMC()<=3]
+    #                              if card.HasType(Creature) and card.cmc()<=3]
     # #get all pairs of targets to put into play
     # if len(targets) == 0:
     #     pairs = [()]
@@ -203,7 +203,7 @@ def ResolveCompany(gamestate, source):
     # return statelist
 
     # targets = [card for card in gamestate.deck[:6]
-    #                              if card.HasType(Creature) and card.CMC()<=3]
+    #                              if card.HasType(Creature) and card.cmc()<=3]
     # pairs = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
     # #check for duplicates. NOT guaranteed to all be length 2, but YES
     # #guaranteed to all be the same length
@@ -239,7 +239,7 @@ def ResolveCompany(gamestate, source):
 
     # get all valid Collected Company targets from top 6 cards of deck
     targets = [(ii, card) for ii, card in enumerate(gamestate.deck[:6])
-               if card.has_type(Creature) and card.CMC() <= 3]
+               if card.has_type(Creature) and card.cmc() <= 3]
     # list choices as pairs of targets. Each target is (Cardboard, deck index)
     # chosen = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
     chosen = Choices.ChooseNOrFewer(targets, 2, sourcename="Collected Company")
@@ -346,14 +346,14 @@ def FetchLandType(gamestate, source, typelist):
                 if not any([card.is_equiv_to(ob) for ob in targets]):
                     targets.append(card)
     if len(targets) == 0:  # fail to find. fetch still sacrificed
-        newstate, [fetch] = gamestate.CopyAndTrack([source])
+        newstate, [fetch] = gamestate.copy_and_track([source])
         newstate.LoseLife(1)
         newstate.MoveZone(fetch, ZONE.GRAVE)
         newstate.Shuffle()
         return newstate.ClearSuperStack()
     universes = []
     for landcard in targets:
-        newstate, [newland, fetch] = gamestate.CopyAndTrack([landcard, source])
+        newstate, [newland, fetch] = gamestate.copy_and_track([landcard, source])
         newstate.LoseLife(1)
         newstate.MoveZone(fetch, ZONE.GRAVE)
         newstate.MoveZone(newland, ZONE.FIELD)
@@ -445,7 +445,7 @@ MistyRainforest.trig_move.append(
 #     def __init__(self):
 #         super().__init__("Company", "3G", ["instant"])
 #     def Effect(self):
-#         options = [card for card in self.gamestate.deck[:6] if (isinstance(card,RulesText.Creature) and card.cost.CMC()<=3)]
+#         options = [card for card in self.gamestate.deck[:6] if (isinstance(card,RulesText.Creature) and card.cost.cmc()<=3)]
 #         if len(options)>0: #might wiff entirely   
 #             chosen = AI.ChooseCompany(self.gamestate,options)
 #             for card in chosen:

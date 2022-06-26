@@ -144,7 +144,7 @@ def SelecterGUI(options,name,numtoselect,canbeless):
         frame.grid(row=1,column=ii,padx=2,pady=2)
         framelist[ii] = frame
         if hasattr(obj,"TkDisplay"):
-            butt = obj.TkDisplay(frame)
+            butt = obj.build_tk_display(frame)
         else:
             butt = tk.Button(frame,text=str(obj),height=7,width=10,
                               wraplength=80,padx=2,pady=2,

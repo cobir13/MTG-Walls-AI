@@ -32,7 +32,7 @@ if __name__ == "__main__":
     for i in range(4):
         game.MoveZone(Cardboard.Cardboard(Decklist.Roots),ZONE.HAND)
     game.MoveZone(game.hand[0],ZONE.FIELD)
-    assert(len(game.superstack)==0) #nothing to trigger, yet
+    assert(len(game.super_stack) == 0) #nothing to trigger, yet
 
     #activate the one ability!
     assert(len(game.GetValidActivations())==1)  #1 ability to activate
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     startclock = time.perf_counter()
     
     #add a caryatid to the all-roots game
-    carygame1,_ = game.CopyAndTrack([])
+    carygame1,_ = game.copy_and_track([])
     carygame1.MoveZone(Cardboard.Cardboard(Decklist.Caryatid),ZONE.FIELD)
     #should only see one valid ability to activate, since Caryatid not hasty
     assert(len(carygame1.GetValidActivations())==1)  
@@ -375,9 +375,9 @@ if __name__ == "__main__":
     assert(all([len(n.state.hand)==2 for n in tree.LatestNodes()]))
     assert(all([len(n.state.field)==5 for n in tree.LatestNodes()]))
 
-    assert(all([n.state.turncount == 1 for n in tree.trackerlist[0].allnodes]))
-    assert(all([n.state.turncount == 2 for n in tree.trackerlist[1].allnodes]))
-    assert(all([n.state.turncount == 3 for n in tree.trackerlist[2].allnodes]))
+    assert(all([n.state.turn_count == 1 for n in tree.trackerlist[0].allnodes]))
+    assert(all([n.state.turn_count == 2 for n in tree.trackerlist[1].allnodes]))
+    assert(all([n.state.turn_count == 3 for n in tree.trackerlist[2].allnodes]))
     
     print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
     
@@ -392,7 +392,7 @@ if __name__ == "__main__":
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker) ,ZONE.HAND)
     game.MoveZone(game.hand[0],ZONE.FIELD)
-    assert(len(game.superstack)==0)  #nothing to trigger off of this move
+    assert(len(game.super_stack) == 0)  #nothing to trigger off of this move
     
     assert(game.field[0].summon_sick)
     assert(len(game.GetValidActivations())==0)
@@ -560,14 +560,14 @@ if __name__ == "__main__":
     for x in range(10):
         gameA.MoveZone( Cardboard.Cardboard(Decklist.Island) ,ZONE.DECK)
     gameA.MoveZone( Cardboard.Cardboard(Decklist.Arcades),ZONE.FIELD)
-    assert(len(gameA.superstack)==0)  #Arcades doesn't trigger itself
+    assert(len(gameA.super_stack) == 0)  #Arcades doesn't trigger itself
     #add Blossoms to field and hopefully draw 2
     gameA.MoveZone( Cardboard.Cardboard(Decklist.Blossoms),ZONE.FIELD)
-    assert(len(gameA.superstack)==2)
+    assert(len(gameA.super_stack) == 2)
     assert(len(gameA.stack)==0)
     assert(len(gameA.hand)==0)  #haven't draw or put triggers on stack
     assert(len(gameA.deck)==10)  #haven't draw or put triggers on stack
-    #clear the superstack and then stack. should come to the same thing.
+    #clear the super_stack and then stack. should come to the same thing.
     gameA,gameA1 = gameA.ClearSuperStack()
     assert( gameA != gameA1)  #different order of triggers
     while len(gameA.stack)>0:
@@ -579,13 +579,13 @@ if __name__ == "__main__":
         assert(len(universes)==1)
         gameA1 = universes[0]
     assert(gameA==gameA1)
-    assert(len(gameA.superstack)==0)
+    assert(len(gameA.super_stack) == 0)
     #should have drawn 2 cards
     assert(len(gameA.hand)==2)
     assert(len(gameA.deck)==8)
     #now let's try to add a Caryatid to field and hopefully draw 1
     gameA.MoveZone( Cardboard.Cardboard(Decklist.Caryatid),ZONE.FIELD)
-    assert(len(gameA.superstack)==1)
+    assert(len(gameA.super_stack) == 1)
     assert(len(gameA.hand)==2)  #haven't draw or put triggers on stack
     assert(len(gameA.deck)==8)  #haven't draw or put triggers on stack
     [gameA] = gameA.ClearSuperStack()
@@ -670,11 +670,11 @@ if __name__ == "__main__":
     assert(len(universes)==2)
     assert(not universes[0].field[0].is_equiv_to(universes[1].field[0]))
     
-    #I will MOVE the fetch into play instead. should put onto superstack first
+    #I will MOVE the fetch into play instead. should put onto super_stack first
     game2 = game.copy()
     game2.MoveZone(game2.hand[0],ZONE.FIELD)
     assert(game2.stack==[])
-    assert(len(game2.superstack)==1)
+    assert(len(game2.super_stack) == 1)
     assert(len(game2.ClearSuperStack())==2)  #same 2 as before
     
     #add two shocks to the deck.  should both be fetchable. I expect four
@@ -690,7 +690,7 @@ if __name__ == "__main__":
         assert(len(g.deck)==7)
         assert(len(g.hand)==1)
         assert(len(g.grave)==1)
-        assert(len(g.superstack)==0)
+        assert(len(g.super_stack) == 0)
         assert(len(g.stack)==0)
         landstrings.append(g.field[0].get_id())
         totallife += g.life
@@ -730,7 +730,7 @@ if __name__ == "__main__":
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.DECK)
     #put Collected Company directly onto the stack
     game.MoveZone( Cardboard.Cardboard(Decklist.Company   ),ZONE.STACK)
-    assert(len(game.superstack)==0)
+    assert(len(game.super_stack) == 0)
     
     #resolve Collected Company
     universes = game.ResolveTopOfStack()

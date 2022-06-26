@@ -76,12 +76,12 @@ class Land(Permanent):
     def __init__(self, name, typelist):
         # build the "cost" of casting a land
         def canplayland(gamestate, source):
-            return not gamestate.playedland
+            return not gamestate.has_played_land
 
         def playland(gamestate, source):
             # doesn't actually move, just pays the "cost" of saying we've played a land
-            newstate, [newsource] = gamestate.CopyAndTrack([source])
-            newstate.playedland = True
+            newstate, [newsource] = gamestate.copy_and_track([source])
+            newstate.has_played_land = True
             return [(newstate, newsource)]
 
         cost = Costs.Cost(None, canplayland, playland)
@@ -126,7 +126,7 @@ class Spell(RulesText):
                       Applies the effect of the card.
                       NOTE: the card itself should still be on the stack when
                       resolve_fn is done. It will be moved automatically later.
-                      NOTE: the superstack should NOT be cleared by resolve_fn.
+                      NOTE: the super_stack should NOT be cleared by resolve_fn.
                       
         dest_zone   : The ZONE the Cardboard is moved to after resolution.
         """

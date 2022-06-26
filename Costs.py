@@ -18,7 +18,7 @@ class Cost():
         pay_fn: function that takes in a GameState and a source Cardboard.
             Returns a list of (gamestate,source) pairs giving all possible
             ways the (non-mana) costs could be paid. Empty list if impossible
-            to pay. DOES NOT MUTATE the original gamestate. superstack of
+            to pay. DOES NOT MUTATE the original gamestate. super_stack of
             returned GameStates must be empty.
         """
         if manacost is None:
@@ -49,9 +49,9 @@ class Cost():
             been paid. The list is length 1 if there is exactly one way to pay
             the cost, and the list is length 0 if the cost cannot be paid.
         The original GameState and Source are NOT mutated.
-        """       
-        #copy the source separately to keep track of it in the new universe
-        newstate,[newsource] = gamestate.CopyAndTrack([source])
+        """
+        # copy the source separately to keep track of it in the new universe
+        newstate, [newsource] = gamestate.copy_and_track([source])
         try:
             #pay the mana portion. this never splits into new gamestates
             newstate.pool.PayCost(self.manacost)  #mutates
@@ -66,7 +66,7 @@ class Cost():
                 #     #ClearSuperStack only returns [GameState]. I need to return
                 #     #[(GameState,Cardboard)]. I will defer this problem for
                 #     #now by asserting that I don't need to call ClearSuperStack
-                #     assert(len(g.superstack)==0)
+                #     assert(len(g.super_stack)==0)
                 #     result_list += [(g,s)]
                 # return result_list
         except:
@@ -78,6 +78,5 @@ class Cost():
             s += " %s" %self.pay_fn.__name__
         return s
 
-    # def CMC(self):
-    #     return self.manacost.CMC()
-
+    # def cmc(self):
+    #     return self.manacost.cmc()

@@ -8,6 +8,7 @@ Created on Mon Dec 28 21:13:28 2020
 
 import ZONE
 import tkinter as tk
+from abc import abstractmethod
 
 
 
@@ -17,6 +18,12 @@ import tkinter as tk
 #make CardTypes that are generic and never mutated and maintain the
 #distinction between Cardboard and RulesText. This distinction makes it much
 #easier to copy and iterate Gamestates.
+
+
+
+
+
+
 
 
 
@@ -75,8 +82,8 @@ class GenericAbility():
             return []
         #if there IS no cost, then paying the cost changes nothing
         if self.cost is None:
-            g,[s] = gamestate.CopyAndTrack([source])
-            return [(g,s)]
+            g, [s] = gamestate.copy_and_track([source])
+            return [(g, s)]
         else:
             return self.cost.Pay(gamestate,source)
     
@@ -149,7 +156,7 @@ class AsEnterEffect(TriggeredByMove):
         A clone choosing what to copy;
         A 0/0 entering with +1/+1 counters on it;
     They are a separate subclass so that they can be treated differently when
-    they are found on the superstack. They are applied immediately rather
+    they are found on the super_stack. They are applied immediately rather
     than being put onto the stack.
     """
     def __init__(self,name,execute_fn):
@@ -185,25 +192,25 @@ class ManaAbility(ActivatedAbility):
         """Payment function must return states with empty superstacks"""
         newstate,[newsource] = gamestate.CopyAndTrack([source])
         newstate.TapPermanent(newsource)
-        assert(len(newstate.superstack)==0)
-        return [(newstate,newsource)]
+        assert (len(newstate.super_stack) == 0)
+        return [(newstate, newsource)]
 
-    def AddColor(gamestate,source,color):
-        newstate,[newsource] = gamestate.CopyAndTrack([source])
-        newstate.AddToPool(color) #add mana
-        assert(len(newstate.superstack)==0)
+    def AddColor(gamestate, source, color):
+        newstate, [newsource] = gamestate.copy_and_track([source])
+        newstate.AddToPool(color)  # add mana
+        assert (len(newstate.super_stack) == 0)
         return [newstate]
 
-    def AddDual(gamestate,source,color1,color2):
-        #make first game state where we choose the first option
-        state1,[source1] = gamestate.CopyAndTrack([source])
-        state1.AddToPool(color1) #add mana
-        assert(len(state1.superstack)==0)
-        #make second game state where we choose the second option
-        state2,[source2] = gamestate.CopyAndTrack([source])
-        state2.AddToPool(color2) #add mana
-        assert(len(state2.superstack)==0)
-        return [state1,state2]
+    def AddDual(gamestate, source, color1, color2):
+        # make first game state where we choose the first option
+        state1, [source1] = gamestate.copy_and_track([source])
+        state1.AddToPool(color1)  # add mana
+        assert (len(state1.super_stack) == 0)
+        # make second game state where we choose the second option
+        state2, [source2] = gamestate.copy_and_track([source])
+        state2.AddToPool(color2)  # add mana
+        assert (len(state2.super_stack) == 0)
+        return [state1, state2]
 
 
 
@@ -220,10 +227,10 @@ class StackEffect():
 
     def PutOnStack(self,gamestate):
         """Returns list of GameStates where ability is paid for and now on
-        stack.  Note: superstack is empty in returned states."""
-        return gamestate.ActivateAbilities(self.source,self.ability)
-    
-    def Enact(self,gamestate):
+        stack.  Note: super_stack is empty in returned states."""
+        return gamestate.ActivateAbilities(self.source, self.ability)
+
+    def Enact(self, gamestate):
         """Returns list of GameStates resulting from performing this effect"""
         return self.ability.Execute(gamestate,self.source)
         

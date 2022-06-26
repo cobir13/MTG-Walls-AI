@@ -74,7 +74,7 @@ class Cardboard:
             s += "[" + ",".join(self.counters) + "]"
         return s
 
-    def is_equiv_to(self, other: Cardboard):
+    def is_equiv_to(self, other):
         if not isinstance(other, Cardboard):
             return False
         else:
@@ -92,10 +92,10 @@ class Cardboard:
         RulesText type (in addition to possibly other types as well)" """
         return isinstance(self.rules_text, cardtype)
 
-    def CMC(self):
-        return self.rules_text.cost.manacost.CMC()
+    def cmc(self):
+        return self.rules_text.cost.manacost.cmc()
 
-    def TkDisplay(self, parentframe, ):
+    def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
         Note: clicking the button won't do anything yet. Setting up the button
         so that clicking it will cast the card or activate its abilities is
@@ -104,42 +104,42 @@ class Cardboard:
         button to the tkinter frame so that it actually appears on screen.
         """
         # string for mana cost (if any)
-        coststr = ""
-        if self.CMC() > 0:
-            coststr = "(" + str(self.rules_text.cost.manacost) + ")"
+        cost_string = ""
+        if self.cmc() > 0:
+            cost_string = "(" + str(self.rules_text.cost.manacost) + ")"
         # string for name
         # text += "".join([l if l.islower() else " "+l for l in self.name])[1:]
-        namestr = self.name
+        name_string = self.name
         # string for power and toughness, if any
         ptstr = ""
-        if self.has_type(CardType.Creature):
+        if self.has_type(RulesText.Creature):
             ptstr = "%i/%i" % (self.rules_text.basepower, self.rules_text.basetoughness)
             # string for counters, if any
-        countstr = ""
+        counter_string = ""
         for c in set(self.counters):
             if c[0] != "@":
-                countstr += "[%s]" % c
+                counter_string += "[%s]" % c
                 if self.counters.count(c) > 1:
-                    countstr += "x%i" % self.counters.count(c)
-                countstr += "\n"
+                    counter_string += "x%i" % self.counters.count(c)
+                counter_string += "\n"
         # configure text. tapped and untapped display differently
         if self.tapped:
-            text = " " * (27 - len(namestr)) + namestr + "\n"
-            text += countstr
+            text = " " * (27 - len(name_string)) + name_string + "\n"
+            text += counter_string
             while text.count("\n") < 3:
                 text += "\n"
             text += ptstr
-            text += " " * (30 - len(ptstr) - len(coststr))
-            text += coststr
+            text += " " * (30 - len(ptstr) - len(cost_string))
+            text += cost_string
         else:
-            text = " " * (20 - len(coststr)) + coststr + "\n"
-            text += namestr + "\n"
-            text += countstr
+            text = " " * (20 - len(cost_string)) + cost_string + "\n"
+            text += name_string + "\n"
+            text += counter_string
             while text.count("\n") < 6:
                 text += "\n"
             text += " " * (20 - len(ptstr)) + ptstr
         # build the button and return it
-        button = tk.Button(parentframe,
+        button = tk.Button(parent_frame,
                            text=text, anchor="w",
                            height=4 if self.tapped else 7,
                            width=15 if self.tapped else 10,
@@ -157,16 +157,16 @@ if __name__ == "__main__":
     frame.grid(padx=5, pady=5)
 
     c1 = Cardboard(Decklist.Roots)
-    c1.TkDisplay(frame).grid(row=0, column=0, padx=5)
+    c1.build_tk_display(frame).grid(row=0, column=0, padx=5)
     c2 = Cardboard(Decklist.Caretaker)
-    c2.TkDisplay(frame).grid(row=0, column=1, padx=5)
+    c2.build_tk_display(frame).grid(row=0, column=1, padx=5)
 
     c4 = Cardboard(Decklist.Caretaker)
     c4.tapped = True
-    c4.TkDisplay(frame).grid(row=0, column=2, padx=5)
+    c4.build_tk_display(frame).grid(row=0, column=2, padx=5)
 
     c3 = Cardboard(Decklist.WindsweptHeath)
     c3.tapped = True
-    c3.TkDisplay(frame).grid(row=0, column=3, padx=5)
+    c3.build_tk_display(frame).grid(row=0, column=3, padx=5)
 
     window.mainloop()
