@@ -157,79 +157,81 @@ class GameState:
         Cardboards we were asked to track. This allows tracking "between
         split universes."
         Return signature is: GameState, [Cardboard] """
-        #make new Gamestate and start copying attributes by value
+        # make new Gamestate and start copying attributes by value
         state = GameState()
-        #copy mana pool
+        # copy mana pool
         state.pool = self.pool.copy()
-        #these are all ints or bools, so safe to copy directly
-        state.turncount = self.turncount
-        state.myturn = self.myturn
+        # these are all ints or bools, so safe to copy directly
+        state.turn_count = self.turn_count
+        state.is_my_turn = self.is_my_turn
         state.life = self.life
-        state.opponentlife = self.opponentlife
-        state.playedland = self.playedland
+        state.opponent_life = self.opponent_life
+        state.has_played_land = self.has_played_land
         state.verbose = self.verbose
-        #need to track any pointers in StackEffects
-        stackindex = len(tracklist)      #index for where stack portion begins
+        # need to track any pointers in StackEffects
+        stackindex = len(tracklist)  # index for where stack portion begins
         for obj in self.stack:
-            if isinstance(obj,StackEffect):
-                tracklist += [obj.source] + obj.otherlist #pointers in StackEffect
-        for obj in self.superstack:
-            if isinstance(obj,StackEffect):
-                tracklist += [obj.source] + obj.otherlist #pointers in StackEffect
-        #blank list to fill with corresponding copies of each card in tracklist
+            if isinstance(obj, StackEffect):
+                tracklist += [obj.source] + obj.otherlist  # pointers in StackEffect
+        for obj in self.super_stack:
+            if isinstance(obj, StackEffect):
+                tracklist += [obj.source] + obj.otherlist  # pointers in StackEffect
+        # blank list to fill with corresponding copies of each card in tracklist
         newtracklist = [None] * len(tracklist)
-        #copy all the lists of Cardboards. Maintains order, no need to re-sort
+
+        # copy all the lists of Cardboards. Maintains order, no need to re-sort
         def copylist(origl):
             newl = []
             for cardboard in origl:
-                newcardboard = cardboard.copy()  #copy each card
-                newl.append(newcardboard)        #add copy to requested list
-                for index,tracked in enumerate(tracklist):
-                    if cardboard is tracked:     #card we just copied is card we care about
-                        newtracklist[index] = newcardboard #mark at corresponding index
+                newcardboard = cardboard.copy()  # copy each card
+                newl.append(newcardboard)  # add copy to requested list
+                for index, tracked in enumerate(tracklist):
+                    if cardboard is tracked:  # card we just copied is card we care about
+                        newtracklist[index] = newcardboard  # mark at corresponding index
             return newl
+
         state.deck = copylist(self.deck)
         state.hand = copylist(self.hand)
         state.field = copylist(self.field)
         state.grave = copylist(self.grave)
-        #copy the stack, replacing pointers in StackEffects as needed
+        # copy the stack, replacing pointers in StackEffects as needed
         for obj in self.stack:
-            if isinstance(obj,Cardboard.Cardboard):
-                #card was cast so it's on stack. Copy & track as normal
+            if isinstance(obj, Cardboard.Cardboard):
+                # card was cast so it's on stack. Copy & track as normal
                 newcardboard = obj.copy()
-                state.stack.append( newcardboard )  
-                for index,tracked in enumerate(tracklist):
+                state.stack.append(newcardboard)
+                for index, tracked in enumerate(tracklist):
                     if obj is tracked:
                         newtracklist[index] = newcardboard
-            elif isinstance(obj,StackEffect):
-                #Pointers from this StackEffect are the first thing from the
-                #stack to be put on the tracklist. So source is at
-                #newtracklist[stackindex], and then the remaining otherlist
-                #is the next however-many entries in newtracklist. Remove
-                #all these from tracklist once I've put them back on the stack.
+            elif isinstance(obj, StackEffect):
+                # Pointers from this StackEffect are the first thing from the
+                # stack to be put on the tracklist. So source is at
+                # newtracklist[stackindex], and then the remaining otherlist
+                # is the next however-many entries in newtracklist. Remove
+                # all these from tracklist once I've put them back on the stack.
                 source = newtracklist.pop(stackindex)
                 otherlist = []
                 for kk in range(len(obj.otherlist)):
-                    otherlist.append( newtracklist.pop(stackindex) )
-                neweffect = StackEffect(source,otherlist,obj.ability)
-                state.stack.append( neweffect )        #add to stack
-        #copy the superstack in the same way
-        for obj in self.superstack:
-            if isinstance(obj,Cardboard.Cardboard):
+                    otherlist.append(newtracklist.pop(stackindex))
+                neweffect = StackEffect(source, otherlist, obj.ability)
+                state.stack.append(neweffect)  # add to stack
+        # copy the superstack in the same way
+        for obj in self.super_stack:
+            if isinstance(obj, Cardboard.Cardboard):
                 newcardboard = obj.copy()
-                state.superstack.append( newcardboard )  
-                for index,tracked in enumerate(tracklist):
+                state.super_stack.append(newcardboard)
+                for index, tracked in enumerate(tracklist):
                     if obj is tracked:
                         newtracklist[index] = newcardboard
-            elif isinstance(obj,StackEffect):
+            elif isinstance(obj, StackEffect):
                 source = newtracklist.pop(stackindex)
                 otherlist = []
                 for kk in range(len(obj.otherlist)):
-                    otherlist.append( newtracklist.pop(stackindex) )
-                neweffect = StackEffect(source,otherlist,obj.ability)
-                state.superstack.append( neweffect )        #add to superstack
-        #return
-        return state,newtracklist
+                    otherlist.append(newtracklist.pop(stackindex))
+                neweffect = StackEffect(source, otherlist, obj.ability)
+                state.super_stack.append(neweffect)  # add to superstack
+        # return
+        return state, newtracklist
 
     def copy(self):
         return self.copy_and_track([])[0]

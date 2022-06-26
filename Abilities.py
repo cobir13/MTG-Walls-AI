@@ -4,21 +4,18 @@ Created on Mon Dec 28 21:13:28 2020
 
 @author: Cobi
 """
-
-
+import Costs
 import ZONE
 import tkinter as tk
 from abc import abstractmethod
 
 
-
-#abilities and triggers within a card are always called by the gamestate
-#by passing the source Cardboard into the function. Thus, the ability
-#doesn't need to know parent Cardboard ahead of time.  This allows me to
-#make CardTypes that are generic and never mutated and maintain the
-#distinction between Cardboard and RulesText. This distinction makes it much
-#easier to copy and iterate Gamestates.
-
+# abilities and triggers within a card are always called by the gamestate
+# by passing the source Cardboard into the function. Thus, the ability
+# doesn't need to know parent Cardboard ahead of time.  This allows me to
+# make CardTypes that are generic and never mutated and maintain the
+# distinction between Cardboard and RulesText. This distinction makes it much
+# easier to copy and iterate Gamestates.
 
 
 
@@ -27,10 +24,9 @@ from abc import abstractmethod
 
 
 
+class GenericAbility:
 
-class GenericAbility():
-    
-    def __init__(self,name,cost,trigger_fn,execute_fn):
+    def __init__(self, name, cost, trigger_fn, execute_fn):
         """
         name (str):
             The name of this ability. Meant to be human-readable
@@ -56,19 +52,19 @@ class GenericAbility():
         NOTE: ABILITIES ONLY EVER HAVE ONE SOURCE.
         """
         self.name = name
-        self.cost = cost                #Cost or None
-        self.trigger_fn = trigger_fn    #function: GameState,Cardboard,Cardboard,Zone -> bool
-        self.execute_fn = execute_fn    #function: GameState,Cardboard -> [GameState]
-     
-    def CanAfford(self,gamestate,source):
+        self.cost: Costs.Cost = cost  # Cost or None
+        self.trigger_fn = trigger_fn  # function: GameState,Cardboard,Cardboard,Zone -> bool
+        self.execute_fn = execute_fn  # function: GameState,Cardboard -> [GameState]
+
+    def CanAfford(self, gamestate, source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
         if self.cost is None:
             return True
         else:
-            return self.cost.CanAfford(gamestate,source)   
-    
-    def Pay(self,gamestate,source):
+            return self.cost.CanAfford(gamestate, source)
+
+    def Pay(self, gamestate, source):
         """Returns list of GameState,Cardboard pairs in which the cost is paid.
         Takes in the GameState in which the cost is supposed to be paid and
             the source Cardboard that is generating the cost.
@@ -77,18 +73,17 @@ class GenericAbility():
             the cost, and the list is length 0 if the cost cannot be paid.
         The original GameState and Source are NOT mutated.
         """
-        #check to make sure the execution is legal
-        if not self.cost.CanAfford(gamestate,source):
+        # check to make sure the execution is legal
+        if not self.cost.CanAfford(gamestate, source):
             return []
-        #if there IS no cost, then paying the cost changes nothing
+        # if there IS no cost, then paying the cost changes nothing
         if self.cost is None:
             g, [s] = gamestate.copy_and_track([source])
             return [(g, s)]
         else:
-            return self.cost.Pay(gamestate,source)
-    
-    
-    def IsTriggered(self,gamestate,source,trigger,origin):
+            return self.cost.Pay(gamestate, source)
+
+    def IsTriggered(self, gamestate, source, trigger, origin):
         """Returns a boolean: does this trigger-card cause the ability of this
         source-card to trigger?
         gamestate: the GameState where the source and trigger Cardboards live
@@ -97,11 +92,11 @@ class GenericAbility():
         origin:    the Zone the trigger card moved from
         DOES NOT MUTATE."""
         if self.trigger_fn is None:
-            return False    #if no trigger function, is NEVER triggered
+            return False  # if no trigger function, is NEVER triggered
         else:
-            return self.trigger_fn(gamestate,source,trigger,origin)   
-    
-    def Execute(self,gamestate,source):
+            return self.trigger_fn(gamestate, source, trigger, origin)
+
+    def Execute(self, gamestate, source):
         """
         Takes in the GameState in which the ability is supposed to be performed
             and also the source Cardboard that is generating the ability.
@@ -112,14 +107,12 @@ class GenericAbility():
         The original GameState and source Cardboard are NOT mutated.
         """
         statelist = []
-        for state in self.execute_fn(gamestate,source):
+        for state in self.execute_fn(gamestate, source):
             statelist += state.ClearSuperStack()
         return statelist
-    
-    
+
     def __str__(self):
         return self.name
-
 
 
 class TriggeredByMove(GenericAbility):
@@ -129,20 +122,21 @@ class TriggeredByMove(GenericAbility):
     Remember: trigger_fn has the signature:
         GameState,source Cardboard, trigger Cardboard, origin Zone -> bool
     """
-    def __init__(self,name,trigger_fn,execute_fn):
-        super().__init__(name=name,cost=None,trigger_fn=trigger_fn,execute_fn=execute_fn)   
 
-    def ETB_self(gamestate,source,trigger,origin):
+    def __init__(self, name, trigger_fn, execute_fn):
+        super().__init__(name=name, cost=None, trigger_fn=trigger_fn, execute_fn=execute_fn)
+
+    def ETB_self(gamestate, source, trigger, origin):
         return (source is trigger and trigger.zone == ZONE.FIELD)
-    
-    def ETB_other(gamestate,source,trigger,origin):
+
+    def ETB_other(gamestate, source, trigger, origin):
         return (source.zone == ZONE.FIELD and trigger.zone == ZONE.FIELD)
-    
-    def Cast_self(gamestate,source,trigger,origin):
+
+    def Cast_self(gamestate, source, trigger, origin):
         return (source is trigger and trigger.zone == ZONE.STACK)
 
-    def Dies_self(gamestate,source,trigger,origin):
-        return (    source is trigger
+    def Dies_self(gamestate, source, trigger, origin):
+        return (source is trigger
                 and trigger.zone == ZONE.GRAVE
                 and origin == ZONE.FIELD)
 
@@ -159,38 +153,31 @@ class AsEnterEffect(TriggeredByMove):
     they are found on the super_stack. They are applied immediately rather
     than being put onto the stack.
     """
-    def __init__(self,name,execute_fn):
+
+    def __init__(self, name, execute_fn):
         super().__init__(name=name,
                          trigger_fn=TriggeredByMove.ETB_self,
-                         execute_fn=execute_fn)   
-    
-
-
-
-
-
+                         execute_fn=execute_fn)
 
 
 class ActivatedAbility(GenericAbility):
-    
-    def __init__(self,name,cost,execute_fn):
-        super().__init__(name=name,cost=cost,trigger_fn=None,execute_fn=execute_fn)
 
-
+    def __init__(self, name, cost, execute_fn):
+        super().__init__(name=name, cost=cost, trigger_fn=None, execute_fn=execute_fn)
 
 
 class ManaAbility(ActivatedAbility):
     """No functional difference to ActivatedAbility, just for tracking so that
     ManaAbilities can skip the stack.  Also a good place to collect some
     useful functions that specific abilities might want to make use of."""
-    
-    def DorkAvailable(gamestate,source):
+
+    def DorkAvailable(gamestate, source):
         return (not source.tapped and not source.summon_sick and
                 source.zone == ZONE.FIELD)
-    
-    def TapToPay(gamestate,source):
+
+    def TapToPay(gamestate, source):
         """Payment function must return states with empty superstacks"""
-        newstate,[newsource] = gamestate.CopyAndTrack([source])
+        newstate, [newsource] = gamestate.copy_and_track([source])
         newstate.TapPermanent(newsource)
         assert (len(newstate.super_stack) == 0)
         return [(newstate, newsource)]
@@ -213,39 +200,34 @@ class ManaAbility(ActivatedAbility):
         return [state1, state2]
 
 
+class StackEffect:
 
+    def __init__(self, source, otherlist, ability):
+        self.source = source  # Cardboard source of the effect. "Pointer".
+        self.otherlist = []  # list of other relevant Cardboards. "Pointers".
+        self.ability = ability  # GenericAbility
 
-
-
-
-class StackEffect():
-    
-    def __init__(self,source,otherlist,ability):
-        self.source = source  #Cardboard source of the effect. "Pointer".
-        self.otherlist = []   #list of other relevant Cardboards. "Pointers".
-        self.ability = ability  #GenericAbility
-
-    def PutOnStack(self,gamestate):
+    def PutOnStack(self, gamestate):
         """Returns list of GameStates where ability is paid for and now on
         stack.  Note: super_stack is empty in returned states."""
         return gamestate.ActivateAbilities(self.source, self.ability)
 
     def Enact(self, gamestate):
         """Returns list of GameStates resulting from performing this effect"""
-        return self.ability.Execute(gamestate,self.source)
-        
+        return self.ability.Execute(gamestate, self.source)
+
     def __str__(self):
         return self.ability.name
-    
+
     def __repr__(self):
-        return "Effect: "+self.ability.name
-    
-    def ID(self):
+        return "Effect: " + self.ability.name
+
+    def get_id(self):
         cards = ",".join([c.get_id() for c in [self.source] + self.otherlist])
-        return "E(%s|%s)" %(cards,self.ability.name)
-    
-    def EquivTo(self,other):
-        return self.ID() == other.get_id()
+        return "E(%s|%s)" % (cards, self.ability.name)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
         # return (    type(self) == type(other)
         #         and self.source == other.source
         #         and set(self.otherlist) == set(other.otherlist)
@@ -254,12 +236,11 @@ class StackEffect():
     @property
     def name(self):
         return self.ability.name
-    
-    
-    def TkDisplay(self,parentframe,):
+
+    def build_tk_display(self, parentframe, ):
         return tk.Button(parentframe,
-                           text="Effect: %s" %self.name,
-                           anchor="w",
-                           height=7,width=10,wraplength=80,
-                           padx=3,pady=3,
-                           relief="solid",bg="lightblue")
+                         text="Effect: %s" % self.name,
+                         anchor="w",
+                         height=7, width=10, wraplength=80,
+                         padx=3, pady=3,
+                         relief="solid", bg="lightblue")

@@ -98,7 +98,7 @@ class Land(Permanent):
 
     def ShockIntoPlay(gamestate, source):
         """useful for shock lands.  GameState,Cardboard -> [GameState]. MUTATES."""
-        gamestate2, [source2] = gamestate.CopyAndTrack([source])
+        gamestate2, [source2] = gamestate.copy_and_track([source])
         # Either the land enters tapped OR we take 2 damage
         source.tapped = True  # effect is allowed to mutate
         gamestate2.life -= 2
