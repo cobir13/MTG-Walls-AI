@@ -13,6 +13,7 @@ import Decklist
 import Cardboard
 import Abilities
 import PlayTree
+import Actions
 
 
 import time
@@ -840,8 +841,57 @@ if __name__ == "__main__":
 
     ###--------------------------------------------------------------------
 
+    print("Testing WildCards and other new templating tech")
+    startclock = time.perf_counter()
+
+
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.FIELD)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.FIELD)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.FIELD)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Battlement   ),ZONE.FIELD)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Axebane),ZONE.HAND)
+    game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.HAND)
+
+    wild = Actions.WildCard( zone=ZONE.DECK )
+    assert(sum([wild.compare(c) for c in game.field])==0)
+    assert(sum([wild.compare(c) for c in game.hand])==0)
+    wild = Actions.WildCard( zone=ZONE.FIELD )
+    assert(sum([wild.compare(c) for c in game.field])==4)
+    assert(sum([wild.compare(c) for c in game.hand])==0)
+
+    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature )
+    assert(sum([wild.compare(c) for c in game.field])==3)    
+    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
+                             toughness=3)
+    assert(sum([wild.compare(c) for c in game.field])==2)
+    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
+                             toughness=(">",3))
+    assert(sum([wild.compare(c) for c in game.field])==1)
+    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
+                             toughness=(">",2))
+    assert(sum([wild.compare(c) for c in game.field])==3)
+    wild = Actions.WildCard( zone=ZONE.FIELD, toughness=("<",5))
+    assert(sum([wild.compare(c) for c in game.field])==3)
+    
+    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Land)
+    assert(sum([wild.compare(c) for c in game.field])==1)
+    assert(sum([wild.compare(c) for c in game.hand])==0)
+    wild = Actions.WildCard( zone=ZONE.HAND, rules_text=RulesText.Land)
+    assert(sum([wild.compare(c) for c in game.field])==0)
+    assert(sum([wild.compare(c) for c in game.hand])==1)
 
 
 
+
+
+
+
+
+
+
+
+
+
+    print ("      ...done, %0.2f sec" %(time.perf_counter()-startclock) )
 
     print("\n\npasses all tests!")

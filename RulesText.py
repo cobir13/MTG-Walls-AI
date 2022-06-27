@@ -67,8 +67,8 @@ class Creature(Permanent):
 
     def __init__(self, name, cost, keywords, power, toughness):
         super().__init__(name, cost, keywords)
-        self.basepower = power
-        self.basetoughness = toughness
+        self.power = power
+        self.toughness = toughness
         # if "creature" not in self.keywords:
         #     self.keywords = ["creature"] + self.keywords
 

@@ -313,7 +313,7 @@ class GameState:
             if cardboard.has_type(RulesText.Creature):
                 # look for counters with "/", which modify power or toughness
                 modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
-                if cardboard.rules_text.basetoughness + modifier <= 0:
+                if cardboard.rules_text.toughness + modifier <= 0:
                     self.MoveZone(cardboard, ZONE.GRAVE)
                     continue
             i += 1

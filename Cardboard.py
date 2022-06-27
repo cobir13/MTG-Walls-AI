@@ -113,7 +113,7 @@ class Cardboard:
         # string for power and toughness, if any
         ptstr = ""
         if self.has_type(RulesText.Creature):
-            ptstr = "%i/%i" % (self.rules_text.basepower, self.rules_text.basetoughness)
+            ptstr = "%i/%i" % (self.rules_text.power, self.rules_text.toughness)
             # string for counters, if any
         counter_string = ""
         for c in set(self.counters):

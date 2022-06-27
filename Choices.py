@@ -66,6 +66,8 @@ def ChooseExactlyN(options,N, sourcename="Choose from:"):
             return options
         else:
             return [ tuple(SelecterGUI(options,sourcename,N,False)) ]
+    # I should remove duplicates HERE (rather than where Choice gets used    
+    
     
 
 def ChooseNOrFewer(options,N,sourcename="Choose from:"):
