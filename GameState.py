@@ -498,7 +498,7 @@ class GameState:
         for card in self.hand:
             if any([card.is_equiv_to(ob) for ob in activeobjects]):
                 continue  # skip cards that are equivalent to cards already used
-            if len(self.stack) > 0 and "instant" not in card.rules_text.typelist:
+            if len(self.stack) > 0 and "instant" not in card.rules_text.keywords:
                 continue  # if stack is full, can only cast instants
             if card.rules_text.CanAfford(self, card):
                 cards.append(card)
@@ -522,7 +522,7 @@ class GameState:
     #             continue
     #         if critter.summon_sick or critter.tapped: #creature needs to be able to attack
     #             continue
-    #         if "defender" in critter.typelist:
+    #         if "defender" in critter.keywords:
     #             if haveArcades: #have an Arcades, so can attack with the defenders!
     #                 self.opponent_life -= critter.toughness
     #                 attackerlist.append(critter)
@@ -531,9 +531,9 @@ class GameState:
     #             attackerlist.append(critter)
     #     #attacking taps the attacker 
     #     for critter in attackerlist:
-    #         if not "vigilance" in critter.typelist:
+    #         if not "vigilance" in critter.keywords:
     #                 critter.tapped = True  
-    #         if "lifelink" in critter.typelist:
+    #         if "lifelink" in critter.keywords:
     #             self.life += critter.power
     #     if self.verbose and len(attackerlist)>0: #print what just happened
     #         print("COMBAT  ",",".join([att.name for att in attackerlist]),"for %i damage" %(oldlife-self.opponent_life))
@@ -688,7 +688,7 @@ class ManualGame(tk.Tk):
                 # ask the user which one to use
                 print("ask the user which ability to use, I guess")
             # add card-button to the GUI. Lands on bottom, cards on top
-            if card.has_type(CardType.Creature):
+            if card.has_type(RulesText.Creature):
                 butt.grid(row=1, column=toprow, padx=5, pady=3)
                 toprow += 1
             else:

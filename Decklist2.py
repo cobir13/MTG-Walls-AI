@@ -6,6 +6,7 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 from RulesText import Creature, Land, Spell
+import RulesText
 from Abilities import ManaAbility, TriggeredByMove, AsEnterEffect  # ,ActivatedAbility
 from Costs import Cost
 
@@ -29,11 +30,15 @@ def RootsPay(gamestate, source):
     newsource.add_counter("-0/-1")
     return [(newstate, newsource)]
 
-Roots = Creature("Roots", Cost("1G", None, None), ["defender"], 0, 5)
-Roots.activated.append(
-    ManaAbility("Roots add G",
-                Cost(None, RootsAfford, RootsPay),
-                lambda g, s: ManaAbility.AddColor(g, s, "g")))
+class WallOfRoots(RulesText.Plant, RulesText.Wall):
+    def __init__(self):
+        super().__init__("Roots", Cost("1G", None, None), ["defender"], 0, 5)
+        self.activated.append(
+                    ManaAbility("Roots add G",
+                                Cost(None, RootsAfford, RootsPay),
+                                lambda g, s: ManaAbility.AddColor(g, s, "g")))
+
+
 
 
 

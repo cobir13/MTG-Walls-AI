@@ -5,6 +5,8 @@ Created on Mon Dec 28 21:13:28 2020
 @author: Cobi
 """
 
+from typing import List
+
 from ManaHandler import ManaCost, ManaPool
 import Costs
 import ZONE
@@ -15,20 +17,20 @@ import Abilities
 
 class RulesText():
 
-    def __init__(self, name, cost, typelist):
+    def __init__(self, name:str, cost:Costs.Cost, keywords:List[str]):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
-        typelist (list(str)):
+        keywords (list(str)):
                       List of lowercase tags describing this card. Includes
                       MtG types as well as relevant keywords.
         """
         self.name = name
         self.cost = cost
-        self.typelist = [s.lower() for s in typelist]
+        self.keywords = [s.lower() for s in keywords]
         # activated abilities
         self.activated = []  # includes mana abilities
-        # triggered abilities
+        # triggered 
         self.trig_move = []
         self.trig_upkeep = []
         self.trig_attack = []
@@ -56,24 +58,51 @@ class RulesText():
 
 class Permanent(RulesText):
 
-    def __init__(self, name, cost, typelist):
-        super().__init__(name, cost, typelist)
+    def __init__(self, name, cost, keywords):
+        super().__init__(name, cost, keywords)
         self.cast_destination = ZONE.FIELD
 
 
 class Creature(Permanent):
 
-    def __init__(self, name, cost, typelist, power, toughness):
-        super().__init__(name, cost, typelist)
+    def __init__(self, name, cost, keywords, power, toughness):
+        super().__init__(name, cost, keywords)
         self.basepower = power
         self.basetoughness = toughness
-        if "creature" not in self.typelist:
-            self.typelist = ["creature"] + self.typelist
+        # if "creature" not in self.keywords:
+        #     self.keywords = ["creature"] + self.keywords
+
+
+class Human(Creature):
+    pass
+
+class Plant(Creature):
+    pass
+
+class Wall(Creature):
+    pass
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class Land(Permanent):
 
-    def __init__(self, name, typelist):
+    def __init__(self, name, keywords):
         # build the "cost" of casting a land
         def canplayland(gamestate, source):
             return not gamestate.has_played_land
@@ -86,9 +115,9 @@ class Land(Permanent):
 
         cost = Costs.Cost(None, canplayland, playland)
         # use normal initializer
-        super().__init__(name, cost, typelist)
-        if "land" not in self.typelist:
-            self.typelist = ["land"] + self.typelist
+        super().__init__(name, cost, keywords)
+        if "land" not in self.keywords:
+            self.keywords = ["land"] + self.keywords
 
     def EnterTapped(gamestate, source):
         """useful for tap-lands. GameState,Cardboard -> [GameState]. MUTATES."""
@@ -115,11 +144,11 @@ class Land(Permanent):
 
 class Spell(RulesText):
 
-    def __init__(self, name, cost, typelist, resolve_fn, dest_zone=ZONE.GRAVE):
+    def __init__(self, name, cost, keywords, resolve_fn, dest_zone=ZONE.GRAVE):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
-        typelist (list(str)):
+        keywords (list(str)):
                       List of lowercase tags describing this card. Includes
                       MtG types as well as relevant keywords.
         resolve_fn  : gamestate,source -> [GameStates]
@@ -130,7 +159,7 @@ class Spell(RulesText):
                       
         dest_zone   : The ZONE the Cardboard is moved to after resolution.
         """
-        super().__init__(name, cost, typelist)
+        super().__init__(name, cost, keywords)
         self.dest_zone = dest_zone
         self.resolve_fn = resolve_fn
 

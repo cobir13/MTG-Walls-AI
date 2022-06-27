@@ -743,7 +743,7 @@ if __name__ == "__main__":
             assert(not any([c.rules_text == Decklist.Axebane for c in u.deck]))
         if any([c.rules_text == Decklist.Battlement for c in u.field]):
             assert(not any([c.rules_text == Decklist.Battlement for c in u.deck]))
-        assert(not any(["land" in c.rules_text.typelist for c in u.field]))
+        assert(not any(["land" in c.rules_text.keywords for c in u.field]))
 
     #deck of 6 forests on top, then 10 islands
     gameF = GameState.GameState()
