@@ -841,10 +841,10 @@ if __name__ == "__main__":
 
     ###--------------------------------------------------------------------
 
-    print("Testing WildCards and other new templating tech")
+    print("Testing WildCards, Cost2, and other new templating tech")
     startclock = time.perf_counter()
 
-
+    game = GameState.GameState()
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.FIELD)
     game.MoveZone( Cardboard.Cardboard(Decklist.Caretaker ),ZONE.FIELD)
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.FIELD)
@@ -852,6 +852,8 @@ if __name__ == "__main__":
     game.MoveZone( Cardboard.Cardboard(Decklist.Axebane),ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.HAND)
 
+    ###---testing WildCards
+    
     wild = Actions.WildCard( zone=ZONE.DECK )
     assert(sum([wild.compare(c) for c in game.field])==0)
     assert(sum([wild.compare(c) for c in game.hand])==0)
@@ -880,8 +882,27 @@ if __name__ == "__main__":
     assert(sum([wild.compare(c) for c in game.field])==0)
     assert(sum([wild.compare(c) for c in game.hand])==1)
 
-
-
+    ###---testing Cost2 with ActionNoChoice's
+    
+    battle = [c for c in game.field if "battle" in c.name.lower()][0]
+    forest = [c for c in game.field if "forest" in c.name.lower()][0]
+    
+    tapsymbol = Actions.Cost2( [Actions.TapSymbol()] )
+    payGG = Actions.Cost2( [Actions.PayMana("GG")] )
+    assert(not tapsymbol.CanAfford(game,battle )) #summon-sick
+    assert(    tapsymbol.CanAfford(game,forest )) #land so it's fine
+    assert(not payGG.CanAfford(game,forest )) #source irrelevant here
+    game.pool.AddMana("GGG")
+    assert( payGG.CanAfford(game,forest ))  #source still irrelevant
+    univ_list = payGG.Pay(game,forest)
+    assert(len(univ_list)==1)
+    new_univ = univ_list[0][0]  #1st in list, then 1st of gamestate,source
+    assert( new_univ.pool == ManaHandler.ManaPool("G") )
+    assert( game.pool == ManaHandler.ManaPool("GGG") )  #didn't mutate
+    game.UntapStep()
+    assert( tapsymbol.CanAfford(game,battle )) #no longer summon-sick
+    assert( tapsymbol.CanAfford(game,forest )) #land so it's fine
+    assert( not tapsymbol.CanAfford(game,game.hand[0] )) #land so it's fine
 
 
 
