@@ -14,6 +14,8 @@ import Choices
 import ZONE
 
 
+# #------------------------------------------------------------------------------
+# #------------------------------------------------------------------------------
 
 
 class WildCard:
@@ -65,14 +67,13 @@ class WildCard:
             return None
 
 
-
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
 
 
 class Getter:
     
-    def get(self, state:GameState, subject:Cardboard)->list:
+    def get(self, state:GameState, subject:Cardboard):
         raise Exception
 
 
@@ -166,6 +167,23 @@ class GetSelf(GetCardboardList):
         return [subject]
 
 
+# ----------
+
+
+class Count(Getter):
+    """Get the number of Cardboards which match the wildcard"""
+    
+    def __init__(self, wildcard:WildCard):
+        super().__init__()
+        self.wildcard = wildcard
+    
+    def get(self, state:GameState, subject:Cardboard):
+        zone = state._GetZone(self.wildcard.zone)
+        return len( [c for c in zone if self.wildcard.compare(c)] )
+
+
+
+
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
 
@@ -197,6 +215,7 @@ class Chooser:
 class ChooseOneCardboard(Chooser):
     
     def __init__(self, getter:GetCardboardList, num_to_choose, can_be_less):
+        super().__init__()
         self.getter = getter
         self.num_to_choose = num_to_choose
         self.can_be_less = can_be_less
@@ -242,6 +261,7 @@ class ActionNoChoice(Action):
 
 class ActionWithChoice(Action):
     def __init__(self, action:ActionNoChoice, chooser:ChooseOneCardboard):
+        super().__init__()
         self.action = action
         self.chooser = chooser
     
@@ -271,6 +291,7 @@ class PayMana(ActionNoChoice):
     """deducts the given amount of mana from the gamestate's mana pool"""
     
     def __init__(self, mana_string:str):
+        super().__init__()
         self.mana_cost = ManaHandler.ManaCost(mana_string)
     
     def can_be_done(self, state, subject):
@@ -290,6 +311,7 @@ class AddMana(ActionNoChoice):
     """adds the given amount of mana to the gamestate's mana pool"""
     
     def __init__(self, mana_string:str):
+        super().__init__()
         self.mana_value = ManaHandler.ManaPool(mana_string)
     
     def can_be_done(self, state, subject):
@@ -336,6 +358,38 @@ class TapAny(ActionWithChoice):
     def __init__(self, target:ChooseOneCardboard ):
         super().__init__(action=TapSelf(),target=target)
         
+
+# #------------------------------------------------------------------------------
+
+
+class ActivateOncePerTurn(ActionNoChoice):
+    """Marks the given `subject` as only able to activate this ability once
+    per turn"""
+    
+    def __init__(self, ability_name:str):
+        super().__init__()
+        self.counter_text = "@"+ability_name #marks using an "invisible" counter
+    
+    def can_be_done(self, state, subject):
+        return (subject.zone == ZONE.FIELD
+                and self.counter_text not in subject.counters)
+    
+    def do_it(self, state, subject):
+        subject.add_counter(self.counter_text)
+        
+
+# #------------------------------------------------------------------------------
+
+
+class ActivateOnlyAsSorcery(ActionNoChoice):
+    """Checks that the stack is empty and cannot be done otherwise"""
+
+    def can_be_done(self, state, subject):
+        return len(state.stack)==0
+    
+    def do_it(self, state, subject):
+        return #doesn't actually DO anything, only exists as a check
+    
 
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
@@ -392,87 +446,3 @@ class Cost2:
 
     
     
-    
-
-    
-    
-    
-    
-    
-# =============================================================================
-# # THIS BIT HERE IS PSEUDO-CODE. I'LL COME BACK AND CHANGE IT TO BE REAL
-# # CODE ONCE I DECIDE HOW IT SHOULD LOOK
-# 
-# # Caryatid
-# Ability2(name = "caryatid tap for Au",
-#           cost = [TapSymbol()],
-#           trigger = None,
-#           effect = AddMana("A")
-#           )
-# 
-# # Roots
-# Ability2(name = "Roots add G",
-#           cost = [AddCounter("-0/-1"),OncePerTurn("Roots add G")],
-#           trigger = None,
-#           effect = AddMana("G")
-#           )
-# 
-# # Caretaker
-# Ability2(name = "Caretaker add Au",
-#           cost = [TapSymbol(),
-#                   TapOther(Chooser( Match( WildCard( zone = ZONE.FIELD,
-#                                                     rules_text = Creature,
-#                                                     untapped = True
-#                                                     ))))],
-#           trigger = None,
-#           effect = AddMana("A")
-#           )
-#     
-#     
-# # THIS IS THE END OF THE PSEUDO-CODE SECTION. RESUME NORMAL ACTIVITIES.
-# =============================================================================
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
-
-
-# #------------------------------------------------------------------------------
-
-# class AddCounter(ActionWithChoice):
-    
-#     def can_be_done(self, state, subject):
-#         return subject.zone == ZONE.FIELD
-    
-#     def do_it(self, state, subject): 
-#         counter_string = self.Chooser.choose()
-#         subject.add_counter(counter_string)
-
-# #------------------------------------------------------------------------------
-
-# class OncePerTurn(ActionWithChoice):
-        
-#     def can_be_done(self, state, subject):
-#         counter_string = "@"+self.Chooser.choose()
-#         return (counter_string not in subject.counters
-#                 and subject.zone == ZONE.FIELD)
-    
-#     def do_it(self, state, subject):
-#         counter_string = "@"+self.Chooser.choose()
-#         subject.add_counter(counter_string)  #"@" counters clear at untap step
-
-# #------------------------------------------------------------------------------
-
-
-
-
-

@@ -1,0 +1,41 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Jun 30 13:40:26 2022
+
+@author: Cobi
+"""
+
+Getter
+|-- GetCardboardList -> List[Cardboard]
+    |-- MatchCardboardFromZone (WildCard)
+    |-- MatchOtherFromZone (WildCard)
+    |-- MatchCardboardFromTopOfDeck (WildCard, num_of_cards_deep)
+    |** GetConstantCardboard (Cardboard)
+    |** GetSelf
+|** GetConstantValue (list) -> list of anything 
+ 
+ 
+     
+
+Chooser (getter, num_to_choose, can_be_less)
+|** ChooseOneCardboard
+|-- ChooseOneOther (WildCard)
+
+
+
+Actions
+|-- ActionNoChoice
+    |-- PayMana (mana_string)
+    |-- AddMana (mana_string)
+    |-- TapSelf
+    |-- TapSymbol
+    |-- AddCounterToSelf (counter_text)
+    |-- ActivateOncePerTurn (ability_name)
+    |-- ActivateOnlyAsSorcery
+    
+|-- ActionWithChoice (ActionNoChoice, ChooseOneCardboard)
+    |-- TapAny (ChooseOneCardboard)
+    |-- 
+
+
+

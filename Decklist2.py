@@ -13,34 +13,25 @@ from Costs import Cost
 import ZONE
 import Choices
 
+#for now I'm importing these all separately to keep track of which I need and
+#which are extraneous
 from Actions import Ability2,Cost2,WildCard
-from Actions import PayMana,AddMana,TapSymbol,TapAny,ChooseOneOther
+from Actions import PayMana,AddMana,TapSymbol,AddCounterToSelf,ActivateOncePerTurn
+from Actions import TapAny
+from Actions import ChooseOneOther
 
 
 
 ##---------------------------------------------------------------------------##
 
 
-# def RootsAfford(gamestate, source):
-#     return ("@used" not in source.counters) and (source.zone == ZONE.FIELD)
-
-# def RootsPay(gamestate, source):
-#     newstate, [newsource] = gamestate.copy_and_track([source])
-#     newsource.add_counter("@used")  # "@" counters are cleared automatically at untap
-#     newsource.add_counter("-0/-1")
-#     return [(newstate, newsource)]
-
-# class WallOfRoots(RulesText.Plant, RulesText.Wall):
-#     def __init__(self):
-#         super().__init__("Roots", Cost("1G", None, None), ["defender"], 0, 5)
-#         self.activated.append(
-#                     ManaAbility("Roots add G",
-#                                 Cost(None, RootsAfford, RootsPay),
-#                                 lambda g, s: ManaAbility.AddColor(g, s, "g")))
 
 
-
-
+Roots = Creature("Roots", Cost2([PayMana("1G")]), ["defender"], 0, 5)
+Roots.activated.append(
+        Ability2("Roots add G",
+                 Cost2([AddCounterToSelf("-0/-1"),ActivateOncePerTurn()]),
+                 [AddMana("A")] ))
 
 ##---------------------------------------------------------------------------##
 
@@ -48,22 +39,18 @@ Caryatid = Creature("Caryatid", Cost2([PayMana("1G")]), ["defender", "hexproof"]
 Caryatid.activated.append(
         Ability2("Caryatid add Au", Cost2([TapSymbol()]), [AddMana("A")] ) )
 
-
 ##---------------------------------------------------------------------------##
-
-
-
 
 Caretaker = Creature("Caretaker", Cost2([PayMana("1G")]), ["defender"], 0, 3)
 Caretaker.activated.append(
         Ability2("Caretaker add Au",
-                    Cost2( [TapSymbol(),
-                            TapAny(ChooseOneOther(WildCard(
-                                            zone = ZONE.FIELD,
-                                            rules_text = RulesText.Creature,
-                                            tapped = False)))
-                            ]),
-                    [AddMana("A")] ))
+                 Cost2( [TapSymbol(),
+                         TapAny(ChooseOneOther(WildCard(
+                                        zone = ZONE.FIELD,
+                                        rules_text = RulesText.Creature,
+                                        tapped = False)))
+                        ]),
+                 [AddMana("A")] ))
 
 
 ##---------------------------------------------------------------------------##
