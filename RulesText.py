@@ -32,6 +32,7 @@ class RulesText():
         self.activated = []  # includes mana abilities
         # triggered 
         self.trig_move = []
+        self.trig_do = []
         self.trig_upkeep = []
         self.trig_attack = []
         self.trig_endstep = []

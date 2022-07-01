@@ -5,38 +5,54 @@ Created on Thu Jun 30 13:40:26 2022
 @author: Cobi
 """
 
+
+CardPattern -> bool
+|-- MatchType (RulesText)
+|-- MatchKeyword (str)
+|-- MatchName (str)
+|** MatchZone (zone)
+|-- MatchCounter (str)
+|-- MatchTapped
+|-- MatchUntapped
+|-- MatchNumeric (comparator, value)
+    |-- MatchPower
+    |-- MatchToughness
+    |-- MatchManaValue
+
+
+
+
 Getter
 |-- GetCardboardList -> List[Cardboard]
-    |-- MatchCardboardFromZone (WildCard)
-    |-- MatchOtherFromZone (WildCard)
-    |-- MatchCardboardFromTopOfDeck (WildCard, num_of_cards_deep)
+    |-- MatchCardboardFromZone (patterns)
+    |-- MatchOtherFromZone (patterns,zone)
+    |-- MatchCardboardFromTopOfDeck (patterns,num_of_cards_deep)
     |** GetConstantCardboard (Cardboard)
     |** GetSelf
-|** GetConstantValue (list) -> list of anything 
-|-- Count (WildCard)
+|-- GetInteger
+    |-- CountInZone (patterns,zone)
+|-- GetConst (obj) -> obj
  
  
      
 
 Chooser (getter, num_to_choose, can_be_less)
 |** ChooseOneCardboard
-|-- ChooseOneOther (WildCard)
+|-- ChooseOneOther (patterns)
 
 
 
-Actions
-|-- ActionNoChoice
-    |-- PayMana (mana_string)
-    |-- AddMana (mana_string)
+Verb
+|-- VerbNoChoice -> GameState. #mutates.
+    |-- RepeatBasedOnState (Verb, Getter)
+    |-- PayMana (mana_str)
+    |-- AddMana (mana_str)
     |-- TapSelf
     |-- TapSymbol
     |-- AddCounterToSelf (counter_text)
     |-- ActivateOncePerTurn (ability_name)
     |-- ActivateOnlyAsSorcery
-    
-|-- ActionWithChoice (ActionNoChoice, ChooseOneCardboard)
+|-- VerbWithChoice (Verb, ChooseOneCardboard) -> List[(GameState,Cardboard)] #doesn't mutate
     |-- TapAny (ChooseOneCardboard)
-    |-- 
-
 
 

@@ -15,11 +15,12 @@ import Choices
 
 #for now I'm importing these all separately to keep track of which I need and
 #which are extraneous
-from Actions import Ability2,Cost2
-from Actions import PayMana,AddMana,TapSymbol,AddCounterToSelf,ActivateOncePerTurn
+from Actions import Ability2,Cost2, TriggeredAbility2
+from Actions import PayMana,AddMana,TapSymbol,AddCounterToSelf,ActivateOncePerTurn,RepeatBasedOnState,DrawCard
 from Actions import TapAny
-from Actions import ChooseOneOther
-from Actions import MatchUntapped,MatchType
+from Actions import ChooseOneCardboard
+from Actions import Trigger,TriggerOnMove
+from Actions import MatchCardboardFromZone,MatchUntapped,MatchType,MatchKeyword,CountInZone,MatchNotSelf,MatchSelf,MatchCardboardFromTopOfDeck
 
 
 
@@ -46,9 +47,9 @@ Caretaker = Creature("Caretaker", Cost2([PayMana("1G")]), ["defender"], 0, 3)
 Caretaker.activated.append(
         Ability2("Caretaker add Au",
                  Cost2( [TapSymbol(),
-                         TapAny(ChooseOneOther(
-                                     [MatchUntapped(),MatchType(Creature)],
-                                     ZONE.FIELD) )
+                         TapAny(ChooseOneCardboard(MatchCardboardFromZone(
+                                     [MatchNotSelf(),MatchUntapped(),MatchType(Creature)],
+                                     ZONE.FIELD) ) )
                         ]),
                  [AddMana("A")] ))
 
@@ -66,10 +67,11 @@ Battlement = Creature("Battlement", Cost2([PayMana("1G")]), ["defender"], 0, 4)
 Battlement.activated.append(
         Ability2("Battlement add G",
                  Cost2([TapSymbol()]),
-                 
-                 
-                 
-                 BattlementAddColor))
+                 [RepeatBasedOnState(AddMana("G"),
+                                     CountInZone([MatchKeyword("defender")],
+                                                 ZONE.FIELD)
+                                    )]
+                 ))
 
 
 ##---------------------------------------------------------------------------##
@@ -81,184 +83,50 @@ def AxebaneAddColor(gamestate, source):
     return [newstate]
 
 
-Axebane = Creature("Axebane", Cost("2G", None, None), ["defender"], 0, 3)
+Axebane = Creature("Axebane", Cost2([PayMana("2G")]), ["defender"], 0, 3)
 Axebane.activated.append(
-    ManaAbility("Axebane add Au",
-                Cost(None,
-                     ManaAbility.DorkAvailable,
-                     ManaAbility.TapToPay),
-                AxebaneAddColor))
-
+    Ability2("Battlement add G",
+             Cost2([TapSymbol()]),
+             [RepeatBasedOnState(AddMana("G"),
+                                 CountInZone([MatchKeyword("defender")],
+                                             ZONE.FIELD)
+                                )]
+             ))
 
 ##---------------------------------------------------------------------------##
 
-def DrawACard(gamestate, source):
-    newstate = gamestate.copy()
-    newstate.Draw()  # adds to super_stack if necessary
-    return [newstate]
-
-
-Blossoms = Creature("Blossoms", Cost("1G", None, None), ["defender"], 0, 4)
+Blossoms = Creature("Blossoms", Cost2([PayMana("1G")]), ["defender"], 0, 4)
 Blossoms.trig_move.append(
     TriggeredByMove("Blossoms etb draw",
-                    TriggeredByMove.ETB_self,
-                    DrawACard))
+                    TriggerOnMove( [MatchSelf], None, ZONE.FIELD),
+                    [DrawCard()] ))
 
 ##---------------------------------------------------------------------------##
 
-Omens = Creature("Omens", Cost("1W", None, None), ["defender"], 0, 4)
+Omens = Creature("Omens", Cost2([PayMana("1G")]), ["defender"], 0, 4)
 Omens.trig_move.append(
     TriggeredByMove("Omens etb draw",
-                    TriggeredByMove.ETB_self,
-                    DrawACard))
-
+                    TriggerOnMove( [MatchSelf], None, ZONE.FIELD),
+                    [DrawCard()] ))
 
 ##---------------------------------------------------------------------------##
 
-def ETB_defender(gamestate, source, trigger, origin):
-    return (source.zone == ZONE.FIELD
-            and trigger.zone == ZONE.FIELD
-            and "defender" in trigger.rules_text.keywords)
-
-
-Arcades = Creature("Arcades", Cost("1WUG", None, None), ["flying", "vigilance"], 3, 5)
+Arcades = Creature("Arcades", Cost2([PayMana("1WUG")]), ["flying", "vigilance"], 3, 5)
 Arcades.trig_move.append(
     TriggeredByMove("Arcades draw trigger",
-                    ETB_defender,
-                    DrawACard))
+                TriggerOnMove( [MatchKeyword("defender")], None, ZONE.FIELD),
+                [DrawCard()] ))
 
 
 ##---------------------------------------------------------------------------##
 
-def ResolveCompany(gamestate, source):
-    """NOTE: puts bottom in same order as they were on top of deck.
-    Note: in automated mode, there's no point in looking at suboptimal choices.
-    Always take as many creatures as possible, even if choosing fewer is
-    technically legal."""
-    # #get all valid Collected Company targets from top 6 cards of deck
-    # targets = [ii for ii,card in enumerate(gamestate.deck[:6])
-    #                              if card.HasType(Creature) and card.cmc()<=3]
-    # #get all pairs of targets to put into play
-    # if len(targets) == 0:
-    #     pairs = [()]
-    # elif len(targets) == 1:
-    #     pairs = [ (targets[0],) ]
-    # else:
-    #     pairs = []
-    #     for ii in range(len(targets)):
-    #         for jj in range(ii+1,len(targets)):
-    #             obj0 = gamestate.deck[ targets[ii] ]
-    #             obj1 = gamestate.deck[ targets[jj] ]
-    #             alreadygotone = False
-    #             for ind0,ind1 in pairs:
-    #                 p0 = gamestate.deck[ind0]
-    #                 p1 = gamestate.deck[ind1]
-    #                 if (       (obj0.EquivTo(p0) and obj1.EquivTo(p1)) 
-    #                         or (obj0.EquivTo(p1) and obj1.EquivTo(p0))):
-    #                     alreadygotone = True
-    #                     continue
-    #             if not alreadygotone:
-    #                 pairs.append((ii,jj))
-    # #make a copy of the gamestate where we choose each good pair
-    # statelist = []
-    # for tup in goodpairs:
-    #     state = gamestate.copy()
-    #     notchosen = []
-    #     for index in range( min(6,len(state.deck)) ):
-    #         #always pop 0. index still says where this card USED to be b/4 pop
-    #         if index in tup:
-    #             card = state.deck[0]
-    #             state.MoveZone(card,ZONE.FIELD) #move CHOSEN to play
-    #         else:
-    #             notchosen.append( state.deck.pop(0) )
-    #     state.deck = state.deck + notchosen #all 6 gone from top, now.
-    #     statelist.append(state)
-    # return statelist
-
-    # targets = [card for card in gamestate.deck[:6]
-    #                              if card.HasType(Creature) and card.cmc()<=3]
-    # pairs = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
-    # #check for duplicates. NOT guaranteed to all be length 2, but YES
-    # #guaranteed to all be the same length
-    # goodpairs = []
-    # def duplicatepair(a,b):
-    #     if len(a)!=len(b):  #in case the "pair" is actually 1 or 0 cards chosen
-    #         return False
-    #     if len(a)==0:
-    #         return True #there is only one empty list
-    #     elif len(a)==1:
-    #         return a[0].EquivTo(b[0])
-    #     elif len(a)==2:
-    #         return (   (a[0].EquivTo(b[0]) and a[1].EquivTo(b[1]))
-    #                 or (a[0].EquivTo(b[1]) and a[1].EquivTo(b[0])) )
-    # while len(pairs)>0:
-    #     p0 = pairs.pop()
-    #     if not any( [duplicatepair(p0,p1) for p1 in goodpairs] ):
-    #         goodpairs.append(p0) #make it mutable for later
-    # #make a copy of the gamestate where we choose each good pair
-    # statelist = []
-    # for tup in goodpairs:
-    #     state = gamestate.copy()
-    #     #look six cards deep, move all chosen cards from deck to field
-    #     digdeep = 6
-    #     for chosen in tup:
-    #         card = [c for c in state.deck[:digdeep] if c.EquivTo(chosen)][0]
-    #         state.MoveZone(card,ZONE.FIELD)     #move chosen card to field
-    #         digdeep -= 1    #look slightly less deep, deck is smaller now
-    #     #any remaining cards need to be put to the bottom (end of list)
-    #     state.deck = state.deck[digdeep:] + state.deck[:digdeep]
-    #     statelist.append(state)
-    # return statelist
-
-    # get all valid Collected Company targets from top 6 cards of deck
-    targets = [(ii, card) for ii, card in enumerate(gamestate.deck[:6])
-               if card.has_type(Creature) and card.cmc() <= 3]
-    # list choices as pairs of targets. Each target is (Cardboard, deck index)
-    # chosen = Choices.ChooseExactlyN(targets,2,sourcename="Collected Company")
-    chosen = Choices.ChooseNOrFewer(targets, 2, sourcename="Collected Company")
-    # only take the options which put the most creatures into play
-    maxhits = max([len(option) for option in chosen])
-    chosen = [option for option in chosen if len(option) == maxhits]
-    # check for duplicate choices
-    checked = []
-
-    def equivchoices(a, b):  # check if two choices are equivalent
-        if len(a) != len(b):  # in case the "pair" is actually 1 or 0 cards chosen
-            return False
-        if len(a) == 0:
-            return True  # there is only one empty list
-        elif len(a) == 1:
-            cardA = a[-1]
-            cardB = b[-1]
-            return cardA.is_equiv_to(cardB)
-        elif len(a) == 2:
-            cardA0, cardA1 = [t[-1] for t in a]
-            cardB0, cardB1 = [t[-1] for t in b]
-            return ((cardA0.is_equiv_to(cardB0) and cardA1.is_equiv_to(cardB1))
-                    or (cardA0.is_equiv_to(cardB1) and cardA1.is_equiv_to(cardB0)))
-
-    while len(chosen) > 0:
-        p0 = chosen.pop()
-        if not any([equivchoices(p0, p1) for p1 in checked]):
-            checked.append(p0)  # make it mutable for later
-    # for each choice, copy the gamestate and we move chosen cards to field
-    statelist = []
-    for chosen_tuple in checked:
-        state = gamestate.copy()
-        notchosen = []
-        for index in range(min(6, len(state.deck))):
-            # always pop 0. index still says where this card USED to be b/4 pop
-            if any([index == ii for ii, card in chosen_tuple]):
-                card = state.deck[0]
-                state.MoveZone(card, ZONE.FIELD)  # move top card into play
-            else:
-                notchosen.append(state.deck.pop(0))  # pop top card
-        state.deck = state.deck + notchosen  # all 6 gone from top, now.
-        statelist.append(state)
-    return statelist
-
-
-Company = Spell("Company", Cost("3G", None, None), ["instant"], ResolveCompany)
+Company = Spell("Company", Cost2([PayMana("3G")]), 
+                [ MatchCardboardFromTopOfDeck(]
+                
+                
+                
+                
+                )
 
 ##---------------------------------------------------------------------------##
 

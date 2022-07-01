@@ -18,79 +18,26 @@ import ZONE
 # #------------------------------------------------------------------------------
 
 
-# =============================================================================
-# class WildCard:
-#     def __init__(self,**kwargs):
-#         self.dict_of_params = kwargs
-#     
-#     def compare(self, cardboard:Cardboard,quiet=True):
-#         if not quiet:
-#             print(" ")
-#             print(cardboard.name)
-#         for parameter in self.dict_of_params.keys():
-#             try:
-#                 comparator,value = self.dict_of_params[parameter]
-#             except TypeError: #can't unpack one into two
-#                 comparator = "instance" if parameter == "rules_text" else "="
-#                 value = self.dict_of_params[parameter]
-#             #get value from the cardboard to compare to
-#             if hasattr(cardboard, parameter):
-#                 other_value = getattr(cardboard,parameter)
-#             #if cardboard doesn't have it, then try rules_text
-#             elif hasattr(cardboard.rules_text, parameter):
-#                 other_value = getattr(cardboard.rules_text,parameter)
-#             #if there is no comparable value, then cardboard fails comparison
-#             else:
-#                 return False  #break loop, we found a False
-#             if callable(other_value):
-#                 other_value = other_value()
-#             #compare
-#             if not quiet:
-#                 print(parameter,value,comparator,other_value)
-#             
-#             if comparator == "instance" and not isinstance(other_value, value):
-#                 return False
-#             elif comparator in ["is", "=", "=="] and not other_value == value:
-#                 return False
-#             elif comparator == "<" and not other_value < value:
-#                 return False
-#             elif comparator == ">" and not other_value > value:
-#                 return False
-#             elif comparator == "!=" and not other_value != value:
-#                 return False
-#         return True
-#     
-#     @property
-#     def zone(self):
-#         if "zone" in self.dict_of_params:
-#             return self.dict_of_params["zone"]
-#         else:
-#             return None
-# =============================================================================
-
-
-
-
 class CardPattern:
-    def match(self, card:Cardboard) -> bool:
+    def match(self, card:Cardboard, gamestate=None, source=None) -> bool:
         raise Exception
 
 class MatchType(CardPattern):
     def __init__(self, card_type:RulesText):
         self.type_to_match = card_type
-    def match(self, card):
+    def match(self, card, gamestate=None, source=None):
         return isinstance(card,self.type_to_match)
     
 class MatchKeyword(CardPattern):
     def __init__(self, keyword:str):
         self.keyword_to_match = keyword
-    def match(self, card):
+def match(self, card, gamestate=None, source=None):
         return self.keyword_to_match in card.rules_text.keywords
 
 class MatchName(CardPattern):
     def __init__(self, name:str):
         self.name_to_match = name
-    def match(self, card):
+    def match(self, card, gamestate=None, source=None):
         return self.name_to_match == card.rules_text.name
 
 # class MatchZone(CardPattern):
@@ -102,15 +49,15 @@ class MatchName(CardPattern):
 class MatchCounter(CardPattern):
     def __init__(self, counter_to_match:str):
         self.counter_to_match = counter_to_match
-    def match(self, card):
+    def match(self, card, gamestate=None, source=None):
         return self.counter_to_match in card.counters
 
 class MatchTapped(CardPattern):
-    def match(self, card):
+    def match(self, card, gamestate=None, source=None):
         return card.tapped
 
 class MatchUntapped(CardPattern):
-    def match(self, card):
+    def match(self, card, gamestate=None, source=None):
         return not card.tapped
 
 class MatchNumeric(CardPattern):
@@ -121,7 +68,7 @@ class MatchNumeric(CardPattern):
         self.value = value
     def get_card_value(self,card:Cardboard):
         return None
-    def match(self, card):
+    def match(self, card, gamestate=None, source=None):
         card_value = self.get_card_value(card)
         if card_value is None:
             return False
@@ -157,9 +104,13 @@ class MatchManaValue(MatchNumeric):
     def get_card_value(self,card:Cardboard):
         return card.rules_text.mana_value
 
+class MatchNotSelf(CardPattern):
+    def match(self, card, gamestate, source):
+        return not (card is source)
 
-
-
+class MatchSelf(CardPattern):
+    def match(self, card, gamestate, source):
+        return card is source
 
 
 # #------------------------------------------------------------------------------
@@ -181,59 +132,14 @@ class GetCardboardList(Getter):
         raise Exception
 
 
-# ----------
-
-
-class MatchCardboardFromZone(GetCardboardList):
-    
-    def __init__(self, patterns:List[CardPattern], zone):
-        super().__init__()
-        self.patterns = patterns
-        self.zone = zone
-        
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        zone = state._GetZone(self.zone)
-        return [c for c in zone if all([p.match(c) for p in self.patterns])]
 
 
 # ----------
 
 
-class MatchOtherFromZone(GetCardboardList):
+class GetConst(Getter):
     
-    def __init__(self, patterns:List[CardPattern], zone):
-        super().__init__()
-        self.patterns = patterns
-        self.zone = zone
-        
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        zone = state._GetZone(self.zone)
-        return [c for c in zone if (all([p.match(c) for p in self.patterns])
-                                    and not c is subject) ]
-        
-
-# ----------
-
-
-class MatchCardboardFromTopOfDeck(GetCardboardList):
-    
-    def __init__(self, patterns:List[CardPattern], num_of_cards_deep:int):
-        super().__init__()
-        self.patterns = patterns
-        self.num_of_cards_deep = num_of_cards_deep
-        
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        top_of_deck = state.deck[:self.num_of_cards_deep]
-        return [c for c in top_of_deck
-                            if all([p.match(c) for p in self.patterns])]
-
-
-# ----------
-
-
-class GetConstantValue(Getter):
-    
-    def __init__(self, constant_value:list):
+    def __init__(self, constant_value):
         super().__init__()
         self.constant_value = constant_value
         
@@ -269,8 +175,13 @@ class GetSelf(GetCardboardList):
 # ----------
 
 
-class CountInZone(Getter):
-    """Get the number of Cardboards which match the wildcard"""
+class GetInteger(Getter):
+    def get(self, state:GameState, subject:Cardboard) -> int:
+        return super().get(state,subject)
+
+
+class CountInZone(GetInteger):
+    """Get the number of Cardboards which match the wildcard patterns"""
     
     def __init__(self, patterns:List[CardPattern],zone):
         super().__init__()
@@ -278,9 +189,50 @@ class CountInZone(Getter):
         self.zone = zone
     
     def get(self, state:GameState, subject:Cardboard):
-        zone = state._GetZone(self.zone)
+        zone = state.get_zone(self.zone)
         return len( [c for c in zone
-                                 if all([p.match(c) for p in self.patterns])] )
+                                 if all([p.match(c,state,subject) for p in self.patterns])] )
+
+
+class GetConstInteger(GetInteger):
+    def __init__(self, constant_value:int):
+        super().__init__()
+        self.constant_value = constant_value
+        
+    def get(self, state:GameState, subject:Cardboard):
+        return self.constant_value
+
+
+# ----------
+
+class GetFromZone(GetCardboardList):
+    
+    def __init__(self, patterns:List[CardPattern], zone):
+        super().__init__()
+        self.patterns = patterns
+        self.zone = zone
+        
+    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
+        zone = state.get_zone(self.zone)
+        return [c for c in zone if all([p.match(c,state,subject) for p in self.patterns])]
+        
+
+# ----------
+
+
+class GetFromTopOfDeck(GetCardboardList):
+    
+    def __init__(self, patterns:List[CardPattern], get_depth:GetConstInteger):
+        super().__init__()
+        self.patterns = patterns
+        self.get_depth = get_depth
+        
+    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
+        num_of_cards_deep = self.get_depth.get(state,subject)
+        top_of_deck = state.deck[:num_of_cards_deep]
+        return [c for c in top_of_deck
+                            if all([p.match(c,state,subject) for p in self.patterns])]
+
 
 
 
@@ -314,29 +266,21 @@ class Chooser:
 
 class ChooseOneCardboard(Chooser):
     
-    def __init__(self, getter:GetCardboardList, num_to_choose, can_be_less):
+    def __init__(self, getter:GetCardboardList):
         super().__init__()
         self.getter = getter
-        self.num_to_choose = num_to_choose
-        self.can_be_less = can_be_less
+        self.num_to_choose = 1
+        self.can_be_less = False
 
-        
-# ----------
-
-
-class ChooseOneOther(ChooseOneCardboard):
-    """Choose exactly one cardboard that matches the given WildCard. Chosen
-    card can't be self, either.  Returns empty list if fail, I guess."""
-    def __init__(self, patterns:List[CardPattern], zone):
-        super().__init__(MatchOtherFromZone(patterns, zone), 1,False)
+    
         
 
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
         
-class Action:
+class Verb:
     def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
-        raise Exception
+        return True
         
     def do_it(self, state:GameState, subject:Cardboard):
         raise Exception
@@ -346,21 +290,22 @@ class Action:
 
 
 
-class ActionNoChoice(Action):
+class VerbNoChoice(Verb):
     
     def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
-        raise Exception
+        return True
         
-    def do_it(self, state:GameState, subject:Cardboard) -> GameState:
+    def do_it(self, state:GameState, subject:Cardboard) -> None:
         """mutates!"""
-        raise Exception
+        for source in state.field + state.grave + state.hand:
+            for abil in source.rules_text.trig_do:
+                if abil.is_triggered(self, state, source, subject):
+                    new_effect = StackEffect2(source, [subject], abil)
+                    state.super_stack.append(new_effect)
 
 
-
-# -----------
-
-class ActionWithChoice(Action):
-    def __init__(self, action:ActionNoChoice, chooser:ChooseOneCardboard):
+class VerbWithChoice(Verb):
+    def __init__(self, action:Verb, chooser:ChooseOneCardboard):
         super().__init__()
         self.action = action
         self.chooser = chooser
@@ -381,13 +326,10 @@ class ActionWithChoice(Action):
         return new_state_list
 
 
-
-
-
 #------------------------------------------------------------------------------
 
 
-class PayMana(ActionNoChoice):
+class PayMana(VerbNoChoice):
     """deducts the given amount of mana from the gamestate's mana pool"""
     
     def __init__(self, mana_string:str):
@@ -399,6 +341,7 @@ class PayMana(ActionNoChoice):
     
     def do_it(self, state, subject): 
         state.pool.PayCost(self.mana_cost)
+        super().do_it(state,subject)  #adds triggers to super_stack
         
     def __str__(self):
         return str(self.mana_cost)
@@ -407,7 +350,7 @@ class PayMana(ActionNoChoice):
 # ----------
 
 
-class AddMana(ActionNoChoice):
+class AddMana(VerbNoChoice):
     """adds the given amount of mana to the gamestate's mana pool"""
     
     def __init__(self, mana_string:str):
@@ -419,22 +362,46 @@ class AddMana(ActionNoChoice):
     
     def do_it(self, state, subject): 
         state.pool.AddMana(self.mana_value)
+        super().do_it(state,subject)  #adds triggers to super_stack
         
     def __str__(self):
         return str(self.mana_value)
 
 
+
 # ----------
 
 
-class TapSelf(ActionNoChoice):
+class RepeatBasedOnState(VerbNoChoice):
+    def __init__(self, action:Verb, getter:GetInteger):
+        super().__init__()
+        self.action = action
+        self.getter = getter
+    
+    def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
+        return self.action.can_be_done(state,subject)
+    
+    def do_it(self, state:GameState, subject:Cardboard) -> GameState:
+        """mutates!"""
+        num_to_repeat = self.getter.get(state,subject)
+        for _ in range(num_to_repeat):
+            if self.action.can_be_done(state,subject):
+                self.action.do_it(state,subject)
+        super().do_it(state,subject)  #adds triggers to super_stack
+
+
+# ----------
+
+
+class TapSelf(VerbNoChoice):
     """taps `subject` if it was not already tapped."""
     
     def can_be_done(self, state, subject):
         return (not subject.tapped and subject.zone == ZONE.FIELD)
     
-    def do_it(state, subject): 
+    def do_it(state, subject):
         subject.tapped = True
+        super().do_it(state,subject)  #adds triggers to super_stack
 
 
 # ----------
@@ -453,16 +420,16 @@ class TapSymbol(TapSelf):
 # ----------
 
 
-class TapAny(ActionWithChoice):
+class TapAny(VerbWithChoice):
     
     def __init__(self, target:ChooseOneCardboard ):
         super().__init__(action=TapSelf(),target=target)
         
 
-# #------------------------------------------------------------------------------
+# ----------
 
 
-class ActivateOncePerTurn(ActionNoChoice):
+class ActivateOncePerTurn(VerbNoChoice):
     """Marks the given `subject` as only able to activate this ability once
     per turn"""
     
@@ -476,12 +443,13 @@ class ActivateOncePerTurn(ActionNoChoice):
     
     def do_it(self, state, subject):
         subject.add_counter(self.counter_text)
+        super().do_it(state,subject)  #adds triggers to super_stack
         
 
-# #------------------------------------------------------------------------------
+# ----------
 
 
-class ActivateOnlyAsSorcery(ActionNoChoice):
+class ActivateOnlyAsSorcery(VerbNoChoice):
     """Checks that the stack is empty and cannot be done otherwise"""
 
     def can_be_done(self, state, subject):
@@ -491,24 +459,112 @@ class ActivateOnlyAsSorcery(ActionNoChoice):
         return #doesn't actually DO anything, only exists as a check
     
 
+# ----------
+
+
+# class CastSpell
+
+
+# ----------
+
+
+class MoveSelfToZone(VerbNoChoice):
+    def __init__(self, destination_zone):
+        super().__init__()
+        self.destination = destination_zone
+        self.origin = None
+    
+    def can_be_done(self, state, subject):
+        if subject.zone in [ZONE.DECK,ZONE.HAND,ZONE.FIELD,ZONE.GRAVE,ZONE.STACK]:
+            return  subject in state.get_zone(subject.zone)
+    
+    def do_it(self, state, subject):
+        self.origin = subject.zone
+        #remove from origin
+        if self.origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
+            state.get_zone(self.origin).remove(subject)
+        # add to destination
+        subject.zone = self.destination
+        zonelist = state.get_zone(self.destination)
+        zonelist.append(subject)
+        #sort the zones that need to always be sorted
+        if self.destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
+            zonelist.sort(key=Cardboard.Cardboard.get_id)
+        # any time you change zones, reset the cardboard parameters
+        subject.tapped = False
+        subject.summon_sick = True
+        subject.counters = [c for c in subject.counters if c[0]=="$"] #sticky counters stay
+        super().do_it(state,subject)  #adds triggers to super_stack
+
+# ----------
+
+
+class DrawCard(VerbNoChoice):
+    """draw from index 0 of deck"""
+    
+    def can_be_done(self, state, subject):
+        return True  #yes, even if the deck is 0, you CAN draw. you'll just lose
+    
+    def do_it(self, state, subject):
+        mover = MoveSelfToZone(ZONE.HAND)
+        mover.do_it(state, state.deck[0]) #adds move triggers to super_stack
+        super().do_it(state, subject)     #adds draw-specific triggers
+
+
+
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
         
+
+class Trigger:
+    def __init__(self, verb_type:type, patterns_for_subject:List[CardPattern]):
+        self.verb_type = verb_type
+        self.patterns = patterns_for_subject
+
+
+    def is_triggered(self, verb:Verb, state:GameState, source:Cardboard, triggerer:Cardboard):
+        """`source` is source of possible trigger. `triggerer` is the
+        thing which caused the trigger to be checked for viability."""
+        return (isinstance(verb,self.verb_type)
+                and all([p.match(triggerer,state,source) for p in self.patterns]) )
+
+
+class TriggerOnMove(Trigger):
+    def __init__(self, patterns_for_subject:List[CardPattern],origin,destination):
+        self.ver_type = MoveSelfToZone
+        self.patterns = patterns_for_subject
+        self.origin = origin
+        self.destination = destination
+    
+    def is_triggered(self, verb:Verb, state:GameState, source:Cardboard, triggerer:Cardboard):
+        return (super().is_triggered(verb,state,source,triggerer)
+                and (self.origin == verb.origin or self.origin is None)  #MoveSelfToZone has origin
+                and (self.destination == triggerer.zone or self.destination is None)
+                )
+            
+        
+# #------------------------------------------------------------------------------
+# #------------------------------------------------------------------------------
+             
+
+
+
+
 
 
         
     
 class Cost2:
-    def __init__(self, pay_no_choice:List[ActionNoChoice] ):
+    def __init__(self, pay_no_choice:List[VerbNoChoice] ):
         self.actions_no = pay_no_choice
 
-    def CanAfford(self, gamestate, source):
+    def can_afford(self, gamestate, source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
         return all([a.can_be_done(gamestate,source) for a in self.actions_no])
 
 
-    def Pay(self, gamestate, source):
+    def pay(self, gamestate, source):
         """Returns list of GameStates where the cost has been paid.
         Takes in the GameState in which the cost is supposed to be paid and
             the source Cardboard that is generating the cost.
@@ -545,7 +601,149 @@ class Cost2:
             return None
             
 
+class ActivatedAbility2:
+    def __init__(self, name, cost:Cost2, effect_list:List[Verb]):
+        self.name = name
+        self.cost = cost
+        self.effect_list = effect_list
+
+    def can_afford(self, gamestate:GameState, source:Cardboard):
+        """Returns boolean: can this gamestate afford the cost?
+        DOES NOT MUTATE."""
+        return self.cost.CanAfford(gamestate, source)
+    
+    def pay(self, gamestate:GameState, source:Cardboard):
+        """
+        Returns a list of (GameState,Cardboard) pairs in which the
+        cost has been paid. The list is length 1 if there is exactly
+        one way to pay the cost, and the list is length 0 if the cost
+        cannot be paid.
+        The original GameState and Source are NOT mutated.
+        """
+        if not self.cost.CanAfford(gamestate,source):
+            return []
+        else:
+            return self.cost.pay(gamestate, source)
+    
+    def apply_effect(self, gamestate:GameState, source:Cardboard):
+        """
+        Returns a list of GameStates where the effect has been performed:
+            - length 1 if there is exactly one way to do this
+            - length 0 if this cannot be done (costs, lack of targets, etc)
+            - length >1 if there are options that can be decided differently.
+        The original GameState and source Cardboard are NOT mutated.
+        """
+        state_copy, [source_copy] = gamestate.copy_and_track([source])
+        old_tuple_list = [(state_copy,source_copy)]
+        new_tuple_list = []
+        for verb in self.effect_list:
+            if isinstance(verb, VerbNoChoice):
+                #mutate the gamestates in old_tuple_list directly
+                [verb.do_it(g,c) for g,c in old_tuple_list]
+            elif isinstance(verb, VerbWithChoice):
+                #collect output of applying verb to each tuple in old_list
+                for g,c in old_tuple_list:
+                    new_tuple_list += verb.do_it(g,c)
+                old_tuple_list = new_tuple_list
+                new_tuple_list = []
+        #clear the superstack of all the new gamestates
+        for g in old_tuple_list:
+            new_tuple_list += g.ClearSuperStack()
+        return new_tuple_list
+
+    def __str__(self):
+        return self.name
     
 
+
+
+
+class TriggeredAbility2:
+    def __init__(self, name, trigger:Trigger, effect_list:List[Verb]):
+        self.name = name
+        self.trigger = trigger
+        self.effect_list = effect_list
     
-    
+    def is_triggered(self, verb:Verb, state:GameState, source:Cardboard,
+                                                     triggerer:Cardboard):
+        """
+        Returns boolean "the given Verb meets the trigger condition"
+        """
+        return self.trigger.is_triggered(verb, state, source, triggerer)
+        
+    def apply_effect(self, gamestate:GameState, source:Cardboard):
+        """
+        Returns a list of GameStates where the effect has been performed:
+            - length 1 if there is exactly one way to do this
+            - length 0 if this cannot be done (costs, lack of targets, etc)
+            - length >1 if there are options that can be decided differently.
+        The original GameState and source Cardboard are NOT mutated.
+        """
+        state_copy, [source_copy] = gamestate.copy_and_track([source])
+        old_tuple_list = [(state_copy,source_copy)]
+        new_tuple_list = []
+        for verb in self.effect_list:
+            if isinstance(verb, VerbNoChoice):
+                #mutate the gamestates in old_tuple_list directly
+                [verb.do_it(g,c) for g,c in old_tuple_list]
+            elif isinstance(verb, VerbWithChoice):
+                #collect output of applying verb to each tuple in old_list
+                for g,c in old_tuple_list:
+                    new_tuple_list += verb.do_it(g,c)
+                old_tuple_list = new_tuple_list
+                new_tuple_list = []
+        #clear the superstack of all the new gamestates
+        for g in old_tuple_list:
+            new_tuple_list += g.ClearSuperStack()
+        return new_tuple_list
+
+    def __str__(self):
+        return self.name
+
+
+
+
+class StackEffect2:
+
+    def __init__(self, source, otherlist, ability):
+        self.source = source  # Cardboard source of the effect. "Pointer".
+        self.otherlist = []  # list of other relevant Cardboards. "Pointers".
+        self.ability = ability  # GenericAbility
+
+    def PutOnStack(self, gamestate):
+        """Returns list of GameStates where ability is paid for and now on
+        stack.  Note: super_stack is empty in returned states."""
+        return gamestate.ActivateAbilities(self.source, self.ability)
+
+    def Enact(self, gamestate):
+        """Returns list of GameStates resulting from performing this effect"""
+        return self.ability.Execute(gamestate, self.source)
+
+    def __str__(self):
+        return self.ability.name
+
+    def __repr__(self):
+        return "Effect: " + self.ability.name
+
+    def get_id(self):
+        cards = ",".join([c.get_id() for c in [self.source] + self.otherlist])
+        return "E(%s|%s)" % (cards, self.ability.name)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
+        # return (    type(self) == type(other)
+        #         and self.source == other.source
+        #         and set(self.otherlist) == set(other.otherlist)
+        #         and self.ability.name == other.ability.name)
+
+    @property
+    def name(self):
+        return self.ability.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")

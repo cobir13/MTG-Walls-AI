@@ -254,7 +254,7 @@ class GameState:
         """MUTATES. Adds any triggered StackEffects to the super_stack."""
         self.life -= amount
 
-    def _GetZone(self, zonename):
+    def get_zone(self, zonename):
         if zonename == ZONE.DECK:
             zone = self.deck
         elif zonename == ZONE.HAND:
@@ -279,12 +279,12 @@ class GameState:
         # remove from origin
         origin = cardboard.zone
         if origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
-            oldlist = self._GetZone(origin)
+            oldlist = self.get_zone(origin)
             assert (cardboard in oldlist)
             oldlist.remove(cardboard)
         # add to destination
         cardboard.zone = destination
-        zonelist = self._GetZone(destination)
+        zonelist = self.get_zone(destination)
         zonelist.append(cardboard)
         if destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:  # these zones must
             zonelist.sort(key=Cardboard.Cardboard.get_id)  # always be sorted
