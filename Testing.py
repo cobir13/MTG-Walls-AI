@@ -852,35 +852,35 @@ if __name__ == "__main__":
     game.MoveZone( Cardboard.Cardboard(Decklist.Axebane),ZONE.HAND)
     game.MoveZone( Cardboard.Cardboard(Decklist.Forest    ),ZONE.HAND)
 
-    ###---testing WildCards
+    # ###---testing WildCards
     
-    wild = Actions.WildCard( zone=ZONE.DECK )
-    assert(sum([wild.compare(c) for c in game.field])==0)
-    assert(sum([wild.compare(c) for c in game.hand])==0)
-    wild = Actions.WildCard( zone=ZONE.FIELD )
-    assert(sum([wild.compare(c) for c in game.field])==4)
-    assert(sum([wild.compare(c) for c in game.hand])==0)
+    # wild = Actions.WildCard( zone=ZONE.DECK )
+    # assert(sum([wild.compare(c) for c in game.field])==0)
+    # assert(sum([wild.compare(c) for c in game.hand])==0)
+    # wild = Actions.WildCard( zone=ZONE.FIELD )
+    # assert(sum([wild.compare(c) for c in game.field])==4)
+    # assert(sum([wild.compare(c) for c in game.hand])==0)
 
-    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature )
-    assert(sum([wild.compare(c) for c in game.field])==3)    
-    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
-                             toughness=3)
-    assert(sum([wild.compare(c) for c in game.field])==2)
-    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
-                             toughness=(">",3))
-    assert(sum([wild.compare(c) for c in game.field])==1)
-    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
-                             toughness=(">",2))
-    assert(sum([wild.compare(c) for c in game.field])==3)
-    wild = Actions.WildCard( zone=ZONE.FIELD, toughness=("<",5))
-    assert(sum([wild.compare(c) for c in game.field])==3)
+    # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature )
+    # assert(sum([wild.compare(c) for c in game.field])==3)    
+    # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
+    #                          toughness=3)
+    # assert(sum([wild.compare(c) for c in game.field])==2)
+    # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
+    #                          toughness=(">",3))
+    # assert(sum([wild.compare(c) for c in game.field])==1)
+    # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
+    #                          toughness=(">",2))
+    # assert(sum([wild.compare(c) for c in game.field])==3)
+    # wild = Actions.WildCard( zone=ZONE.FIELD, toughness=("<",5))
+    # assert(sum([wild.compare(c) for c in game.field])==3)
     
-    wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Land)
-    assert(sum([wild.compare(c) for c in game.field])==1)
-    assert(sum([wild.compare(c) for c in game.hand])==0)
-    wild = Actions.WildCard( zone=ZONE.HAND, rules_text=RulesText.Land)
-    assert(sum([wild.compare(c) for c in game.field])==0)
-    assert(sum([wild.compare(c) for c in game.hand])==1)
+    # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Land)
+    # assert(sum([wild.compare(c) for c in game.field])==1)
+    # assert(sum([wild.compare(c) for c in game.hand])==0)
+    # wild = Actions.WildCard( zone=ZONE.HAND, rules_text=RulesText.Land)
+    # assert(sum([wild.compare(c) for c in game.field])==0)
+    # assert(sum([wild.compare(c) for c in game.hand])==1)
 
     ###---testing Cost2 with ActionNoChoice's
     

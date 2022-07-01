@@ -13,6 +13,7 @@ Getter
     |** GetConstantCardboard (Cardboard)
     |** GetSelf
 |** GetConstantValue (list) -> list of anything 
+|-- Count (WildCard)
  
  
      

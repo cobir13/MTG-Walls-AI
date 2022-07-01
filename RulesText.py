@@ -83,20 +83,6 @@ class Wall(Creature):
     pass
 
 
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

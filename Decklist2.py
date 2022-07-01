@@ -15,10 +15,11 @@ import Choices
 
 #for now I'm importing these all separately to keep track of which I need and
 #which are extraneous
-from Actions import Ability2,Cost2,WildCard
+from Actions import Ability2,Cost2
 from Actions import PayMana,AddMana,TapSymbol,AddCounterToSelf,ActivateOncePerTurn
 from Actions import TapAny
 from Actions import ChooseOneOther
+from Actions import MatchUntapped,MatchType
 
 
 
@@ -45,10 +46,9 @@ Caretaker = Creature("Caretaker", Cost2([PayMana("1G")]), ["defender"], 0, 3)
 Caretaker.activated.append(
         Ability2("Caretaker add Au",
                  Cost2( [TapSymbol(),
-                         TapAny(ChooseOneOther(WildCard(
-                                        zone = ZONE.FIELD,
-                                        rules_text = RulesText.Creature,
-                                        tapped = False)))
+                         TapAny(ChooseOneOther(
+                                     [MatchUntapped(),MatchType(Creature)],
+                                     ZONE.FIELD) )
                         ]),
                  [AddMana("A")] ))
 
@@ -62,13 +62,14 @@ def BattlementAddColor(gamestate, source):
     return [newstate]
 
 
-Battlement = Creature("Battlement", Cost("1G", None, None), ["defender"], 0, 4)
+Battlement = Creature("Battlement", Cost2([PayMana("1G")]), ["defender"], 0, 4)
 Battlement.activated.append(
-    ManaAbility("Battlement add G",
-                Cost(None,
-                     ManaAbility.DorkAvailable,
-                     ManaAbility.TapToPay),
-                BattlementAddColor))
+        Ability2("Battlement add G",
+                 Cost2([TapSymbol()]),
+                 
+                 
+                 
+                 BattlementAddColor))
 
 
 ##---------------------------------------------------------------------------##

@@ -8,7 +8,7 @@ Created on Sun Jun 26 18:08:14 2022
 from typing import List
 from GameState import GameState
 from Cardboard import Cardboard
-from RulesText import Creature
+from RulesText import RulesText,Creature
 import ManaHandler
 import Choices
 import ZONE
@@ -18,53 +18,148 @@ import ZONE
 # #------------------------------------------------------------------------------
 
 
-class WildCard:
-    def __init__(self,**kwargs):
-        self.dict_of_params = kwargs
+# =============================================================================
+# class WildCard:
+#     def __init__(self,**kwargs):
+#         self.dict_of_params = kwargs
+#     
+#     def compare(self, cardboard:Cardboard,quiet=True):
+#         if not quiet:
+#             print(" ")
+#             print(cardboard.name)
+#         for parameter in self.dict_of_params.keys():
+#             try:
+#                 comparator,value = self.dict_of_params[parameter]
+#             except TypeError: #can't unpack one into two
+#                 comparator = "instance" if parameter == "rules_text" else "="
+#                 value = self.dict_of_params[parameter]
+#             #get value from the cardboard to compare to
+#             if hasattr(cardboard, parameter):
+#                 other_value = getattr(cardboard,parameter)
+#             #if cardboard doesn't have it, then try rules_text
+#             elif hasattr(cardboard.rules_text, parameter):
+#                 other_value = getattr(cardboard.rules_text,parameter)
+#             #if there is no comparable value, then cardboard fails comparison
+#             else:
+#                 return False  #break loop, we found a False
+#             if callable(other_value):
+#                 other_value = other_value()
+#             #compare
+#             if not quiet:
+#                 print(parameter,value,comparator,other_value)
+#             
+#             if comparator == "instance" and not isinstance(other_value, value):
+#                 return False
+#             elif comparator in ["is", "=", "=="] and not other_value == value:
+#                 return False
+#             elif comparator == "<" and not other_value < value:
+#                 return False
+#             elif comparator == ">" and not other_value > value:
+#                 return False
+#             elif comparator == "!=" and not other_value != value:
+#                 return False
+#         return True
+#     
+#     @property
+#     def zone(self):
+#         if "zone" in self.dict_of_params:
+#             return self.dict_of_params["zone"]
+#         else:
+#             return None
+# =============================================================================
+
+
+
+
+class CardPattern:
+    def match(self, card:Cardboard) -> bool:
+        raise Exception
+
+class MatchType(CardPattern):
+    def __init__(self, card_type:RulesText):
+        self.type_to_match = card_type
+    def match(self, card):
+        return isinstance(card,self.type_to_match)
     
-    def compare(self, cardboard:Cardboard,quiet=True):
-        if not quiet:
-            print(" ")
-            print(cardboard.name)
-        for parameter in self.dict_of_params.keys():
-            try:
-                comparator,value = self.dict_of_params[parameter]
-            except TypeError: #can't unpack one into two
-                comparator = "instance" if parameter == "rules_text" else "="
-                value = self.dict_of_params[parameter]
-            #get value from the cardboard to compare to
-            if hasattr(cardboard, parameter):
-                other_value = getattr(cardboard,parameter)
-            #if cardboard doesn't have it, then try rules_text
-            elif hasattr(cardboard.rules_text, parameter):
-                other_value = getattr(cardboard.rules_text,parameter)
-            #if there is no comparable value, then cardboard fails comparison
-            else:
-                return False  #break loop, we found a False
-            if callable(other_value):
-                other_value = other_value()
-            #compare
-            if not quiet:
-                print(parameter,value,comparator,other_value)
-            
-            if comparator == "instance" and not isinstance(other_value, value):
-                return False
-            elif comparator in ["is", "=", "=="] and not other_value == value:
-                return False
-            elif comparator == "<" and not other_value < value:
-                return False
-            elif comparator == ">" and not other_value > value:
-                return False
-            elif comparator == "!=" and not other_value != value:
-                return False
-        return True
-    
-    @property
-    def zone(self):
-        if "zone" in self.dict_of_params:
-            return self.dict_of_params["zone"]
+class MatchKeyword(CardPattern):
+    def __init__(self, keyword:str):
+        self.keyword_to_match = keyword
+    def match(self, card):
+        return self.keyword_to_match in card.rules_text.keywords
+
+class MatchName(CardPattern):
+    def __init__(self, name:str):
+        self.name_to_match = name
+    def match(self, card):
+        return self.name_to_match == card.rules_text.name
+
+# class MatchZone(CardPattern):
+#     def __init__(self, zone):
+#         self.zone = zone
+#     def match(self, card):
+#         self.zone == card.zone
+
+class MatchCounter(CardPattern):
+    def __init__(self, counter_to_match:str):
+        self.counter_to_match = counter_to_match
+    def match(self, card):
+        return self.counter_to_match in card.counters
+
+class MatchTapped(CardPattern):
+    def match(self, card):
+        return card.tapped
+
+class MatchUntapped(CardPattern):
+    def match(self, card):
+        return not card.tapped
+
+class MatchNumeric(CardPattern):
+    """ 'card comparator value' """
+    def __init__(self, comparator:str, value:int):
+        assert(comparator in [">","<","=","==","<=",">=","!=",])
+        self.comparator = comparator
+        self.value = value
+    def get_card_value(self,card:Cardboard):
+        return None
+    def match(self, card):
+        card_value = self.get_card_value(card)
+        if card_value is None:
+            return False
+        if self.comparator == "=" or self.comparator == "==":
+            return card_value == self.value 
+        elif self.comparator == "<":
+            return card_value < self.value
+        elif self.comparator == "<=":
+            return card_value <= self.value 
+        elif self.comparator == ">":
+            return card_value > self.value 
+        elif self.comparator == ">=":
+            return card_value >= self.value 
+        elif self.comparator == "!=":
+            return card_value != self.value
         else:
-            return None
+            raise ValueError("shouldn't be possible to get here!")
+        
+class MatchPower(MatchNumeric):
+    """ 'card comparator value' """
+    def get_card_value(self,card:Cardboard):
+        if hasattr(card,"power"):
+            return card.rules_text.power
+        
+class MatchToughness(MatchNumeric):
+    """ 'card comparator value' """
+    def get_card_value(self,card:Cardboard):
+        if hasattr(card,"toughness"):
+            return card.rules_text.toughness
+
+class MatchManaValue(MatchNumeric):
+    """ 'card comparator value' """
+    def get_card_value(self,card:Cardboard):
+        return card.rules_text.mana_value
+
+
+
+
 
 
 # #------------------------------------------------------------------------------
@@ -91,13 +186,14 @@ class GetCardboardList(Getter):
 
 class MatchCardboardFromZone(GetCardboardList):
     
-    def __init__(self, wildcard:WildCard):
+    def __init__(self, patterns:List[CardPattern], zone):
         super().__init__()
-        self.wildcard = wildcard
+        self.patterns = patterns
+        self.zone = zone
         
     def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        zone = state._GetZone(self.wildcard.zone)
-        return [c for c in zone if self.wildcard.compare(c)]
+        zone = state._GetZone(self.zone)
+        return [c for c in zone if all([p.match(c) for p in self.patterns])]
 
 
 # ----------
@@ -105,28 +201,31 @@ class MatchCardboardFromZone(GetCardboardList):
 
 class MatchOtherFromZone(GetCardboardList):
     
-    def __init__(self, wildcard:WildCard):
+    def __init__(self, patterns:List[CardPattern], zone):
         super().__init__()
-        self.wildcard = wildcard
+        self.patterns = patterns
+        self.zone = zone
         
     def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        zone = state._GetZone(self.wildcard.zone)
-        return [c for c in zone if self.wildcard.compare(c) and not c is subject]
-
+        zone = state._GetZone(self.zone)
+        return [c for c in zone if (all([p.match(c) for p in self.patterns])
+                                    and not c is subject) ]
+        
 
 # ----------
 
 
 class MatchCardboardFromTopOfDeck(GetCardboardList):
     
-    def __init__(self, wildcard:WildCard, num_of_cards_deep:int):
+    def __init__(self, patterns:List[CardPattern], num_of_cards_deep:int):
         super().__init__()
-        self.wildcard = wildcard
+        self.patterns = patterns
         self.num_of_cards_deep = num_of_cards_deep
         
     def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
         top_of_deck = state.deck[:self.num_of_cards_deep]
-        return [c for c in top_of_deck if self.wildcard.compare(c)]
+        return [c for c in top_of_deck
+                            if all([p.match(c) for p in self.patterns])]
 
 
 # ----------
@@ -170,17 +269,18 @@ class GetSelf(GetCardboardList):
 # ----------
 
 
-class Count(Getter):
+class CountInZone(Getter):
     """Get the number of Cardboards which match the wildcard"""
     
-    def __init__(self, wildcard:WildCard):
+    def __init__(self, patterns:List[CardPattern],zone):
         super().__init__()
-        self.wildcard = wildcard
+        self.patterns = patterns
+        self.zone = zone
     
     def get(self, state:GameState, subject:Cardboard):
-        zone = state._GetZone(self.wildcard.zone)
-        return len( [c for c in zone if self.wildcard.compare(c)] )
-
+        zone = state._GetZone(self.zone)
+        return len( [c for c in zone
+                                 if all([p.match(c) for p in self.patterns])] )
 
 
 
@@ -227,8 +327,8 @@ class ChooseOneCardboard(Chooser):
 class ChooseOneOther(ChooseOneCardboard):
     """Choose exactly one cardboard that matches the given WildCard. Chosen
     card can't be self, either.  Returns empty list if fail, I guess."""
-    def __init__(self, wildcard:WildCard ):
-        super().__init__(MatchOtherFromZone(wildcard), 1,False)
+    def __init__(self, patterns:List[CardPattern], zone):
+        super().__init__(MatchOtherFromZone(patterns, zone), 1,False)
         
 
 # #------------------------------------------------------------------------------
@@ -269,7 +369,7 @@ class ActionWithChoice(Action):
         card_list = self.chooser.choose(state,subject)
         return any([ self.action.can_be_done(state,t[0]) for t in card_list])
 
-    def do_it(self, state:GameState, subject:Cardboard) -> List[(GameState,Cardboard)]:
+    def do_it(self, state:GameState, subject:Cardboard) -> List[tuple]:
         """does NOT mutate."""
         new_state_list = []
         for opt in self.chooser.choose(state,subject):
@@ -435,11 +535,14 @@ class Cost2:
             assert(len(mana_actions)==0)  #should only ever be one mana cost
             return mana_actions[0].mana_cost
         else:
-            return ManaHandler.ManaCost("")
+            return None
     
     @property
     def mana_value(self):
-        return self.mana_cost.cmc()
+        if self.mana_cost is not None:
+            return self.mana_cost.cmc()
+        else:
+            return None
             
 
     
