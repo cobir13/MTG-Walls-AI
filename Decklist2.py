@@ -13,14 +13,20 @@ from Costs import Cost
 import ZONE
 import Choices
 
-#for now I'm importing these all separately to keep track of which I need and
-#which are extraneous
+
+
+
+import MatchCardPatterns as Match
+import GettersAndChoosers as Get
+
+
+
 from Actions import Ability2,Cost2, TriggeredAbility2
 from Actions import PayMana,AddMana,TapSymbol,AddCounterToSelf,ActivateOncePerTurn,RepeatBasedOnState,DrawCard
 from Actions import TapAny
 from Actions import ChooseOneCardboard
 from Actions import Trigger,TriggerOnMove
-from Actions import MatchCardboardFromZone,MatchUntapped,MatchType,MatchKeyword,CountInZone,MatchNotSelf,MatchSelf,MatchCardboardFromTopOfDeck
+# from Actions import MatchCardboardFromZone,MatchUntapped,MatchType,MatchKeyword,CountInZone,MatchNotSelf,MatchSelf,MatchCardboardFromTopOfDeck
 
 
 
@@ -121,7 +127,7 @@ Arcades.trig_move.append(
 ##---------------------------------------------------------------------------##
 
 Company = Spell("Company", Cost2([PayMana("3G")]), 
-                [ MatchCardboardFromTopOfDeck(]
+                [ MatchCardboardFromTopOfDeck()]
                 
                 
                 

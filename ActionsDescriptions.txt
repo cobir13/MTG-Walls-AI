@@ -6,26 +6,27 @@ Created on Thu Jun 30 13:40:26 2022
 """
 
 
-CardPattern -> bool
-|-- MatchType (RulesText)
-|-- MatchKeyword (str)
-|-- MatchName (str)
-|** MatchZone (zone)
-|-- MatchCounter (str)
-|-- MatchTapped
-|-- MatchUntapped
-|-- MatchNumeric (comparator, value)
-    |-- MatchPower
-    |-- MatchToughness
-    |-- MatchManaValue
+CardPattern #match(CardBoard,gamestate,source)-> bool
+|-- Type (RulesText)
+|-- Keyword (str)
+|-- Name (str)
+|-- Counter (str)
+|-- Tapped
+|-- Untapped
+|-- NotSelf
+|-- IsSelf
+|-- NumericPattern #(comparator, value)
+    |-- Power
+    |-- Toughness
+    |-- ManaValue
 
 
 
 
-Getter
-|-- GetCardboardList -> List[Cardboard]
-    |-- MatchCardboardFromZone (patterns)
-    |-- MatchOtherFromZone (patterns,zone)
+Getter  #get(gamestate,subject)
+|-- GetCardboardList #-> List[Cardboard]
+    |-- MatchCardboardFromZone (CardPatterns)
+    |-- MatchOtherFromZone (CardPatterns,zone)
     |-- MatchCardboardFromTopOfDeck (patterns,num_of_cards_deep)
     |** GetConstantCardboard (Cardboard)
     |** GetSelf

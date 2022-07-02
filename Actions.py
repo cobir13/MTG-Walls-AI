@@ -12,110 +12,11 @@ from RulesText import RulesText,Creature
 import ManaHandler
 import Choices
 import ZONE
+import MatchCardPatterns as Match
 
 
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
-
-
-class CardPattern:
-    def match(self, card:Cardboard, gamestate=None, source=None) -> bool:
-        raise Exception
-
-class MatchType(CardPattern):
-    def __init__(self, card_type:RulesText):
-        self.type_to_match = card_type
-    def match(self, card, gamestate=None, source=None):
-        return isinstance(card,self.type_to_match)
-    
-class MatchKeyword(CardPattern):
-    def __init__(self, keyword:str):
-        self.keyword_to_match = keyword
-def match(self, card, gamestate=None, source=None):
-        return self.keyword_to_match in card.rules_text.keywords
-
-class MatchName(CardPattern):
-    def __init__(self, name:str):
-        self.name_to_match = name
-    def match(self, card, gamestate=None, source=None):
-        return self.name_to_match == card.rules_text.name
-
-# class MatchZone(CardPattern):
-#     def __init__(self, zone):
-#         self.zone = zone
-#     def match(self, card):
-#         self.zone == card.zone
-
-class MatchCounter(CardPattern):
-    def __init__(self, counter_to_match:str):
-        self.counter_to_match = counter_to_match
-    def match(self, card, gamestate=None, source=None):
-        return self.counter_to_match in card.counters
-
-class MatchTapped(CardPattern):
-    def match(self, card, gamestate=None, source=None):
-        return card.tapped
-
-class MatchUntapped(CardPattern):
-    def match(self, card, gamestate=None, source=None):
-        return not card.tapped
-
-class MatchNumeric(CardPattern):
-    """ 'card comparator value' """
-    def __init__(self, comparator:str, value:int):
-        assert(comparator in [">","<","=","==","<=",">=","!=",])
-        self.comparator = comparator
-        self.value = value
-    def get_card_value(self,card:Cardboard):
-        return None
-    def match(self, card, gamestate=None, source=None):
-        card_value = self.get_card_value(card)
-        if card_value is None:
-            return False
-        if self.comparator == "=" or self.comparator == "==":
-            return card_value == self.value 
-        elif self.comparator == "<":
-            return card_value < self.value
-        elif self.comparator == "<=":
-            return card_value <= self.value 
-        elif self.comparator == ">":
-            return card_value > self.value 
-        elif self.comparator == ">=":
-            return card_value >= self.value 
-        elif self.comparator == "!=":
-            return card_value != self.value
-        else:
-            raise ValueError("shouldn't be possible to get here!")
-        
-class MatchPower(MatchNumeric):
-    """ 'card comparator value' """
-    def get_card_value(self,card:Cardboard):
-        if hasattr(card,"power"):
-            return card.rules_text.power
-        
-class MatchToughness(MatchNumeric):
-    """ 'card comparator value' """
-    def get_card_value(self,card:Cardboard):
-        if hasattr(card,"toughness"):
-            return card.rules_text.toughness
-
-class MatchManaValue(MatchNumeric):
-    """ 'card comparator value' """
-    def get_card_value(self,card:Cardboard):
-        return card.rules_text.mana_value
-
-class MatchNotSelf(CardPattern):
-    def match(self, card, gamestate, source):
-        return not (card is source)
-
-class MatchSelf(CardPattern):
-    def match(self, card, gamestate, source):
-        return card is source
-
-
-# #------------------------------------------------------------------------------
-# #------------------------------------------------------------------------------
-
 
 class Getter:
     
