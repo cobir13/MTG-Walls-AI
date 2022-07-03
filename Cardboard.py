@@ -87,16 +87,16 @@ class Cardboard:
         # equivalent or not. I defined EquivTo as a more intuitive, descriptive
         # definition of equality that I use for comparing two GameStates.
 
-    def has_type(self, cardtype:RulesText):
-        """Returns bool: "this Cardboard refers to a card which is the given
-        RulesText type (in addition to possibly other types as well)" """
-        return isinstance(self.rules_text, cardtype)
+    # def has_type(self, cardtype:RulesText):
+    #     """Returns bool: "this Cardboard refers to a card which is the given
+    #     RulesText type (in addition to possibly other types as well)" """
+    #     return isinstance(self.rules_text, cardtype)
         
-    def has_keyword(self, keyword:str):
-        return keyword in self.rules_text.keywords
+    # def has_keyword(self, keyword:str):
+    #     return keyword in self.rules_text.keywords
 
-    def cmc(self):
-        return self.rules_text.cost.manacost.cmc()
+    # def cmc(self):
+    #     return self.rules_text.cost.manacost.cmc()
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.

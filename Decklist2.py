@@ -53,9 +53,10 @@ Caretaker = Creature("Caretaker", Cost2([PayMana("1G")]), ["defender"], 0, 3)
 Caretaker.activated.append(
         Ability2("Caretaker add Au",
                  Cost2( [TapSymbol(),
-                         TapAny(ChooseOneCardboard(MatchCardboardFromZone(
-                                     [MatchNotSelf(),MatchUntapped(),MatchType(Creature)],
-                                     ZONE.FIELD) ) )
+                         TapAny( [Match.NotSelf(),
+                                  Match.Untapped(),
+                                  Match.CardType(Creature)
+                                  ])
                         ]),
                  [AddMana("A")] ))
 

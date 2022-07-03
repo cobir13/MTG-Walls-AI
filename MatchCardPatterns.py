@@ -12,6 +12,7 @@ from RulesText import RulesText,Creature
 import ManaHandler
 import Choices
 import ZONE
+import Getters as Get
 
 
 # #------------------------------------------------------------------------------
@@ -19,26 +20,26 @@ import ZONE
 
 
 class CardPattern:
-    def match(self, card:Cardboard, gamestate=None, source=None) -> bool:
+    def match(self, card:Cardboard, gamestate, source) -> bool:
         raise Exception
 
 class CardType(CardPattern):
     def __init__(self, card_type:RulesText):
         self.type_to_match = card_type
-    def match(self, card, gamestate=None, source=None):
+    def match(self, card, gamestate, source):
         return isinstance(card,self.type_to_match)
     
 class Keyword(CardPattern):
     def __init__(self, keyword:str):
         self.keyword_to_match = keyword
-    def match(self, card, gamestate=None, source=None):
-        return self.keyword_to_match in card.rules_text.keywords
+    def match(self, card, gamestate, source):
+        return self.keyword_to_match in Get.Keywords(gamestate,card)
 
 class Name(CardPattern):
     def __init__(self, name:str):
         self.name_to_match = name
-    def match(self, card, gamestate=None, source=None):
-        return self.name_to_match == card.rules_text.name
+    def match(self, card, gamestate, source):
+        return self.name_to_match == Get.Name(gamestate,card)
 
 # class Zone(CardPattern):
 #     def __init__(self, zone):
@@ -49,16 +50,16 @@ class Name(CardPattern):
 class Counter(CardPattern):
     def __init__(self, counter_to_match:str):
         self.counter_to_match = counter_to_match
-    def match(self, card, gamestate=None, source=None):
-        return self.counter_to_match in card.counters
+    def match(self, card, gamestate, source=None):
+        return self.counter_to_match in Get.Counters(gamestate,card)
 
 class Tapped(CardPattern):
-    def match(self, card, gamestate=None, source=None):
-        return card.tapped
+    def match(self, card, gamestate, source=None):
+        return Get.IsTapped(gamestate,card)
 
 class Untapped(CardPattern):
-    def match(self, card, gamestate=None, source=None):
-        return not card.tapped
+    def match(self, card, gamestate, source=None):
+        return Get.IsUntapped(gamestate,card)
 
 class NotSelf(CardPattern):
     def match(self, card, gamestate, source):
@@ -70,14 +71,13 @@ class IsSelf(CardPattern):
 
 class NumericPattern(CardPattern):
     """ 'card comparator value' """
-    def __init__(self, comparator:str, value:int):
+    def __init__(self, comparator:str, value:int, getter:Get.Integer):
         assert(comparator in [">","<","=","==","<=",">=","!=",])
         self.comparator = comparator
         self.value = value
-    def get_card_value(self,card:Cardboard):
-        return None
-    def match(self, card, gamestate=None, source=None):
-        card_value = self.get_card_value(card)
+        self.getter = getter
+    def match(self, card, gamestate, source):
+        card_value = self.getter.get(gamestate,card)
         if card_value is None:
             return False
         if self.comparator == "=" or self.comparator == "==":
@@ -97,20 +97,18 @@ class NumericPattern(CardPattern):
         
 class Power(NumericPattern):
     """ 'card comparator value' """
-    def get_card_value(self,card:Cardboard):
-        if hasattr(card,"power"):
-            return card.rules_text.power
+    def __init__(self, comparator:str, value:int):
+        super().__init__(comparator, value, Get.Power())
         
 class Toughness(NumericPattern):
     """ 'card comparator value' """
-    def get_card_value(self,card:Cardboard):
-        if hasattr(card,"toughness"):
-            return card.rules_text.toughness
+    def __init__(self, comparator:str, value:int):
+        super().__init__(comparator, value, Get.Toughness())
 
 class ManaValue(NumericPattern):
     """ 'card comparator value' """
-    def get_card_value(self,card:Cardboard):
-        return card.rules_text.mana_value
+    def __init__(self, comparator:str, value:int):
+        super().__init__(comparator, value, Get.ManaValue())
 
 
 

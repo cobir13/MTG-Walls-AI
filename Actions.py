@@ -13,412 +13,12 @@ import ManaHandler
 import Choices
 import ZONE
 import MatchCardPatterns as Match
+from Verbs import Verb,MoveSelfToZone,PayMana,ManyVerbs
 
 
-# #------------------------------------------------------------------------------
-# #------------------------------------------------------------------------------
-
-class Getter:
-    
-    def get(self, state:GameState, subject:Cardboard):
-        raise Exception
-
-
-# ----------
-
-
-class GetCardboardList(Getter):
-    
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        raise Exception
-
-
-
-
-# ----------
-
-
-class GetConst(Getter):
-    
-    def __init__(self, constant_value):
-        super().__init__()
-        self.constant_value = constant_value
-        
-    def get(self, state:GameState, subject:Cardboard):
-        return self.constant_value
-
-
-# ----------
-
-
-class GetConstantCardboard(GetCardboardList):
-    
-    def __init__(self, cardboard):
-        super().__init__()
-        self.constant_value = cardboard
-        
-    def get(self, state:GameState, subject:Cardboard):
-        return [self.constant_value]
-
-
-# ----------
-
-
-class GetSelf(GetCardboardList):
-    
-    def __init__(self):
-        super().__init__()
-        
-    def get(self, state:GameState, subject:Cardboard):
-        return [subject]
-
-
-# ----------
-
-
-class GetInteger(Getter):
-    def get(self, state:GameState, subject:Cardboard) -> int:
-        return super().get(state,subject)
-
-
-class CountInZone(GetInteger):
-    """Get the number of Cardboards which match the wildcard patterns"""
-    
-    def __init__(self, patterns:List[CardPattern],zone):
-        super().__init__()
-        self.patterns = patterns
-        self.zone = zone
-    
-    def get(self, state:GameState, subject:Cardboard):
-        zone = state.get_zone(self.zone)
-        return len( [c for c in zone
-                                 if all([p.match(c,state,subject) for p in self.patterns])] )
-
-
-class GetConstInteger(GetInteger):
-    def __init__(self, constant_value:int):
-        super().__init__()
-        self.constant_value = constant_value
-        
-    def get(self, state:GameState, subject:Cardboard):
-        return self.constant_value
-
-
-# ----------
-
-class GetFromZone(GetCardboardList):
-    
-    def __init__(self, patterns:List[CardPattern], zone):
-        super().__init__()
-        self.patterns = patterns
-        self.zone = zone
-        
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        zone = state.get_zone(self.zone)
-        return [c for c in zone if all([p.match(c,state,subject) for p in self.patterns])]
-        
-
-# ----------
-
-
-class GetFromTopOfDeck(GetCardboardList):
-    
-    def __init__(self, patterns:List[CardPattern], get_depth:GetConstInteger):
-        super().__init__()
-        self.patterns = patterns
-        self.get_depth = get_depth
-        
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        num_of_cards_deep = self.get_depth.get(state,subject)
-        top_of_deck = state.deck[:num_of_cards_deep]
-        return [c for c in top_of_deck
-                            if all([p.match(c,state,subject) for p in self.patterns])]
-
-
-
-
-# #------------------------------------------------------------------------------
-# #------------------------------------------------------------------------------
-
-
-class Chooser:
-    
-    def __init__(self, getter:Getter, num_to_choose:int, can_be_less:bool ):
-        self.getter = getter
-        self.num_to_choose = num_to_choose
-        self.can_be_less = can_be_less
-
-    def choose(self,  state:GameState, subject:Cardboard) -> List[tuple]:
-        """returns a list of all choices that have been selected. Each element
-        of the list is a tuple of length N, where N is the number of items
-        requested."""
-        options = self.getter.get(state,subject) #list of tuples of items
-        if self.must_be_exact:
-            if self.num_to_choose == 1:
-                return [(c,) for c in Choices.ChooseExactlyOne(options)]
-            else:
-                return Choices.ChooseExactlyN(options, self.num_to_choose)
-        else:
-            return Choices.ChooseNOrFewer(options, self.num_to_choose)
-
-
-# ----------
-
-
-class ChooseOneCardboard(Chooser):
-    
-    def __init__(self, getter:GetCardboardList):
-        super().__init__()
-        self.getter = getter
-        self.num_to_choose = 1
-        self.can_be_less = False
-
-    
-        
-
-# #------------------------------------------------------------------------------
-# #------------------------------------------------------------------------------
-        
-class Verb:
-    def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
-        return True
-        
-    def do_it(self, state:GameState, subject:Cardboard):
-        raise Exception
-
-    def __str__(self):
-        return type(self).__name__
-
-
-
-class VerbNoChoice(Verb):
-    
-    def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
-        return True
-        
-    def do_it(self, state:GameState, subject:Cardboard) -> None:
-        """mutates!"""
-        for source in state.field + state.grave + state.hand:
-            for abil in source.rules_text.trig_do:
-                if abil.is_triggered(self, state, source, subject):
-                    new_effect = StackEffect2(source, [subject], abil)
-                    state.super_stack.append(new_effect)
-
-
-class VerbWithChoice(Verb):
-    def __init__(self, action:Verb, chooser:ChooseOneCardboard):
-        super().__init__()
-        self.action = action
-        self.chooser = chooser
-    
-    def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
-        card_list = self.chooser.choose(state,subject)
-        return any([ self.action.can_be_done(state,t[0]) for t in card_list])
-
-    def do_it(self, state:GameState, subject:Cardboard) -> List[tuple]:
-        """does NOT mutate."""
-        new_state_list = []
-        for opt in self.chooser.choose(state,subject):
-            if self.action.can_be_done(state,opt[0]):
-                output = state.copy_and_track(state,[subject,opt[0]])
-                new_state,[new_subject,new_target] = output
-                self.action.do_it(new_state,new_target)  #mutates
-                new_state_list.append( (new_state,new_subject) )
-        return new_state_list
-
-
-#------------------------------------------------------------------------------
-
-
-class PayMana(VerbNoChoice):
-    """deducts the given amount of mana from the gamestate's mana pool"""
-    
-    def __init__(self, mana_string:str):
-        super().__init__()
-        self.mana_cost = ManaHandler.ManaCost(mana_string)
-    
-    def can_be_done(self, state, subject):
-        return state.pool.CanAffordCost(self.mana_cost)
-    
-    def do_it(self, state, subject): 
-        state.pool.PayCost(self.mana_cost)
-        super().do_it(state,subject)  #adds triggers to super_stack
-        
-    def __str__(self):
-        return str(self.mana_cost)
-
-
-# ----------
-
-
-class AddMana(VerbNoChoice):
-    """adds the given amount of mana to the gamestate's mana pool"""
-    
-    def __init__(self, mana_string:str):
-        super().__init__()
-        self.mana_value = ManaHandler.ManaPool(mana_string)
-    
-    def can_be_done(self, state, subject):
-        return True
-    
-    def do_it(self, state, subject): 
-        state.pool.AddMana(self.mana_value)
-        super().do_it(state,subject)  #adds triggers to super_stack
-        
-    def __str__(self):
-        return str(self.mana_value)
-
-
-
-# ----------
-
-
-class RepeatBasedOnState(VerbNoChoice):
-    def __init__(self, action:Verb, getter:GetInteger):
-        super().__init__()
-        self.action = action
-        self.getter = getter
-    
-    def can_be_done(self, state:GameState, subject:Cardboard) -> bool:
-        return self.action.can_be_done(state,subject)
-    
-    def do_it(self, state:GameState, subject:Cardboard) -> GameState:
-        """mutates!"""
-        num_to_repeat = self.getter.get(state,subject)
-        for _ in range(num_to_repeat):
-            if self.action.can_be_done(state,subject):
-                self.action.do_it(state,subject)
-        super().do_it(state,subject)  #adds triggers to super_stack
-
-
-# ----------
-
-
-class TapSelf(VerbNoChoice):
-    """taps `subject` if it was not already tapped."""
-    
-    def can_be_done(self, state, subject):
-        return (not subject.tapped and subject.zone == ZONE.FIELD)
-    
-    def do_it(state, subject):
-        subject.tapped = True
-        super().do_it(state,subject)  #adds triggers to super_stack
-
-
-# ----------
-
-
-class TapSymbol(TapSelf):
-    """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
-    
-    def can_be_done(self, state, subject):
-        return (super().can_be_done(state,subject) 
-                and not (subject.has_type(Creature) and subject.summon_sick))
-    
-    def __str__(self):
-        return "{T}"
-
-# ----------
-
-
-class TapAny(VerbWithChoice):
-    
-    def __init__(self, target:ChooseOneCardboard ):
-        super().__init__(action=TapSelf(),target=target)
-        
-
-# ----------
-
-
-class ActivateOncePerTurn(VerbNoChoice):
-    """Marks the given `subject` as only able to activate this ability once
-    per turn"""
-    
-    def __init__(self, ability_name:str):
-        super().__init__()
-        self.counter_text = "@"+ability_name #marks using an "invisible" counter
-    
-    def can_be_done(self, state, subject):
-        return (subject.zone == ZONE.FIELD
-                and self.counter_text not in subject.counters)
-    
-    def do_it(self, state, subject):
-        subject.add_counter(self.counter_text)
-        super().do_it(state,subject)  #adds triggers to super_stack
-        
-
-# ----------
-
-
-class ActivateOnlyAsSorcery(VerbNoChoice):
-    """Checks that the stack is empty and cannot be done otherwise"""
-
-    def can_be_done(self, state, subject):
-        return len(state.stack)==0
-    
-    def do_it(self, state, subject):
-        return #doesn't actually DO anything, only exists as a check
-    
-
-# ----------
-
-
-# class CastSpell
-
-
-# ----------
-
-
-class MoveSelfToZone(VerbNoChoice):
-    def __init__(self, destination_zone):
-        super().__init__()
-        self.destination = destination_zone
-        self.origin = None
-    
-    def can_be_done(self, state, subject):
-        if subject.zone in [ZONE.DECK,ZONE.HAND,ZONE.FIELD,ZONE.GRAVE,ZONE.STACK]:
-            return  subject in state.get_zone(subject.zone)
-    
-    def do_it(self, state, subject):
-        self.origin = subject.zone
-        #remove from origin
-        if self.origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
-            state.get_zone(self.origin).remove(subject)
-        # add to destination
-        subject.zone = self.destination
-        zonelist = state.get_zone(self.destination)
-        zonelist.append(subject)
-        #sort the zones that need to always be sorted
-        if self.destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
-            zonelist.sort(key=Cardboard.Cardboard.get_id)
-        # any time you change zones, reset the cardboard parameters
-        subject.tapped = False
-        subject.summon_sick = True
-        subject.counters = [c for c in subject.counters if c[0]=="$"] #sticky counters stay
-        super().do_it(state,subject)  #adds triggers to super_stack
-
-# ----------
-
-
-class DrawCard(VerbNoChoice):
-    """draw from index 0 of deck"""
-    
-    def can_be_done(self, state, subject):
-        return True  #yes, even if the deck is 0, you CAN draw. you'll just lose
-    
-    def do_it(self, state, subject):
-        mover = MoveSelfToZone(ZONE.HAND)
-        mover.do_it(state, state.deck[0]) #adds move triggers to super_stack
-        super().do_it(state, subject)     #adds draw-specific triggers
-
-
-
-# #------------------------------------------------------------------------------
-# #------------------------------------------------------------------------------
-        
 
 class Trigger:
-    def __init__(self, verb_type:type, patterns_for_subject:List[CardPattern]):
+    def __init__(self, verb_type:type, patterns_for_subject:List[Match.CardPattern]):
         self.verb_type = verb_type
         self.patterns = patterns_for_subject
 
@@ -431,7 +31,7 @@ class Trigger:
 
 
 class TriggerOnMove(Trigger):
-    def __init__(self, patterns_for_subject:List[CardPattern],origin,destination):
+    def __init__(self, patterns_for_subject:List[Match.CardPattern],origin,destination):
         self.ver_type = MoveSelfToZone
         self.patterns = patterns_for_subject
         self.origin = origin
@@ -456,16 +56,16 @@ class TriggerOnMove(Trigger):
         
     
 class Cost2:
-    def __init__(self, pay_no_choice:List[VerbNoChoice] ):
-        self.actions_no = pay_no_choice
+    def __init__(self, payment_verbs:List[Verb] ):
+        self.verb = ManyVerbs(payment_verbs)
 
-    def can_afford(self, gamestate, source):
+    def can_afford(self, state:GameState, source:Cardboard):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
-        return all([a.can_be_done(gamestate,source) for a in self.actions_no])
-
-
-    def pay(self, gamestate, source):
+        choices = self.verb.choose_choices(state,source)
+        return self.verb.can_be_done(state,source,choices)
+        
+    def pay(self, state:GameState, source:Cardboard, choices:list):
         """Returns list of GameStates where the cost has been paid.
         Takes in the GameState in which the cost is supposed to be paid and
             the source Cardboard that is generating the cost.
@@ -474,20 +74,15 @@ class Cost2:
             the cost, and the list is length 0 if the cost cannot be paid.
         The original GameState and Source are NOT mutated.
         """
-        ### RIGHT NOW THIS ONLY WORKS FOR ACTIONS WHICH RETURN A SINGLE
-        ### MUTATED GAMESTATE
-        newstate, [newsource] = gamestate.copy_and_track([source])
-        for action in self.actions_no:
-            action.do_it(newstate,newsource) #mutates
-        return [(newstate,newsource)]
-
+        # choices = self.verb.choose_choices(state,source)
+        return self.verb.do_it(state,source,choices)
 
     def __str__(self):
         return " ".join([str(a) for a in self.actions_no])
 
     @property
     def mana_cost(self):
-        mana_actions = [a for a in self.actions_no if isinstance(a,PayMana)]
+        mana_actions = [a for a in self.verbs if isinstance(a,PayMana)]
         if len(mana_actions)>0:
             assert(len(mana_actions)==0)  #should only ever be one mana cost
             return mana_actions[0].mana_cost
@@ -501,6 +96,9 @@ class Cost2:
         else:
             return None
             
+
+
+
 
 class ActivatedAbility2:
     def __init__(self, name, cost:Cost2, effect_list:List[Verb]):
@@ -526,7 +124,12 @@ class ActivatedAbility2:
         else:
             return self.cost.pay(gamestate, source)
     
-    def apply_effect(self, gamestate:GameState, source:Cardboard):
+    
+    
+    
+    
+    
+    def apply_effect(self, gamestate:GameState, source:Cardboard, choices):
         """
         Returns a list of GameStates where the effect has been performed:
             - length 1 if there is exactly one way to do this
@@ -540,11 +143,11 @@ class ActivatedAbility2:
         for verb in self.effect_list:
             if isinstance(verb, VerbNoChoice):
                 #mutate the gamestates in old_tuple_list directly
-                [verb.do_it(g,c) for g,c in old_tuple_list]
+                [verb.do_it(g,c,choices) for g,c in old_tuple_list]
             elif isinstance(verb, VerbWithChoice):
                 #collect output of applying verb to each tuple in old_list
                 for g,c in old_tuple_list:
-                    new_tuple_list += verb.do_it(g,c)
+                    new_tuple_list += verb.do_it(g,c,choices)
                 old_tuple_list = new_tuple_list
                 new_tuple_list = []
         #clear the superstack of all the new gamestates
@@ -603,43 +206,51 @@ class TriggeredAbility2:
 
 
 
+class StackObject:
+    def resolve(self, gamestate):
+        pass
+    def get_id(self):
+        pass
+    def is_equiv_to(self,other):
+        pass
+    @property
+    def name(self):
+        pass
 
-class StackEffect2:
 
-    def __init__(self, source, otherlist, ability):
-        self.source = source  # Cardboard source of the effect. "Pointer".
-        self.otherlist = []  # list of other relevant Cardboards. "Pointers".
-        self.ability = ability  # GenericAbility
 
-    def PutOnStack(self, gamestate):
-        """Returns list of GameStates where ability is paid for and now on
-        stack.  Note: super_stack is empty in returned states."""
-        return gamestate.ActivateAbilities(self.source, self.ability)
 
-    def Enact(self, gamestate):
+class StackCardboard(StackObject):
+
+    def __init__(self, card:Cardboard=None, choices:list=[]):
+        #the Cardboard that is being cast. It is NOT just a pointer. The
+        #Cardboard really has been moved to the Stack zone
+        self.card = card
+        #list of any modes or targets or other choices made during casting
+        #or activation.  If targets are Cardboards, they are pointers.
+        self.choices = choices
+
+    def resolve(self, gamestate):
         """Returns list of GameStates resulting from performing this effect"""
-        return self.ability.Execute(gamestate, self.source)
+        return self.card.Execute(gamestate)
 
     def __str__(self):
-        return self.ability.name
+        return self.card.name
 
     def __repr__(self):
-        return "Effect: " + self.ability.name
+        return "Spell: " + self.card.name
 
     def get_id(self):
-        cards = ",".join([c.get_id() for c in [self.source] + self.otherlist])
-        return "E(%s|%s)" % (cards, self.ability.name)
+        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
+                            for c in self.choices])
+        return "S(%s|%s)" %(self.card.get_id(),choices)
 
     def is_equiv_to(self, other):
         return self.get_id() == other.get_id()
-        # return (    type(self) == type(other)
-        #         and self.source == other.source
-        #         and set(self.otherlist) == set(other.otherlist)
-        #         and self.ability.name == other.ability.name)
 
     @property
     def name(self):
-        return self.ability.name
+        return self.card.name
 
     # def build_tk_display(self, parentframe, ):
     #     return tk.Button(parentframe,
@@ -648,3 +259,102 @@ class StackEffect2:
     #                      height=7, width=10, wraplength=80,
     #                      padx=3, pady=3,
     #                      relief="solid", bg="lightblue")
+
+
+
+
+class StackAbility(StackObject):
+
+    def __init__(self, ability, source:Cardboard, choices:list=[]):
+        #The Ability that is being activated
+        self.ability = ability
+        #The source Cardboard as a "pointer"
+        self.source = source
+        #list of any modes or targets or other choices made during casting
+        #or activation.  If targets are Cardboards, they are pointers.
+        self.choices = choices  # list of other relevant Cardboards. "Pointers".
+
+
+    def resolve(self, gamestate):
+        """Returns list of GameStates resulting from performing this effect"""
+        return self.ability.apply_effect(gamestate, self.source, self.choices)
+
+    def __str__(self):
+        return self.ability.name
+
+    def __repr__(self):
+        return "Effect: " + self.ability.name
+
+    def get_id(self):
+        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
+                            for c in self.choices])
+        return "E(%s|%s)" %(self.ability.get_id(),choices)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
+
+    @property
+    def name(self):
+        return self.card.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")
+
+
+
+
+
+    
+    
+def CastSpell(self, cardboard):
+    """
+    DOES NOT MUTATE. Instead returns a list of GameStates in which the
+        given Cardboard has been cast and any effects of that casting have
+        been put onto the super_stack.
+    """
+    # check to make sure the execution is legal
+    if not cardboard.rules_text.cost.CanAfford(self, cardboard):
+        return []
+    
+    game,[spell] = self.copy_and_track([cardboard])
+    #601.2a: move spell to stack
+    game.MoveZone(spell, ZONE.STACK)
+    #601.2b: choose modes and cost (additional costs, choose X, choose hybrid)
+    if hasattr(spell,"choose_modes"):
+        modes = spell.choose_modes(game)      #this will split the gamestate!
+    else:
+        modes = []
+    #601.2c: choose targets
+    if hasattr(spell,"choose_targets"):
+        targets = spell.choose_targets(game)  #this will split the gamestate!
+    else:
+        targets = []
+    #601.2f: determine total cost
+    #601.2g: activate mana abilities
+    #601.2h: pay costs
+    #601.2i: spell has now "been cast".  trigger abilities
+    
+    
+    #check state-based
+    #clear super_stack
+    
+    # cast_list = []
+    # for state, card in cardboard.rules_text.cost.Pay(self, cardboard):
+    #     # Iterate through all possible ways the cost could have been paid.
+    #     # Each has a GameState and a Cardboard being cast. Move the card
+    #     # being cast to the stack, which adds any triggers to super_stack.
+    #     if card.has_type(RulesText.Land):
+    #         # special exception for Lands, which don't use the stack. Just
+    #         # move it directly to play and then resolve super_stack
+    #         # state is a copy so can mutate it safely.
+    #         state.MoveZone(card, ZONE.FIELD)
+    #     else:
+    #         state.MoveZone(card, ZONE.STACK)
+    #     state.StateBasedActions()  # check state-based actions
+    #     cast_list += state.ClearSuperStack()  # list of GameStates
+    # return cast_list

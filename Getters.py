@@ -16,14 +16,39 @@ import MatchCardPatterns as Match
 # #------------------------------------------------------------------------------
 
 class Getter:
-    def get(self, state:GameState, subject:Cardboard):
+    def get(self, state:GameState, source:Cardboard):
         raise Exception
+    @property
+    def single_output(self):
+        return True
 
-# ----------
+class Const(Getter):
+    def __init__(self, value):
+        self.value = value
+    def get(self, state:GameState, source:Cardboard):
+        return self.value
+
+class CardSingle(Getter):
+    pass
+
+class CardList(Getter):
+    pass
 
 class Integer(Getter):
-    def get(self, state:GameState, subject:Cardboard) -> int:
-        return super().get(state,subject)
+    pass
+
+class ConstInteger(Const,Integer):
+    pass
+
+class StringList(Getter):
+    pass
+
+class Bool(Getter):
+    pass
+
+class String(Getter):
+    pass
+
 
 # ----------
 
@@ -33,112 +58,110 @@ class NumberInZone(Integer):
         super().__init__()
         self.patterns = patterns
         self.zone = zone
-    def get(self, state:GameState, subject:Cardboard):
+    def get(self, state:GameState, source:Cardboard):
         zone = state.get_zone(self.zone)
         return len( [c for c in zone
-                                 if all([p.match(c,state,subject) for p in self.patterns])] )
+                                 if all([p.match(c,state,source) for p in self.patterns])] )
 
 # ----------
 
-class ConstInteger(Integer):
-    def __init__(self, constant_value:int):
-        super().__init__()
-        self.constant_value = constant_value
-    def get(self, state:GameState, subject:Cardboard):
-        return self.constant_value
-
-# ----------
-
-class CardboardList(Getter):
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        raise Exception
-
-# ----------
-
-class Const(Getter):
-    def __init__(self, constant_value):
-        super().__init__()
-        self.constant_value = constant_value
-    def get(self, state:GameState, subject:Cardboard):
-        return self.constant_value
-
-# ----------
-
-class ConstCardboard(CardboardList):
-    def __init__(self, cardboard):
-        super().__init__()
-        self.constant_value = cardboard
-    def get(self, state:GameState, subject:Cardboard):
-        return [self.constant_value]
-
-# ----------
-
-class ListFromZone(CardboardList):
+class ListFromZone(CardList):
     def __init__(self, patterns:List[Match.CardPattern], zone):
         super().__init__()
         self.patterns = patterns
         self.zone = zone
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
+    def get(self, state:GameState, source:Cardboard) -> List[Cardboard]:
         zone = state.get_zone(self.zone)
-        return [c for c in zone if all([p.match(c,state,subject) for p in self.patterns])]
+        return [c for c in zone if all([p.match(c,state,source) for p in self.patterns])]
 
 # ----------
 
-class TopOfDeck(CardboardList):
-    def __init__(self, patterns:List[Match.CardPattern], get_depth:ConstInteger):
+class ListTopOfDeck(CardList):
+    def __init__(self, patterns:List[Match.CardPattern], get_depth:Integer):
         super().__init__()
         self.patterns = patterns
         self.get_depth = get_depth
-    def get(self, state:GameState, subject:Cardboard) -> List[Cardboard]:
-        num_of_cards_deep = self.get_depth.get(state,subject)
+    def get(self, state:GameState, source:Cardboard) -> List[Cardboard]:
+        num_of_cards_deep = self.get_depth.get(state,source)
         top_of_deck = state.deck[:num_of_cards_deep]
         return [c for c in top_of_deck
-                            if all([p.match(c,state,subject) for p in self.patterns])]
+                            if all([p.match(c,state,source) for p in self.patterns])]
 
-# =============================================================================
-# class GetSelf(CardboardList):
-#     
-#     def __init__(self):
-#         super().__init__()
-#         
-#     def get(self, state:GameState, subject:Cardboard):
-#         return [subject]
-# =============================================================================
+# ----------
+
+
+
+class Keywords(StringList):
+    def get(self, state:GameState, source:Cardboard) -> List[str]:
+        return source.rules_text.keywords
+    
+class Name(String):
+    def get(self, state:GameState, source:Cardboard) -> str:
+        return source.rules_text.name
+    
+class Counters(StringList):
+    def get(self, state:GameState, source:Cardboard) -> List[str]: 
+        return source.counters
+
+class IsTapped(Bool):
+    def get(self, state:GameState, source:Cardboard) -> bool: 
+        return source.tapped
+
+class IsUntapped(Bool):
+    def get(self, state:GameState, source:Cardboard) -> bool: 
+        return not source.tapped
+    
+class Power(Integer):
+    def get(self, state:GameState, source:Cardboard) -> int: 
+        if hasattr(source.rules_text,"power"):
+            return source.rules_text.power
+        else:
+            return None
+
+class Toughness(Integer):
+    def get(self, state:GameState, source:Cardboard) -> int: 
+        if hasattr(source.rules_text,"toughness"):
+            return source.rules_text.power
+        else:
+            return None
+      
+class ManaValue(Integer):
+    """ 'card comparator value' """
+    def get(self, state:GameState, source:Cardboard) -> int: 
+        return source.rules_text.mana_value
 
 
 # #------------------------------------------------------------------------------
 # #------------------------------------------------------------------------------
 
 
-# =============================================================================
-# class Chooser:
-#     
-#     def __init__(self, getter:Getter, num_to_choose:int, can_be_less:bool ):
-#         self.getter = getter
-#         self.num_to_choose = num_to_choose
-#         self.can_be_less = can_be_less
-#     def choose(self,  state:GameState, subject:Cardboard) -> List[tuple]:
-#         """returns a list of all choices that have been selected. Each element
-#         of the list is a tuple of length N, where N is the number of items
-#         requested."""
-#         options = self.getter.get(state,subject) #list of tuples of items
-#         if self.must_be_exact:
-#             if self.num_to_choose == 1:
-#                 return [(c,) for c in Choices.ChooseExactlyOne(options)]
-#             else:
-#                 return Choices.ChooseExactlyN(options, self.num_to_choose)
-#         else:
-#             return Choices.ChooseNOrFewer(options, self.num_to_choose)
-# 
-# # ----------
-# 
-# class ChooseOneCardboard(Chooser):
-#     def __init__(self, getter:CardboardList):
-#         super().__init__()
-#         self.getter = getter
-#         self.num_to_choose = 1
-#         self.can_be_less = False
-# =============================================================================
+
+
+class Chooser(Getter):
+    
+    def __init__(self, getter:Getter, num_to_choose:int, can_be_less:bool ):
+        self.getter = getter
+        self.num_to_choose = num_to_choose
+        self.can_be_less = can_be_less
+    
+    def get(self,  state:GameState, source:Cardboard) -> List[tuple]:
+        """returns a list of all choices that have been selected. Each element
+        of the list is a tuple of length N, where N is the number of items
+        requested."""
+        options = self.getter.get(state,source) #list of tuples of items
+        if self.must_be_exact:
+            if self.num_to_choose == 1:
+                return [(c,) for c in Choices.ChooseExactlyOne(options)]
+            else:
+                return Choices.ChooseExactlyN(options, self.num_to_choose)
+        else:
+            return Choices.ChooseNOrFewer(options, self.num_to_choose)
+   
+    @property
+    def single_output(self):
+        return False
+
+
 
     
         
