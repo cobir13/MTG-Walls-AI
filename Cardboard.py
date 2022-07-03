@@ -58,6 +58,10 @@ class Cardboard:
     @property
     def name(self):
         return self.rules_text.name
+    
+    @property
+    def cost(self):
+        return self.rules_text.cost
 
     def get_activated(self):
         return self.rules_text.activated

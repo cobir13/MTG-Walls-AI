@@ -55,63 +55,63 @@ class TriggerOnMove(Trigger):
 
         
     
-class Cost2:
-    def __init__(self, payment_verbs:List[Verb] ):
-        self.verb = ManyVerbs(payment_verbs)
+# class Cost2:
+#     def __init__(self, payment_verbs:List[Verb] ):
+#         self.verb = ManyVerbs(payment_verbs)
 
-    def can_afford(self, state:GameState, source:Cardboard):
-        """Returns boolean: can this gamestate afford the cost?
-        DOES NOT MUTATE."""
-        choices = self.verb.choose_choices(state,source)
-        return self.verb.can_be_done(state,source,choices)
+#     def can_afford(self, state:GameState, source:Cardboard):
+#         """Returns boolean: can this gamestate afford the cost?
+#         DOES NOT MUTATE."""
+#         choices = self.verb.choose_choices(state,source)
+#         return self.verb.can_be_done(state,source,choices)
         
-    def pay(self, state:GameState, source:Cardboard, choices:list):
-        """Returns list of GameStates where the cost has been paid.
-        Takes in the GameState in which the cost is supposed to be paid and
-            the source Cardboard that is generating the cost.
-        Returns a list of (GameState,Cardboard) pairs in which the cost has
-            been paid. The list is length 1 if there is exactly one way to pay
-            the cost, and the list is length 0 if the cost cannot be paid.
-        The original GameState and Source are NOT mutated.
-        """
-        # choices = self.verb.choose_choices(state,source)
-        return self.verb.do_it(state,source,choices)
+#     def pay(self, state:GameState, source:Cardboard, choices:list):
+#         """Returns list of GameStates where the cost has been paid.
+#         Takes in the GameState in which the cost is supposed to be paid and
+#             the source Cardboard that is generating the cost.
+#         Returns a list of (GameState,Cardboard) pairs in which the cost has
+#             been paid. The list is length 1 if there is exactly one way to pay
+#             the cost, and the list is length 0 if the cost cannot be paid.
+#         The original GameState and Source are NOT mutated.
+#         """
+#         # choices = self.verb.choose_choices(state,source)
+#         return self.verb.do_it(state,source,choices)
 
-    def __str__(self):
-        return " ".join([str(a) for a in self.actions_no])
+#     def __str__(self):
+#         return str(self.verb)
 
-    @property
-    def mana_cost(self):
-        mana_actions = [a for a in self.verbs if isinstance(a,PayMana)]
-        if len(mana_actions)>0:
-            assert(len(mana_actions)==0)  #should only ever be one mana cost
-            return mana_actions[0].mana_cost
-        else:
-            return None
+    # @property
+    # def mana_cost(self):
+    #     mana_actions = [a for a in self.verbs if isinstance(a,PayMana)]
+    #     if len(mana_actions)>0:
+    #         assert(len(mana_actions)==0)  #should only ever be one mana cost
+    #         return mana_actions[0].mana_cost
+    #     else:
+    #         return None
     
-    @property
-    def mana_value(self):
-        if self.mana_cost is not None:
-            return self.mana_cost.cmc()
-        else:
-            return None
+    # @property
+    # def mana_value(self):
+    #     if self.mana_cost is not None:
+    #         return self.mana_cost.cmc()
+    #     else:
+    #         return None
             
 
 
 
 
 class ActivatedAbility2:
-    def __init__(self, name, cost:Cost2, effect_list:List[Verb]):
+    def __init__(self, name, cost:Verb, effect:Verb):
         self.name = name
         self.cost = cost
-        self.effect_list = effect_list
+        self.effect = effect
 
     def can_afford(self, gamestate:GameState, source:Cardboard):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
-        return self.cost.CanAfford(gamestate, source)
+        return self.cost.can_be_done(gamestate, source)
     
-    def pay(self, gamestate:GameState, source:Cardboard):
+    def pay(self, gamestate:GameState, source:Cardboard, choices):
         """
         Returns a list of (GameState,Cardboard) pairs in which the
         cost has been paid. The list is length 1 if there is exactly
@@ -119,7 +119,7 @@ class ActivatedAbility2:
         cannot be paid.
         The original GameState and Source are NOT mutated.
         """
-        if not self.cost.CanAfford(gamestate,source):
+        if not self.CanAfford(gamestate,source):
             return []
         else:
             return self.cost.pay(gamestate, source)
@@ -206,104 +206,6 @@ class TriggeredAbility2:
 
 
 
-class StackObject:
-    def resolve(self, gamestate):
-        pass
-    def get_id(self):
-        pass
-    def is_equiv_to(self,other):
-        pass
-    @property
-    def name(self):
-        pass
-
-
-
-
-class StackCardboard(StackObject):
-
-    def __init__(self, card:Cardboard=None, choices:list=[]):
-        #the Cardboard that is being cast. It is NOT just a pointer. The
-        #Cardboard really has been moved to the Stack zone
-        self.card = card
-        #list of any modes or targets or other choices made during casting
-        #or activation.  If targets are Cardboards, they are pointers.
-        self.choices = choices
-
-    def resolve(self, gamestate):
-        """Returns list of GameStates resulting from performing this effect"""
-        return self.card.Execute(gamestate)
-
-    def __str__(self):
-        return self.card.name
-
-    def __repr__(self):
-        return "Spell: " + self.card.name
-
-    def get_id(self):
-        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
-                            for c in self.choices])
-        return "S(%s|%s)" %(self.card.get_id(),choices)
-
-    def is_equiv_to(self, other):
-        return self.get_id() == other.get_id()
-
-    @property
-    def name(self):
-        return self.card.name
-
-    # def build_tk_display(self, parentframe, ):
-    #     return tk.Button(parentframe,
-    #                      text="Effect: %s" % self.name,
-    #                      anchor="w",
-    #                      height=7, width=10, wraplength=80,
-    #                      padx=3, pady=3,
-    #                      relief="solid", bg="lightblue")
-
-
-
-
-class StackAbility(StackObject):
-
-    def __init__(self, ability, source:Cardboard, choices:list=[]):
-        #The Ability that is being activated
-        self.ability = ability
-        #The source Cardboard as a "pointer"
-        self.source = source
-        #list of any modes or targets or other choices made during casting
-        #or activation.  If targets are Cardboards, they are pointers.
-        self.choices = choices  # list of other relevant Cardboards. "Pointers".
-
-
-    def resolve(self, gamestate):
-        """Returns list of GameStates resulting from performing this effect"""
-        return self.ability.apply_effect(gamestate, self.source, self.choices)
-
-    def __str__(self):
-        return self.ability.name
-
-    def __repr__(self):
-        return "Effect: " + self.ability.name
-
-    def get_id(self):
-        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
-                            for c in self.choices])
-        return "E(%s|%s)" %(self.ability.get_id(),choices)
-
-    def is_equiv_to(self, other):
-        return self.get_id() == other.get_id()
-
-    @property
-    def name(self):
-        return self.card.name
-
-    # def build_tk_display(self, parentframe, ):
-    #     return tk.Button(parentframe,
-    #                      text="Effect: %s" % self.name,
-    #                      anchor="w",
-    #                      height=7, width=10, wraplength=80,
-    #                      padx=3, pady=3,
-    #                      relief="solid", bg="lightblue")
 
 
 
@@ -311,50 +213,50 @@ class StackAbility(StackObject):
 
     
     
-def CastSpell(self, cardboard):
-    """
-    DOES NOT MUTATE. Instead returns a list of GameStates in which the
-        given Cardboard has been cast and any effects of that casting have
-        been put onto the super_stack.
-    """
-    # check to make sure the execution is legal
-    if not cardboard.rules_text.cost.CanAfford(self, cardboard):
-        return []
+# def CastSpell(self, cardboard):
+#     """
+#     DOES NOT MUTATE. Instead returns a list of GameStates in which the
+#         given Cardboard has been cast and any effects of that casting have
+#         been put onto the super_stack.
+#     """
+#     # check to make sure the execution is legal
+#     if not cardboard.rules_text.cost.CanAfford(self, cardboard):
+#         return []
     
-    game,[spell] = self.copy_and_track([cardboard])
-    #601.2a: move spell to stack
-    game.MoveZone(spell, ZONE.STACK)
-    #601.2b: choose modes and cost (additional costs, choose X, choose hybrid)
-    if hasattr(spell,"choose_modes"):
-        modes = spell.choose_modes(game)      #this will split the gamestate!
-    else:
-        modes = []
-    #601.2c: choose targets
-    if hasattr(spell,"choose_targets"):
-        targets = spell.choose_targets(game)  #this will split the gamestate!
-    else:
-        targets = []
-    #601.2f: determine total cost
-    #601.2g: activate mana abilities
-    #601.2h: pay costs
-    #601.2i: spell has now "been cast".  trigger abilities
+#     game,[spell] = self.copy_and_track([cardboard])
+#     #601.2a: move spell to stack
+#     game.MoveZone(spell, ZONE.STACK)
+#     #601.2b: choose modes and cost (additional costs, choose X, choose hybrid)
+#     if hasattr(spell,"choose_modes"):
+#         modes = spell.choose_modes(game)      #this will split the gamestate!
+#     else:
+#         modes = []
+#     #601.2c: choose targets
+#     if hasattr(spell,"choose_targets"):
+#         targets = spell.choose_targets(game)  #this will split the gamestate!
+#     else:
+#         targets = []
+#     #601.2f: determine total cost
+#     #601.2g: activate mana abilities
+#     #601.2h: pay costs
+#     #601.2i: spell has now "been cast".  trigger abilities
     
     
-    #check state-based
-    #clear super_stack
+#     #check state-based
+#     #clear super_stack
     
-    # cast_list = []
-    # for state, card in cardboard.rules_text.cost.Pay(self, cardboard):
-    #     # Iterate through all possible ways the cost could have been paid.
-    #     # Each has a GameState and a Cardboard being cast. Move the card
-    #     # being cast to the stack, which adds any triggers to super_stack.
-    #     if card.has_type(RulesText.Land):
-    #         # special exception for Lands, which don't use the stack. Just
-    #         # move it directly to play and then resolve super_stack
-    #         # state is a copy so can mutate it safely.
-    #         state.MoveZone(card, ZONE.FIELD)
-    #     else:
-    #         state.MoveZone(card, ZONE.STACK)
-    #     state.StateBasedActions()  # check state-based actions
-    #     cast_list += state.ClearSuperStack()  # list of GameStates
-    # return cast_list
+#     # cast_list = []
+#     # for state, card in cardboard.rules_text.cost.Pay(self, cardboard):
+#     #     # Iterate through all possible ways the cost could have been paid.
+#     #     # Each has a GameState and a Cardboard being cast. Move the card
+#     #     # being cast to the stack, which adds any triggers to super_stack.
+#     #     if card.has_type(RulesText.Land):
+#     #         # special exception for Lands, which don't use the stack. Just
+#     #         # move it directly to play and then resolve super_stack
+#     #         # state is a copy so can mutate it safely.
+#     #         state.MoveZone(card, ZONE.FIELD)
+#     #     else:
+#     #         state.MoveZone(card, ZONE.STACK)
+#     #     state.StateBasedActions()  # check state-based actions
+#     #     cast_list += state.ClearSuperStack()  # list of GameStates
+#     # return cast_list

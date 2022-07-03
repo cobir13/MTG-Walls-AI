@@ -17,7 +17,6 @@ from ManaHandler import ManaPool
 import Choices
 import tkinter as tk
 
-
 class WinTheGameError(Exception):
     pass
 
@@ -156,6 +155,7 @@ class GameState:
         Cardboards in the new gamestate corresponding to the list of
         Cardboards we were asked to track. This allows tracking "between
         split universes."
+        If tracklist has non-Cardboard objects, they're also returned
         Return signature is: GameState, [Cardboard] """
         # make new Gamestate and start copying attributes by value
         state = GameState()
@@ -168,68 +168,82 @@ class GameState:
         state.opponent_life = self.opponent_life
         state.has_played_land = self.has_played_land
         state.verbose = self.verbose
-        # need to track any pointers in StackEffects
+        # need to track any pointers in StackObjects
         stackindex = len(tracklist)  # index for where stack portion begins
-        for obj in self.stack:
-            if isinstance(obj, StackEffect):
-                tracklist += [obj.source] + obj.otherlist  # pointers in StackEffect
-        for obj in self.super_stack:
-            if isinstance(obj, StackEffect):
-                tracklist += [obj.source] + obj.otherlist  # pointers in StackEffect
+        for obj in self.stack + self.super_stack:
+            if isinstance(obj, StackCardboard):
+                tracklist += [obj.card] + obj.choices
+            elif isinstance(obj, StackAbility):
+                tracklist += [obj.source] + obj.choices
         # blank list to fill with corresponding copies of each card in tracklist
-        newtracklist = [None] * len(tracklist)
+        newtracklist = tracklist[:] #a copy of tracklist
 
-        # copy all the lists of Cardboards. Maintains order, no need to re-sort
-        def copylist(origl):
-            newl = []
-            for cardboard in origl:
-                newcardboard = cardboard.copy()  # copy each card
-                newl.append(newcardboard)  # add copy to requested list
-                for index, tracked in enumerate(tracklist):
-                    if cardboard is tracked:  # card we just copied is card we care about
-                        newtracklist[index] = newcardboard  # mark at corresponding index
-            return newl
-
-        state.deck = copylist(self.deck)
-        state.hand = copylist(self.hand)
-        state.field = copylist(self.field)
-        state.grave = copylist(self.grave)
-        # copy the stack, replacing pointers in StackEffects as needed
-        for obj in self.stack:
-            if isinstance(obj, Cardboard.Cardboard):
-                # card was cast so it's on stack. Copy & track as normal
-                newcardboard = obj.copy()
-                state.stack.append(newcardboard)
-                for index, tracked in enumerate(tracklist):
-                    if obj is tracked:
-                        newtracklist[index] = newcardboard
-            elif isinstance(obj, StackEffect):
-                # Pointers from this StackEffect are the first thing from the
-                # stack to be put on the tracklist. So source is at
-                # newtracklist[stackindex], and then the remaining otherlist
-                # is the next however-many entries in newtracklist. Remove
-                # all these from tracklist once I've put them back on the stack.
-                source = newtracklist.pop(stackindex)
-                otherlist = []
-                for kk in range(len(obj.otherlist)):
-                    otherlist.append(newtracklist.pop(stackindex))
-                neweffect = StackEffect(source, otherlist, obj.ability)
-                state.stack.append(neweffect)  # add to stack
-        # copy the superstack in the same way
-        for obj in self.super_stack:
-            if isinstance(obj, Cardboard.Cardboard):
-                newcardboard = obj.copy()
-                state.super_stack.append(newcardboard)
-                for index, tracked in enumerate(tracklist):
-                    if obj is tracked:
-                        newtracklist[index] = newcardboard
-            elif isinstance(obj, StackEffect):
-                source = newtracklist.pop(stackindex)
-                otherlist = []
-                for kk in range(len(obj.otherlist)):
-                    otherlist.append(newtracklist.pop(stackindex))
-                neweffect = StackEffect(source, otherlist, obj.ability)
-                state.super_stack.append(neweffect)  # add to superstack
+        def copy_list_and_update_pointers_to_it(original_list):
+            """Goes through a list and returns a list of
+            copies of each element in the original list. Also
+            checks against tracklist to make sure that any pointers
+            to the original elements now points at the new copies of
+            the elements. Maintains order so that the new list
+            does not need to be re-sorted."""
+            new_list = []
+            for obj in original_list:
+                if isinstance(obj,list) or isinstance(obj,tuple):
+                    #recurse. I don't THINK this ever happens but just in case.
+                    new_object = copy_list_and_update_pointers_to_it(obj)
+                elif hasattr(obj,"copy"):
+                    new_object = obj.copy()
+                else:
+                    # not copiable, probably int or similar
+                    new_object = obj 
+                new_list.append(new_object)
+                # now spin through tracklist. if we just copied a
+                # Cardboard that we are tracking, replace the old
+                # pointer in newtracklist with a pointer to the new
+                # copy.
+                # (For things like ints, we don't care if it's
+                # technically the old object or a new copy.)
+                if isinstance(new_object,Cardboard):
+                    for index, tracked_object in enumerate(tracklist):
+                        # try to iterate through tracked_object just in case
+                        try:
+                            newtracklist[index] = [new_object if obj is c else c
+                                                   for c in tracked_object]
+                        except TypeError:
+                            if obj is tracked_object:
+                                newtracklist[index] = new_object
+            return new_list
+        
+        state.deck = copy_list_and_update_pointers_to_it(self.deck)
+        state.hand = copy_list_and_update_pointers_to_it(self.hand)
+        state.field = copy_list_and_update_pointers_to_it(self.field)
+        state.grave = copy_list_and_update_pointers_to_it(self.grave)
+        
+        def copy_stack_objects(original_list):
+            """Goes through a list of StackObjects and rebuilds
+            copies of them. StackObjects contain pointers to
+            Cardboards, so we get the new pointers to the newly
+            copied Cardboards by looking in the newtracklist.
+            This assumes that the StackObjects are checked in the
+            same order that they were placed into the newtracklist.
+            Returns a list of new StackObjects and the new newtracklist"""
+            new_list = []
+            for obj in original_list:
+                new_card = newtracklist[stackindex]
+                i_end = stackindex+1+len(obj.choices)
+                new_choices = newtracklist[stackindex+1:i_end]
+                # build the new StackObject
+                if isinstance(obj, StackCardboard):
+                    new_stack_obj = StackCardboard(new_card, new_choices)
+                elif isinstance(obj, StackAbility):
+                    abil = obj.ability  # does this need a copy?
+                    new_stack_obj = StackAbility(new_card, abil, new_choices)
+                new_list.append(new_stack_obj)                
+                # get rid of the references I just used. done with them now.
+                return new_list, newtracklist[:stackindex]+newtracklist[i_end:]
+        
+        #copy stack and superstack, replacing pointers in StackObjects as I go
+        state.stack, newtracklist = copy_stack_objects(self.stack)
+        state.super_stack, newtracklist = copy_stack_objects(self.super_stack)
         # return
         return state, newtracklist
 
@@ -795,6 +809,126 @@ class ManualGame(tk.Tk):
             return  # just don't panic. gamestate is unchanged.
         else:
             super().report_callback_exception(exc, val, tb, *args)
+
+
+
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+class StackObject:
+    def resolve(self, gamestate):
+        pass
+    def get_id(self):
+        pass
+    def is_equiv_to(self,other):
+        pass
+    @property
+    def name(self):
+        pass
+
+
+
+class StackCardboard(StackObject):
+
+    def __init__(self, card:Cardboard=None, choices:list=[]):
+        #the Cardboard that is being cast. It is NOT just a pointer. The
+        #Cardboard really has been moved to the Stack zone
+        self.card = card
+        #list of any modes or targets or other choices made during casting
+        #or activation.  If targets are Cardboards, they are pointers.
+        self.choices = choices
+
+    def resolve(self, gamestate):
+        """Returns list of GameStates resulting from performing this effect"""
+        return self.card.Execute(gamestate)
+
+    def __str__(self):
+        return self.card.name
+
+    def __repr__(self):
+        return "Spell: " + self.card.name
+
+    def get_id(self):
+        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
+                            for c in self.choices])
+        return "S(%s|%s)" %(self.card.get_id(),choices)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
+
+    @property
+    def name(self):
+        return self.card.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")
+
+
+
+
+class StackAbility(StackObject):
+
+    def __init__(self, ability, source:Cardboard, choices:list=[]):
+        #The Ability that is being activated
+        self.ability = ability
+        #The source Cardboard as a "pointer"
+        self.source = source
+        #list of any modes or targets or other choices made during casting
+        #or activation.  If targets are Cardboards, they are pointers.
+        self.choices = choices  # list of other relevant Cardboards. "Pointers".
+
+
+    def resolve(self, gamestate):
+        """Returns list of GameStates resulting from performing this effect"""
+        return self.ability.apply_effect(gamestate, self.source, self.choices)
+
+    def __str__(self):
+        return self.ability.name
+
+    def __repr__(self):
+        return "Effect: " + self.ability.name
+
+    def get_id(self):
+        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
+                            for c in self.choices])
+        return "E(%s|%s)" %(self.ability.get_id(),choices)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
+
+    @property
+    def name(self):
+        return self.card.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":
