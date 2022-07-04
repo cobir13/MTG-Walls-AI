@@ -5,9 +5,11 @@ Created on Sun Jun 26 18:08:14 2022
 @author: Cobi
 """
 
-from typing import List
-from GameState import GameState
-from Cardboard import Cardboard
+from typing import List, TYPE_CHECKING
+if TYPE_CHECKING:
+    from GameState import GameState
+    from Cardboard import Cardboard
+
 import Choices
 import MatchCardPatterns as Match
 
@@ -114,14 +116,18 @@ class IsUntapped(Bool):
 class Power(Integer):
     def get(self, state:GameState, source:Cardboard) -> int: 
         if hasattr(source.rules_text,"power"):
-            return source.rules_text.power
+            modifier = sum([int(v[:v.index("/")])
+                            for v in source.counters if "/" in v])
+            return source.rules_text.power + modifier
         else:
             return None
 
 class Toughness(Integer):
     def get(self, state:GameState, source:Cardboard) -> int: 
         if hasattr(source.rules_text,"toughness"):
-            return source.rules_text.power
+            modifier = sum([int(v[v.index("/")+1:])
+                            for v in source.counters if "/" in v])
+            return source.rules_text.toughness + modifier
         else:
             return None
       

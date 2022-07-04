@@ -5,10 +5,12 @@ Created on Mon Dec 28 21:13:28 2020
 @author: Cobi
 """
 from typing import List
-
 import ZONE
-import RulesText
 import tkinter as tk
+
+# # This is just a hack to make Spyder happy and let me do type-annotation
+# RulesText = "RulesText"
+from RulesText import RulesText
 
 
 ##---------------------------------------------------------------------------##
@@ -21,7 +23,7 @@ class Cardboard:
     # a list and I need the `in` functionality to use `is` rather than `==`.
     # Unfortunately, this also means I can't drop Cardboard's into sets to sort.
 
-    def __init__(self, rules_text: RulesText):
+    def __init__(self, rules_text:RulesText):
         self.rules_text: RulesText = rules_text
         self.tapped: bool = False
         self.summon_sick: bool = True
@@ -71,7 +73,7 @@ class Cardboard:
         s += self.rules_text.name + "_"
         if self.tapped:
             s += "T"
-        if self.summon_sick and self.has_type(RulesText.Creature):
+        if self.summon_sick:
             s += "S"
         s += str(self.zone)
         if len(self.counters) > 0:
@@ -91,10 +93,10 @@ class Cardboard:
         # equivalent or not. I defined EquivTo as a more intuitive, descriptive
         # definition of equality that I use for comparing two GameStates.
 
-    # def has_type(self, cardtype:RulesText):
-    #     """Returns bool: "this Cardboard refers to a card which is the given
-    #     RulesText type (in addition to possibly other types as well)" """
-    #     return isinstance(self.rules_text, cardtype)
+    def has_type(self, cardtype:RulesText):
+        """Returns bool: "this Cardboard refers to a card which is the given
+        RulesText type (in addition to possibly other types as well)" """
+        return isinstance(self.rules_text, cardtype)
         
     # def has_keyword(self, keyword:str):
     #     return keyword in self.rules_text.keywords
@@ -119,7 +121,7 @@ class Cardboard:
         name_string = self.name
         # string for power and toughness, if any
         ptstr = ""
-        if self.has_type(RulesText.Creature):
+        if hasattr(self.rules_text,"power") and hasattr(self.rules_text,"toughness"):
             ptstr = "%i/%i" % (self.rules_text.power, self.rules_text.toughness)
             # string for counters, if any
         counter_string = ""

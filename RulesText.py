@@ -4,18 +4,18 @@ Created on Mon Dec 28 21:13:28 2020
 
 @author: Cobi
 """
-
 from typing import List
-
+from Verbs import PlayLandForTurn
 import ZONE
-import Verbs
 
+# This is just a hack to make Spyder happy and let me do type-annotation
+Verb = "Verbs"
 
 ##---------------------------------------------------------------------------##
 
 class RulesText():
 
-    def __init__(self, name:str, cost:Verbs.Verb, keywords:List[str]):
+    def __init__(self, name:str, cost:Verb, keywords:List[str]):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
@@ -29,7 +29,7 @@ class RulesText():
         # activated abilities
         self.activated = []  # includes mana abilities
         # triggered 
-        self.trig_verb = []
+        self.trig_verb = []   #triggered by verbs (actions that are done)
         self.trig_upkeep = []
         self.trig_attack = []
         self.trig_endstep = []
@@ -85,7 +85,7 @@ class Creature(Permanent):
 class Land(Permanent):
 
     def __init__(self, name, keywords):        
-        super().__init__(name, Verbs.PlayLandForTurn, keywords)        
+        super().__init__(name, PlayLandForTurn, keywords)        
         # if "land" not in self.keywords:
         #     self.keywords = ["land"] + self.keywords
 
@@ -117,8 +117,8 @@ class Land(Permanent):
 
 class Spell(RulesText):
 
-    def __init__(self, name, cost:Verbs.Verb, keywords:List[str], 
-                 effect:Verbs.Verb, dest_zone=ZONE.GRAVE):
+    def __init__(self, name, cost:Verb, keywords:List[str], 
+                 effect:Verb, dest_zone=ZONE.GRAVE):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.

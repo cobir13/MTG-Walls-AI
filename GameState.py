@@ -4,21 +4,20 @@ Created on Mon Dec 28 21:13:59 2020
 
 @author: Cobi
 """
-
-import random
-# import Decklist
+# from __future__ import annotations
 from typing import List
-
-import Cardboard
-import RulesText
+import random
+from Cardboard import Cardboard  #actually needs
+import Getters as Get
 import ZONE
 from ManaHandler import ManaPool
 import Choices
-import tkinter as tk
+# import tkinter as tk
 
 import Verbs
 
-
+# # This is just a hack to make Spyder happy and let me do type-annotation
+# RulesText = "RulesText"
 
 
 """
@@ -82,6 +81,12 @@ class GameState:
         self.life = 20
         self.opponent_life = 20
         self.has_played_land = False
+        
+        #self.num_lands_played
+        #self.num_lands_permitted
+        #self.opponent_list = [] ???
+        #self.num_spells_cast
+        
 
         self.verbose = False
 
@@ -167,9 +172,9 @@ class GameState:
         # need to track any pointers in StackObjects
         stackindex = len(tracklist)  # index for where stack portion begins
         for obj in self.stack + self.super_stack:
-            if isinstance(obj, StackCardboard):
+            if isinstance(obj, Verbs.StackCardboard):
                 tracklist += [obj.card] + obj.choices
-            elif isinstance(obj, StackAbility):
+            elif isinstance(obj, Verbs.StackAbility):
                 tracklist += [obj.source] + obj.choices
         # blank list to fill with corresponding copies of each card in tracklist
         newtracklist = tracklist[:] #a copy of tracklist
@@ -228,11 +233,11 @@ class GameState:
                 i_end = stackindex+1+len(obj.choices)
                 new_choices = newtracklist[stackindex+1:i_end]
                 # build the new StackObject
-                if isinstance(obj, StackCardboard):
-                    new_stack_obj = StackCardboard(new_card, new_choices)
-                elif isinstance(obj, StackAbility):
+                if isinstance(obj, Verbs.StackCardboard):
+                    new_stack_obj = Verbs.StackCardboard(new_card, new_choices)
+                elif isinstance(obj, Verbs.StackAbility):
                     abil = obj.ability  # does this need a copy?
-                    new_stack_obj = StackAbility(new_card, abil, new_choices)
+                    new_stack_obj = Verbs.StackAbility(new_card, abil, new_choices)
                 new_list.append(new_stack_obj)                
                 # get rid of the references I just used. done with them now.
                 return new_list, newtracklist[:stackindex]+newtracklist[i_end:]
@@ -262,6 +267,17 @@ class GameState:
         else:
             raise IndexError
         return zone
+    
+    def re_sort(self, zonename):
+        """sort the specified zone, if it is a zone that is supposed
+        to be sorted"""
+        if zonename == ZONE.HAND:
+            self.hand.sort(key=Cardboard.get_id)
+        elif zonename == ZONE.FIELD:
+            self.field.sort(key=Cardboard.get_id)                 
+        elif zonename == ZONE.grave:
+            self.grave.sort(key=Cardboard.get_id)
+            
 
 # =============================================================================
 #     def MoveZone(self, cardboard, destination):
@@ -306,12 +322,10 @@ class GameState:
         i = 0
         while i < len(self.field):
             cardboard = self.field[i]
-            if cardboard.has_type(RulesText.Creature):
-                # look for counters with "/", which modify power or toughness
-                modifier = sum([int(v[:v.index("/")]) for v in cardboard.counters if "/" in v])
-                if cardboard.rules_text.toughness + modifier <= 0:
-                    self.MoveZone(cardboard, ZONE.GRAVE)
-                    continue
+            toughness = Get.Toughness().get(self,cardboard)
+            if toughness is not None and toughness <=0:
+                Verbs.MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
+                continue #don't increment counter
             i += 1
         # legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
 
@@ -332,7 +346,7 @@ class GameState:
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         for cardboard in self.hand + self.field + self.grave:
             for abil in cardboard.rules_text.trig_upkeep:
-                newEffect = StackAbility(abil,cardboard,[])
+                newEffect = Verbs.StackAbility(abil,cardboard,[])
                 self.super_stack.append(newEffect)
 
     def Draw(self):
@@ -382,7 +396,7 @@ class GameState:
             been placed on the stack."""
         if len(self.stack) == 0:
             return []
-        assert( isinstance(self.stack[-1],StackObject) )
+        assert( isinstance(self.stack[-1],Verbs.StackObject) )
         return self.stack[-1].resolve(self)  #
 
 
@@ -434,8 +448,7 @@ class GameState:
                     # here StackAbility is convenient container. It is NOT
                     # added to the stack yet. Ability has NOT been properly
                     # activated yet.
-                    e = StackAbility(ability, source, [])
-                    effects.append(e)
+                    effects.append( Verbs.StackAbility(ability,source,[]) )
                     addobject = True
             if addobject:  # only add each object once, even if many abilities
                 activeobjects.append(source)
@@ -755,139 +768,7 @@ class GameState:
 # =============================================================================
 
 
-# -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 
-
-class StackObject:
-    def resolve(self, gamestate):
-        pass
-    def get_id(self):
-        pass
-    def is_equiv_to(self,other):
-        pass
-    @property
-    def name(self):
-        pass
-
-# ----------
-
-class StackCardboard(StackObject):
-
-    def __init__(self, card:Cardboard=None, choices:list=[]):
-        #the Cardboard that is being cast. It is NOT just a pointer. The
-        #Cardboard really has been moved to the Stack zone
-        self.card = card
-        #list of any modes or targets or other choices made during casting
-        #or activation.  If targets are Cardboards, they are pointers.
-        self.choices = choices
-
-    def resolve(self, state:GameState):
-        """Returns list of GameStates resulting from performing
-        this spell's effect. That might consist of carrying out
-        the Verbs of an instant or sorcery, or might consist of
-        moving a permanent from the stack to the battlefield and
-        putting all resulting triggers onto the stack.
-        Does not mutate the original GameState"""
-        assert(self is state.stack[-1])  #last item on the stack
-        new_state = state.copy()
-        # remove StackCardboard from the stack
-        stack_object = new_state.stack.pop(-1)
-        if hasattr(self.card, "effect"):
-            # perform the effect
-            tuple_list = stack_object.card.effect.do_it(new_state,
-                                                        stack_object.card,
-                                                        stack_object.choices)
-        else:
-            tuple_list = [(new_state,stack_object.card.copy(),[])]
-        #move the card to the destination zone and also clear the superstack
-        results = []
-        for state2,card2,_ in tuple_list:
-            mover = Verbs.MoveToZone(card2.rules_text.cast_destination)
-            for state3,_,_ in mover.do_it(state2,card2,[]): 
-                results += state3.ClearSuperStack()
-        return results
-
-    def __str__(self):
-        return self.card.name
-
-    def __repr__(self):
-        return "Spell: " + self.card.name
-
-    def get_id(self):
-        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
-                            for c in self.choices])
-        return "S(%s|%s)" %(self.card.get_id(),choices)
-
-    def is_equiv_to(self, other):
-        return self.get_id() == other.get_id()
-
-    @property
-    def name(self):
-        return self.card.name
-
-    # def build_tk_display(self, parentframe, ):
-    #     return tk.Button(parentframe,
-    #                      text="Effect: %s" % self.name,
-    #                      anchor="w",
-    #                      height=7, width=10, wraplength=80,
-    #                      padx=3, pady=3,
-    #                      relief="solid", bg="lightblue")
-
-# ----------
-
-class StackAbility(StackObject):
-
-    def __init__(self, ability, source:Cardboard, choices:list=[]):
-        #The Ability that is being activated
-        self.ability = ability
-        #The source Cardboard as a "pointer"
-        self.source = source
-        #list of any modes or targets or other choices made during casting
-        #or activation.  If targets are Cardboards, they are pointers.
-        self.choices = choices  # list of other relevant Cardboards. "Pointers".
-
-    def resolve(self, state:GameState):
-        """Returns list of GameStates resulting from performing this effect"""
-        assert(self is state.stack[-1])  #last item on the stack
-        new_state = state.copy()
-        # remove StackCardboard from the stack
-        stack_object = new_state.stack.pop(-1)
-        #apply the effect
-        tuple_list = stack_object.ability.apply_effect(new_state,
-                                                    stack_object.source,
-                                                    stack_object.choices)
-        #clear the superstack and return!
-        results = []
-        for state2,_,_ in tuple_list:
-            results += state2.ClearSuperStack()
-        return results
-
-    def __str__(self):
-        return self.ability.name
-
-    def __repr__(self):
-        return "Effect: " + self.ability.name
-
-    def get_id(self):
-        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
-                            for c in self.choices])
-        return "E(%s|%s)" %(self.ability.get_id(),choices)
-
-    def is_equiv_to(self, other):
-        return self.get_id() == other.get_id()
-
-    @property
-    def name(self):
-        return self.card.name
-
-    # def build_tk_display(self, parentframe, ):
-    #     return tk.Button(parentframe,
-    #                      text="Effect: %s" % self.name,
-    #                      anchor="w",
-    #                      height=7, width=10, wraplength=80,
-    #                      padx=3, pady=3,
-    #                      relief="solid", bg="lightblue")
 
 # -----------------------------------------------------------------------------
 # -----------------------------------------------------------------------------

@@ -6,16 +6,17 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from typing import List
-from GameState import GameState
-from Cardboard import Cardboard
-import ManaHandler
 import ZONE
 import MatchCardPatterns as Match
-import GettersAndChoosers as Get
+import Getters as Get
 
 from RulesText import Creature,Spell,Land
 
 import Actions
+
+# This is just a hack to make Spyder happy and let me do type-annotation
+GameState = "GameState"
+Cardboard = "Cardboard"  
 
 
 
@@ -51,17 +52,19 @@ class Verb:
         Cardboard, and any (copied) choices which have not yet been
         used up.
         """
-        if self.single_output:
-            #`trigger_source` is source of the trigger. Not to be confused
-            #with `source`, which is the source of the Verb which is
-            #potentially CAUSING the trigger.
-            for trigger_source in state.field + state.grave + state.hand:
-                for abil in trigger_source.rules_text.trig_verb:
-                    if abil.is_triggered(self, state, trigger_source, source):
-                        effect = Actions.StackAbility(abil, trigger_source,
-                                                      [source])
-                        state.super_stack.append(effect)
-            return [(state,source,choices[self.num_inputs:])]
+        # `trigger_source` is source of the trigger. Not to be confused
+        # with `source`, which is the source of the Verb which is
+        # potentially CAUSING the trigger.
+        for trigger_source in state.field + state.grave + state.hand:
+            for abil in trigger_source.rules_text.trig_verb:
+                if abil.is_triggered(self, state, trigger_source, source):
+                    effect = Actions.StackAbility(abil, trigger_source,
+                                                  [source])
+                    state.super_stack.append(effect)
+        # return the expected triplet of GameState, source Cardboard,
+        # and list of choices. But strip out any choices that this
+        # Verb already 'used up'.
+        return [(state,source,choices[self.num_inputs:])]
         
     def __str__(self):
         return type(self).__name__
@@ -269,53 +272,17 @@ class VerbManyTimes(Verb):
         
 #------------------------------------------------------------------------------
 
-# =============================================================================
-# class PayMana(VerbAtomic):
-#     """deducts the given amount of mana from the gamestate's mana pool"""
-#     
-#     def __init__(self, mana_string:str):
-#         super().__init__( [] )
-#         self.mana_cost = ManaHandler.ManaCost(mana_string)
-#         
-#     def can_be_done(self, state, subject, choices):
-#         return state.pool.CanAffordCost(self.mana_cost)
-#     
-#     def do_it(self, state, subject, choices):
-#         state.pool.PayCost(self.mana_cost)
-#         super().do_it(state,subject,choices)  #adds triggers to super_stack
-#         
-# # ----------
-# 
-# class AddMana(Verb):
-#     """adds the given amount of mana to the gamestate's mana pool"""
-#     def __init__(self, mana_string_getter:str):
-#         super().__init__( [mana_string_getter] )
-#     def can_be_done(self, state, subject ,choices):
-#         return True
-#     def do_it(self, state, subject, choices): 
-#         mana_string = self.getter_list[0].get(state,subject)
-#         mana_to_add = ManaHandler.ManaPool( mana_string)
-#         state.pool.AddMana(mana_to_add)
-#         super().do_it(state,subject,choices)  #adds triggers to super_stack
-# =============================================================================
-
 class PayMana(VerbAtomic):
     """deducts the given amount of mana from the gamestate's mana pool"""
-    def __init__(self, mana_string_getter:Get.Const ):
-        super().__init__( [mana_string_getter] )
-        # self.mana_cost = ManaHandler.ManaCost(mana_string)
+    def __init__(self, mana_string:str):
+        super().__init__( [] )
+        self.mana_cost = ManaHandler.ManaCost(mana_string)
         
     def can_be_done(self, state, subject, choices):
-        # mana_string = choices[0]
-        mana_string = self.getter_list[0].get(state,subject)
-        mana_cost = ManaHandler.ManaCost( mana_string)
-        return state.pool.CanAffordCost(mana_cost)
+        return state.pool.CanAffordCost(self.mana_cost)
     
     def do_it(self, state, source, choices):
-        # mana_string = choices[0]
-        mana_string = self.getter_list[0].get(state,source)
-        mana_cost = ManaHandler.ManaCost( mana_string)
-        state.pool.PayCost(mana_cost)
+        state.pool.PayCost(self.mana_cost)
         #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
         
@@ -323,20 +290,60 @@ class PayMana(VerbAtomic):
     
 class AddMana(VerbAtomic):
     """adds the given amount of mana to the gamestate's mana pool"""
-    def __init__(self, mana_string_getter:Get.Const):
-        super().__init__( [mana_string_getter] )
+    def __init__(self, mana_string:str):
+        super().__init__( [] )
+        self.mana_pool_to_add = ManaHandler.ManaPool(mana_string)
         
     def can_be_done(self, state, source ,choices):
         return True
     
     def do_it(self, state, source, choices): 
-        mana_string = self.getter_list[0].get(state,source)
-        mana_to_add = ManaHandler.ManaPool( mana_string)
-        state.pool.AddMana(mana_to_add)
+        state.pool.AddMana(self.mana_pool_to_add)
         #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
 
 # ----------
+
+# =============================================================================
+# class PayMana(VerbAtomic):
+#     """deducts the given amount of mana from the gamestate's mana pool"""
+#     def __init__(self, mana_string_getter:Get.Const ):
+#         super().__init__( [mana_string_getter] )
+#         # self.mana_cost = ManaHandler.ManaCost(mana_string)
+#         
+#     def can_be_done(self, state, subject, choices):
+#         mana_string = choices[0]
+#         # mana_string = self.getter_list[0].get(state,subject)
+#         mana_cost = ManaHandler.ManaCost( mana_string)
+#         return state.pool.CanAffordCost(mana_cost)
+#     
+#     def do_it(self, state, source, choices):
+#         mana_string = choices[0]
+#         # mana_string = self.getter_list[0].get(state,source)
+#         mana_cost = ManaHandler.ManaCost( mana_string)
+#         state.pool.PayCost(mana_cost)
+#         #add triggers to super_stack, reduce length of choices list
+#         return super().do_it(state,source,choices)
+#         
+# # ----------   
+#     
+# class AddMana(VerbAtomic):
+#     """adds the given amount of mana to the gamestate's mana pool"""
+#     def __init__(self, mana_string_getter:Get.Const):
+#         super().__init__( [mana_string_getter] )
+#         
+#     def can_be_done(self, state, source ,choices):
+#         return True
+#     
+#     def do_it(self, state, source, choices): 
+#         mana_string = self.getter_list[0].get(state,source)
+#         mana_to_add = ManaHandler.ManaPool( mana_string)
+#         state.pool.AddMana(mana_to_add)
+#         #add triggers to super_stack, reduce length of choices list
+#         return super().do_it(state,source,choices)
+# 
+# # ----------
+# =============================================================================
 
 class LoseOwnLife(VerbAtomic):
     def __init__(self, damage_getter:Get.Integer):
@@ -474,8 +481,7 @@ class MoveToZone(VerbOnSourceCard):
         zonelist = state.get_zone(self.destination)
         zonelist.append(source)
         #sort the zones that need to always be sorted
-        if self.destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
-            zonelist.sort(key=Cardboard.Cardboard.get_id)
+        state.re_sort(self.destination)
         # any time you change zones, reset the cardboard parameters
         source.tapped = False
         source.summon_sick = True
@@ -598,7 +604,7 @@ class ActivateAbility(VerbAtomic):
         final_results = []
         for g,s,targets in new_tuple_list:
             # create the StackAbility and put it on the stack.
-            g.stack.append( GameState.StackAbility(ability, s, targets) )            
+            g.stack.append( StackAbility(ability, s, targets) )            
             # 601.2i: ability has now "been activated".  Trigger abilities.
             # for actually activating the ability
             for g2,_,_ in super().do_it(g,s,[]):
@@ -680,7 +686,7 @@ class CastCard(VerbOnSourceCard):
                 mover = MoveToZone(ZONE.FIELD)
                 mover.do_it(g,c,targets)
             else:
-                g.stack.append( GameState.StackCardboard(c,targets) )
+                g.stack.append( StackCardboard(c,targets) )
             # 601.2i: spell has now "been cast".  trigger abilities
             # I already triggered abilities from paying costs. Now just
             # trigger for actually casting the spell, and clear super_stack.
@@ -704,4 +710,138 @@ class CastCard(VerbOnSourceCard):
     
     def num_inputs(self):
         return 0
-        
+
+
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+
+
+class StackObject:
+    def resolve(self, gamestate):
+        pass
+    def get_id(self):
+        pass
+    def is_equiv_to(self,other):
+        pass
+    @property
+    def name(self):
+        pass
+
+# ----------
+
+class StackCardboard(StackObject):
+
+    def __init__(self, card:Cardboard=None, choices:list=[]):
+        #the Cardboard that is being cast. It is NOT just a pointer. The
+        #Cardboard really has been moved to the Stack zone
+        self.card = card
+        #list of any modes or targets or other choices made during casting
+        #or activation.  If targets are Cardboards, they are pointers.
+        self.choices = choices
+
+    def resolve(self, state:GameState):
+        """Returns list of GameStates resulting from performing
+        this spell's effect. That might consist of carrying out
+        the Verbs of an instant or sorcery, or might consist of
+        moving a permanent from the stack to the battlefield and
+        putting all resulting triggers onto the stack.
+        Does not mutate the original GameState"""
+        assert(self is state.stack[-1])  #last item on the stack
+        new_state = state.copy()
+        # remove StackCardboard from the stack
+        stack_object = new_state.stack.pop(-1)
+        if hasattr(self.card, "effect"):
+            # perform the effect
+            tuple_list = stack_object.card.effect.do_it(new_state,
+                                                        stack_object.card,
+                                                        stack_object.choices)
+        else:
+            tuple_list = [(new_state,stack_object.card.copy(),[])]
+        #move the card to the destination zone and also clear the superstack
+        results = []
+        for state2,card2,_ in tuple_list:
+            mover = MoveToZone(card2.rules_text.cast_destination)
+            for state3,_,_ in mover.do_it(state2,card2,[]): 
+                results += state3.ClearSuperStack()
+        return results
+
+    def __str__(self):
+        return self.card.name
+
+    def __repr__(self):
+        return "Spell: " + self.card.name
+
+    def get_id(self):
+        choices = ",".join([c.get_id() if hasattr(c,"get_id") else str(c)
+                            for c in self.choices])
+        return "S(%s|%s)" %(self.card.get_id(),choices)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
+
+    @property
+    def name(self):
+        return self.card.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")
+
+# ----------
+
+class StackAbility(StackObject):
+
+    def __init__(self, ability, source:Cardboard, choices:list=[]):
+        #The Ability that is being activated
+        self.ability = ability
+        #The source Cardboard as a "pointer"
+        self.source = source
+        #list of any modes or targets or other choices made during casting
+        #or activation.  If targets are Cardboards, they are pointers.
+        self.choices = choices  # list of other relevant Cardboards. "Pointers".
+
+    def resolve(self, state:GameState):
+        """Returns list of GameStates resulting from performing this effect"""
+        assert(self is state.stack[-1])  #last item on the stack
+        new_state = state.copy()
+        # remove StackCardboard from the stack
+        stack_object = new_state.stack.pop(-1)
+        #apply the effect
+        tuple_list = stack_object.ability.apply_effect(new_state,
+                                                    stack_object.source,
+                                                    stack_object.choices)
+        #clear the superstack and return!
+        results = []
+        for state2,_,_ in tuple_list:
+            results += state2.ClearSuperStack()
+        return results
+
+    def __str__(self):
+        return self.ability.name
+
+    def __repr__(self):
+        return "Effect: " + self.ability.name
+
+    def get_id(self):
+        choices = ",".join([c.get_id() if isinstance(c,Cardboard) else str(c)
+                            for c in self.choices])
+        return "E(%s|%s)" %(self.ability.get_id(),choices)
+
+    def is_equiv_to(self, other):
+        return self.get_id() == other.get_id()
+
+    @property
+    def name(self):
+        return self.card.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")
