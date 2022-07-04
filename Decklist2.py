@@ -6,224 +6,200 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 from RulesText import Creature, Land, Spell
-import RulesText
-from Abilities import ManaAbility, TriggeredByMove, AsEnterEffect  # ,ActivatedAbility
-from Costs import Cost
-
 import ZONE
-import Choices
-
-
-
-
 import MatchCardPatterns as Match
-import GettersAndChoosers as Get
+from Abilities import ActivatedAbility2, TriggeredAbility2, TriggerOnMove
+import Verbs as V
+import Getters as Get
 
-
-
-from Actions import Ability2,Cost2, TriggeredAbility2
-from Actions import PayMana,AddMana,TapSymbol,AddCounterToSelf,ActivateOncePerTurn,RepeatBasedOnState,DrawCard
-from Actions import TapAny
-from Actions import ChooseOneCardboard
-from Actions import Trigger,TriggerOnMove
-# from Actions import MatchCardboardFromZone,MatchUntapped,MatchType,MatchKeyword,CountInZone,MatchNotSelf,MatchSelf,MatchCardboardFromTopOfDeck
 
 
 
 ##---------------------------------------------------------------------------##
 
-
-
-
-Roots = Creature("Roots", Cost2([PayMana("1G")]), ["defender"], 0, 5)
+Roots = Creature("Roots", V.PayMana(V.Const("1G")), ["defender"], 0, 5)
 Roots.activated.append(
-        Ability2("Roots add G",
-                 Cost2([AddCounterToSelf("-0/-1"),ActivateOncePerTurn()]),
-                 [AddMana("A")] ))
+        ActivatedAbility2("Roots add G",
+                 V.ManyVerbs([V.AddCounterToSelf("-0/-1"),
+                              V.ActivateOncePerTurn("Roots add G")]),
+                 V.AddMana("A") ))
 
 ##---------------------------------------------------------------------------##
 
-Caryatid = Creature("Caryatid", Cost2([PayMana("1G")]), ["defender", "hexproof"], 0, 3)
+Caryatid = Creature("Caryatid", V.PayMana(V.Const("1G")),
+                    ["defender", "hexproof"], 0, 3)
 Caryatid.activated.append(
-        Ability2("Caryatid add Au", Cost2([TapSymbol()]), [AddMana("A")] ) )
+        ActivatedAbility2("Caryatid add Au",V.TapSymbol(),V.AddMana("A")) )
 
 ##---------------------------------------------------------------------------##
 
-Caretaker = Creature("Caretaker", Cost2([PayMana("1G")]), ["defender"], 0, 3)
+Caretaker = Creature("Caretaker", V.PayMana(V.Const("1G")), ["defender"], 0, 3)
 Caretaker.activated.append(
-        Ability2("Caretaker add Au",
-                 Cost2( [TapSymbol(),
-                         TapAny( [Match.NotSelf(),
-                                  Match.Untapped(),
-                                  Match.CardType(Creature)
-                                  ])
-                        ]),
-                 [AddMana("A")] ))
-
+        ActivatedAbility2("Caretaker add Au",
+                          V.ManyVerbs( [V.TapSymbol(),
+                                        V.TapAny([Match.NotSelf(),
+                                                  Match.Untapped(),
+                                                  Match.CardType(Creature)
+                                                  ])
+                                        ]),
+                          [V.AddMana("A")] ))
 
 ##---------------------------------------------------------------------------##
 
-def BattlementAddColor(gamestate, source):
-    num = sum(["defender" in c.rules_text.keywords for c in gamestate.field])
-    newstate, [newsource] = gamestate.copy_and_track([source])
-    newstate.pool.AddMana("G" * num)  # add mana
-    return [newstate]
-
-
-Battlement = Creature("Battlement", Cost2([PayMana("1G")]), ["defender"], 0, 4)
+Battlement = Creature("Battlement", V.PayMana(V.Const("1G")),
+                      ["defender"], 0, 4)
 Battlement.activated.append(
-        Ability2("Battlement add G",
-                 Cost2([TapSymbol()]),
-                 [RepeatBasedOnState(AddMana("G"),
-                                     CountInZone([MatchKeyword("defender")],
-                                                 ZONE.FIELD)
-                                    )]
-                 ))
-
+        ActivatedAbility2("Battlement add G",
+                          V.TapSymbol(),
+                          V.VerbManyTimes(V.AddMana("G"),Get.NumberInZone(
+                              [Match.Keyword("defender")],ZONE.FIELD))))
 
 ##---------------------------------------------------------------------------##
 
-def AxebaneAddColor(gamestate, source):
-    num = sum(["defender" in c.rules_text.keywords for c in gamestate.field])
-    newstate, [newsource] = gamestate.copy_and_track([source])
-    newstate.pool.AddMana("A" * num)  # add mana
-    return [newstate]
-
-
-Axebane = Creature("Axebane", Cost2([PayMana("2G")]), ["defender"], 0, 3)
+Axebane = Creature("Axebane", V.PayMana(V.Const("2G")), ["defender"], 0, 3)
 Axebane.activated.append(
-    Ability2("Battlement add G",
-             Cost2([TapSymbol()]),
-             [RepeatBasedOnState(AddMana("G"),
-                                 CountInZone([MatchKeyword("defender")],
-                                             ZONE.FIELD)
-                                )]
-             ))
+        ActivatedAbility2("Axebane add Au",
+                          V.TapSymbol(),
+                          V.VerbManyTimes(V.AddMana("A"),Get.NumberInZone(
+                              [Match.Keyword("defender")],ZONE.FIELD))))
 
 ##---------------------------------------------------------------------------##
 
-Blossoms = Creature("Blossoms", Cost2([PayMana("1G")]), ["defender"], 0, 4)
-Blossoms.trig_move.append(
-    TriggeredByMove("Blossoms etb draw",
-                    TriggerOnMove( [MatchSelf], None, ZONE.FIELD),
-                    [DrawCard()] ))
+Blossoms = Creature("Blossoms", V.PayMana(V.Const("1G")), ["defender"], 0, 4)
+Blossoms.trig_verb.append(
+    TriggeredAbility2("Blossoms etb draw",
+                      TriggerOnMove( [Match.IsSelf], None, ZONE.FIELD),
+                      [V.DrawCard()] ))
 
 ##---------------------------------------------------------------------------##
 
-Omens = Creature("Omens", Cost2([PayMana("1G")]), ["defender"], 0, 4)
-Omens.trig_move.append(
-    TriggeredByMove("Omens etb draw",
-                    TriggerOnMove( [MatchSelf], None, ZONE.FIELD),
-                    [DrawCard()] ))
+Omens = Creature("Omens", V.PayMana(V.Const("1W")), ["defender"], 0, 4)
+Omens.trig_verb.append(
+    TriggeredAbility2("Omens etb draw",
+                      TriggerOnMove( [Match.IsSelf], None, ZONE.FIELD),
+                      [V.DrawCard()] ))
 
 ##---------------------------------------------------------------------------##
 
-Arcades = Creature("Arcades", Cost2([PayMana("1WUG")]), ["flying", "vigilance"], 3, 5)
-Arcades.trig_move.append(
-    TriggeredByMove("Arcades draw trigger",
-                TriggerOnMove( [MatchKeyword("defender")], None, ZONE.FIELD),
-                [DrawCard()] ))
+Arcades = Creature("Arcades", V.PayMana(V.Const("1WUG")),
+                   ["flying","vigilance"], 3, 5)
+Arcades.trig_verb.append(
+    TriggeredAbility2("Arcades draw trigger",
+                      TriggerOnMove([Match.Keyword("defender")],None,ZONE.FIELD),
+                      [V.DrawCard()] ))
 
 
 ##---------------------------------------------------------------------------##
 
-Company = Spell("Company", Cost2([PayMana("3G")]), 
-                [ MatchCardboardFromTopOfDeck()]
-                
-                
-                
-                
-                )
+# Company = Spell(name="Company",
+#                 cost = V.PayMana(V.Const("3G")),
+#                 keywords = ["instant"],
+#                 [ MatchCardboardFromTopOfDeck()]
+                #TODO
+                #I know I don't have the tech for this yet
+                #I need the weird "Verb on half of the list and then do a
+                #different verb on the other half of the list" templating.
+                #maybe make a Choose.Split or something? Select half
+                #but return both halves?
 
-##---------------------------------------------------------------------------##
+# =============================================================================
+# ##---------------------------------------------------------------------------##
+# 
+# ###---basic lands
+# 
+# Forest = Land("Forest", ["basic", "forest"])
+# Forest.activated.append(
+#     ManaAbility("Forest add G",
+#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
+#                 lambda g, s: ManaAbility.AddColor(g, s, "G")))
+# 
+# Plains = Land("Plains", ["basic", "plains"])
+# Plains.activated.append(
+#     ManaAbility("Plains add W",
+#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
+#                 lambda g, s: ManaAbility.AddColor(g, s, "W")))
+# 
+# Island = Land("Island", ["basic", "island"])
+# Island.activated.append(
+#     ManaAbility("Island add U",
+#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
+#                 lambda g, s: ManaAbility.AddColor(g, s, "U")))
+# 
+# ###---shock lands
+# AsEnterShock = AsEnterEffect("ShockIntoPlay", Land.ShockIntoPlay)
+# 
+# TempleGarden = Land("TempleGarden", ["forest", "plains"])
+# TempleGarden.activated.append(
+#     ManaAbility("TempleGarden add W/G",
+#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
+#                 lambda g, s: ManaAbility.AddDual(g, s, "W", "G")))
+# TempleGarden.trig_move.append(AsEnterShock)
+# 
+# BreedingPool = Land("BreedingPool", ["forest", "island"])
+# BreedingPool.activated.append(
+#     ManaAbility("BreedingPool add U/G",
+#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
+#                 lambda g, s: ManaAbility.AddDual(g, s, "U", "G")))
+# BreedingPool.trig_move.append(AsEnterShock)
+# 
+# HallowedFountain = Land("HallowedFountain", ["plains", "island"])
+# HallowedFountain.activated.append(
+#     ManaAbility("HallowedFountain add W/U",
+#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
+#                 lambda g, s: ManaAbility.AddDual(g, s, "W", "U")))
+# HallowedFountain.trig_move.append(AsEnterShock)
+# 
+# 
+# ###---fetch lands
+# 
+# def FetchLandType(gamestate, source, keywords):
+#     targets = []
+#     for card in gamestate.deck:
+#         if "land" in card.rules_text.keywords:
+#             # if it's the right type of land...
+#             if any([t in keywords for t in card.rules_text.keywords]):
+#                 # and if we don't have it already...
+#                 if not any([card.is_equiv_to(ob) for ob in targets]):
+#                     targets.append(card)
+#     if len(targets) == 0:  # fail to find. fetch still sacrificed
+#         newstate, [fetch] = gamestate.copy_and_track([source])
+#         newstate.LoseLife(1)
+#         newstate.MoveZone(fetch, ZONE.GRAVE)
+#         newstate.Shuffle()
+#         return newstate.ClearSuperStack()
+#     universes = []
+#     for landcard in targets:
+#         newstate, [newland, fetch] = gamestate.copy_and_track([landcard, source])
+#         newstate.LoseLife(1)
+#         newstate.MoveZone(fetch, ZONE.GRAVE)
+#         newstate.MoveZone(newland, ZONE.FIELD)
+#         newstate.Shuffle()
+#         universes += newstate.ClearSuperStack()
+#     return universes
+# 
+# 
+# WindsweptHeath = Land("WindsweptHeath", [])
+# WindsweptHeath.trig_move.append(
+#     AsEnterEffect("Fetch G/W",
+#                   lambda g, s: FetchLandType(g, s, ["forest", "plains"])))
+# 
+# FloodedStrand = Land("FloodedStrand", [])
+# FloodedStrand.trig_move.append(
+#     AsEnterEffect("Fetch G/W",
+#                   lambda g, s: FetchLandType(g, s, ["island", "plains"])))
+# 
+# MistyRainforest = Land("MistyRainforest", [])
+# MistyRainforest.trig_move.append(
+#     AsEnterEffect("Fetch G/W",
+#                   lambda g, s: FetchLandType(g, s, ["forest", "island"])))
+# =============================================================================
 
-###---basic lands
-
-Forest = Land("Forest", ["basic", "forest"])
-Forest.activated.append(
-    ManaAbility("Forest add G",
-                Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-                lambda g, s: ManaAbility.AddColor(g, s, "G")))
-
-Plains = Land("Plains", ["basic", "plains"])
-Plains.activated.append(
-    ManaAbility("Plains add W",
-                Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-                lambda g, s: ManaAbility.AddColor(g, s, "W")))
-
-Island = Land("Island", ["basic", "island"])
-Island.activated.append(
-    ManaAbility("Island add U",
-                Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-                lambda g, s: ManaAbility.AddColor(g, s, "U")))
-
-###---shock lands
-AsEnterShock = AsEnterEffect("ShockIntoPlay", Land.ShockIntoPlay)
-
-TempleGarden = Land("TempleGarden", ["forest", "plains"])
-TempleGarden.activated.append(
-    ManaAbility("TempleGarden add W/G",
-                Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-                lambda g, s: ManaAbility.AddDual(g, s, "W", "G")))
-TempleGarden.trig_move.append(AsEnterShock)
-
-BreedingPool = Land("BreedingPool", ["forest", "island"])
-BreedingPool.activated.append(
-    ManaAbility("BreedingPool add U/G",
-                Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-                lambda g, s: ManaAbility.AddDual(g, s, "U", "G")))
-BreedingPool.trig_move.append(AsEnterShock)
-
-HallowedFountain = Land("HallowedFountain", ["plains", "island"])
-HallowedFountain.activated.append(
-    ManaAbility("HallowedFountain add W/U",
-                Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-                lambda g, s: ManaAbility.AddDual(g, s, "W", "U")))
-HallowedFountain.trig_move.append(AsEnterShock)
 
 
-###---fetch lands
-
-def FetchLandType(gamestate, source, keywords):
-    targets = []
-    for card in gamestate.deck:
-        if "land" in card.rules_text.keywords:
-            # if it's the right type of land...
-            if any([t in keywords for t in card.rules_text.keywords]):
-                # and if we don't have it already...
-                if not any([card.is_equiv_to(ob) for ob in targets]):
-                    targets.append(card)
-    if len(targets) == 0:  # fail to find. fetch still sacrificed
-        newstate, [fetch] = gamestate.copy_and_track([source])
-        newstate.LoseLife(1)
-        newstate.MoveZone(fetch, ZONE.GRAVE)
-        newstate.Shuffle()
-        return newstate.ClearSuperStack()
-    universes = []
-    for landcard in targets:
-        newstate, [newland, fetch] = gamestate.copy_and_track([landcard, source])
-        newstate.LoseLife(1)
-        newstate.MoveZone(fetch, ZONE.GRAVE)
-        newstate.MoveZone(newland, ZONE.FIELD)
-        newstate.Shuffle()
-        universes += newstate.ClearSuperStack()
-    return universes
 
 
-WindsweptHeath = Land("WindsweptHeath", [])
-WindsweptHeath.trig_move.append(
-    AsEnterEffect("Fetch G/W",
-                  lambda g, s: FetchLandType(g, s, ["forest", "plains"])))
 
-FloodedStrand = Land("FloodedStrand", [])
-FloodedStrand.trig_move.append(
-    AsEnterEffect("Fetch G/W",
-                  lambda g, s: FetchLandType(g, s, ["island", "plains"])))
 
-MistyRainforest = Land("MistyRainforest", [])
-MistyRainforest.trig_move.append(
-    AsEnterEffect("Fetch G/W",
-                  lambda g, s: FetchLandType(g, s, ["forest", "island"])))
 
 # ##---------------------------------------------------------------------------##
 # class Recruiter(RulesText.Creature):

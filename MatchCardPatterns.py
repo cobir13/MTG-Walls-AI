@@ -6,12 +6,8 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from typing import List
-from GameState import GameState
 from Cardboard import Cardboard
-from RulesText import RulesText,Creature
-import ManaHandler
-import Choices
-import ZONE
+from RulesText import RulesText
 import Getters as Get
 
 

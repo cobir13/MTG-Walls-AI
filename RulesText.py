@@ -7,17 +7,15 @@ Created on Mon Dec 28 21:13:28 2020
 
 from typing import List
 
-from ManaHandler import ManaCost, ManaPool
-import Costs
 import ZONE
-import Abilities
+import Verbs
 
 
 ##---------------------------------------------------------------------------##
 
 class RulesText():
 
-    def __init__(self, name:str, cost:Costs.Cost, keywords:List[str]):
+    def __init__(self, name:str, cost:Verbs.Verb, keywords:List[str]):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
@@ -48,10 +46,10 @@ class RulesText():
     # distinction between Cardboard and RulesText. This distinction makes it much
     # easier to copy and iterate Gamestates.
 
-    def CanAfford(self, gamestate, source):
+    def can_afford(self, gamestate, source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
-        return self.cost.CanAfford(gamestate, source)
+        return self.cost.can_afford(gamestate, source)
 
     ###----------------------------------------------------------------------------
 
@@ -69,18 +67,16 @@ class Creature(Permanent):
         super().__init__(name, cost, keywords)
         self.power = power
         self.toughness = toughness
-        # if "creature" not in self.keywords:
-        #     self.keywords = ["creature"] + self.keywords
 
 
-class Human(Creature):
-    pass
+# class Human(Creature):
+#     pass
 
-class Plant(Creature):
-    pass
+# class Plant(Creature):
+#     pass
 
-class Wall(Creature):
-    pass
+# class Wall(Creature):
+#     pass
 
 
 
@@ -88,22 +84,13 @@ class Wall(Creature):
 
 class Land(Permanent):
 
-    def __init__(self, name, keywords):
-        # build the "cost" of casting a land
-        def canplayland(gamestate, source):
-            return not gamestate.has_played_land
+    def __init__(self, name, keywords):        
+        super().__init__(name, Verbs.PlayLandForTurn, keywords)        
+        # if "land" not in self.keywords:
+        #     self.keywords = ["land"] + self.keywords
 
-        def playland(gamestate, source):
-            # doesn't actually move, just pays the "cost" of saying we've played a land
-            newstate, [newsource] = gamestate.copy_and_track([source])
-            newstate.has_played_land = True
-            return [(newstate, newsource)]
 
-        cost = Costs.Cost(None, canplayland, playland)
-        # use normal initializer
-        super().__init__(name, cost, keywords)
-        if "land" not in self.keywords:
-            self.keywords = ["land"] + self.keywords
+
 
     def EnterTapped(gamestate, source):
         """useful for tap-lands. GameState,Cardboard -> [GameState]. MUTATES."""
@@ -130,34 +117,30 @@ class Land(Permanent):
 
 class Spell(RulesText):
 
-    def __init__(self, name, cost, keywords, resolve_fn, dest_zone=ZONE.GRAVE):
+    def __init__(self, name, cost:Verbs.Verb, keywords:List[str], 
+                 effect:Verbs.Verb, dest_zone=ZONE.GRAVE):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
         keywords (list(str)):
                       List of lowercase tags describing this card. Includes
                       MtG types as well as relevant keywords.
-        resolve_fn  : gamestate,source -> [GameStates]
-                      Applies the effect of the card.
-                      NOTE: the card itself should still be on the stack when
-                      resolve_fn is done. It will be moved automatically later.
-                      NOTE: the super_stack should NOT be cleared by resolve_fn.
                       
         dest_zone   : The ZONE the Cardboard is moved to after resolution.
         """
         super().__init__(name, cost, keywords)
-        self.dest_zone = dest_zone
-        self.resolve_fn = resolve_fn
+        self.cast_destination = dest_zone
+        self.effect = effect
 
-    def ResolveSpell(self, gamestate):
-        """Note: assumes that the relevant Cardboard is the final element of
-        the stack."""
-        card = gamestate.stack[-1]
-        assert (self is card.rules_text)
-        statelist = []
-        for state in self.resolve_fn(gamestate, card):  # [GameStates]
-            # nothing new on stack. triggers go to SUPERstack, not stack.
-            assert (card.is_equiv_to(state.stack[-1]))
-            state.MoveZone(state.stack[-1], self.dest_zone)
-            statelist += state.ClearSuperStack()
-        return statelist
+    # def ResolveSpell(self, gamestate):
+    #     """Note: assumes that the relevant Cardboard is the final element of
+    #     the stack."""
+    #     card = gamestate.stack[-1]
+    #     assert (self is card.rules_text)
+    #     statelist = []
+    #     for state in self.resolve_fn(gamestate, card):  # [GameStates]
+    #         # nothing new on stack. triggers go to SUPERstack, not stack.
+    #         assert (card.is_equiv_to(state.stack[-1]))
+    #         state.MoveZone(state.stack[-1], self.dest_zone)
+    #         statelist += state.ClearSuperStack()
+    #     return statelist

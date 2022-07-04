@@ -9,14 +9,21 @@ from typing import List
 from GameState import GameState
 from Cardboard import Cardboard
 import ManaHandler
-import Choices
 import ZONE
 import MatchCardPatterns as Match
 import GettersAndChoosers as Get
 
-from RulesText import Creature,Spell
+from RulesText import Creature,Spell,Land
 
 import Actions
+
+
+
+class WinTheGameError(Exception):
+    pass
+
+class LoseTheGameError(Exception):
+    pass
 
 
 
@@ -27,7 +34,7 @@ class Verb:
     def __init__(self, getter_list:List[Get.Getter]):
         self.getter_list = getter_list
     
-    def can_be_done(self, state:GameState, source:Cardboard, choices:list) -> bool:
+    def can_be_done(self, state:GameState, source:Cardboard) -> bool:
         return True
         
     def do_it(self, state:GameState, source:Cardboard, choices:list):
@@ -145,7 +152,6 @@ class VerbOnTarget(Verb):
         return super().is_type(verb_type) or self.verb.is_type(verb_type)
     
     
-    
 class ManyVerbs(Verb):
     def __init__(self, list_of_verbs:List[Verb]):
         super().__init__( [] )
@@ -220,12 +226,9 @@ class ManyVerbs(Verb):
     
     def is_type(self, verb_type):
         return any( [v.is_type(verb_type) for v in self.list_of_verbs] )
-    
-    
+       
 #------------------------------------------------------------------------------
     
-
-
 class VerbManyTimes(Verb):
     def __init__(self, verb:Verb, getter:Get.Integer):
         super().__init__([getter])
@@ -239,7 +242,6 @@ class VerbManyTimes(Verb):
         num_to_repeat = choices[0]        
         multi_verb = ManyVerbs( [self.verb]*num_to_repeat )
         return multi_verb.do_it(state, source, choices[1:])
-
 
     def __str__(self):
         return super().__str__(self)+"(%s)" %str(self.verb)
@@ -264,15 +266,8 @@ class VerbManyTimes(Verb):
     
     def is_type(self, verb_type):
         return super().is_type(verb_type) or self.action.is_type(verb_type)
-    
-    
-
-
-
-
-    
+        
 #------------------------------------------------------------------------------
-
 
 # =============================================================================
 # class PayMana(VerbAtomic):
@@ -304,7 +299,6 @@ class VerbManyTimes(Verb):
 #         super().do_it(state,subject,choices)  #adds triggers to super_stack
 # =============================================================================
 
-
 class PayMana(VerbAtomic):
     """deducts the given amount of mana from the gamestate's mana pool"""
     def __init__(self, mana_string_getter:Get.Const ):
@@ -322,9 +316,10 @@ class PayMana(VerbAtomic):
         mana_string = self.getter_list[0].get(state,source)
         mana_cost = ManaHandler.ManaCost( mana_string)
         state.pool.PayCost(mana_cost)
-        #add triggers to super_tack, reduce length of choices list
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
         
+# ----------   
     
 class AddMana(VerbAtomic):
     """adds the given amount of mana to the gamestate's mana pool"""
@@ -338,7 +333,37 @@ class AddMana(VerbAtomic):
         mana_string = self.getter_list[0].get(state,source)
         mana_to_add = ManaHandler.ManaPool( mana_string)
         state.pool.AddMana(mana_to_add)
-        #add triggers to super_tack, reduce length of choices list
+        #add triggers to super_stack, reduce length of choices list
+        return super().do_it(state,source,choices)
+
+# ----------
+
+class LoseOwnLife(VerbAtomic):
+    def __init__(self, damage_getter:Get.Integer):
+        super().__init__( [damage_getter] )
+        
+    def can_be_done(self, state, source ,choices):
+        return True
+    
+    def do_it(self, state, source, choices): 
+        damage = choices[0]
+        state.life -= damage
+        #add triggers to super_stack, reduce length of choices list
+        return super().do_it(state,source,choices)
+
+# ----------
+
+class DealDamageToOpponent(VerbAtomic):
+    def __init__(self, damage_getter:Get.Integer):
+        super().__init__( [damage_getter] )
+        
+    def can_be_done(self, state, source ,choices):
+        return True
+    
+    def do_it(self, state, source, choices): 
+        damage = choices[0]
+        state.opponentlife -= damage
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
 
 # ----------
@@ -354,9 +379,10 @@ class TapSelf(VerbOnSourceCard):
     
     def do_it(state, source ,choices):
         source.tapped = True
-        #add triggers to super_tack, reduce length of choices list
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
 
+# ----------
 
 class TapSymbol(TapSelf):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
@@ -368,6 +394,29 @@ class TapSymbol(TapSelf):
     
     def __str__(self):
         return "{T}"
+
+# ----------
+
+class TapAny(VerbOnTarget):
+    
+    def __init__(self, patterns:List[Match.CardPattern] ):
+        getter = Get.Chooser( Get.ListFromZone(patterns,ZONE.FIELD), 1, False)
+        super().__init__( TapSelf(), [getter] )
+
+# ----------
+
+class UntapSelf(VerbOnSourceCard):
+    
+    def __init__(self):
+        super().__init__([])
+    
+    def can_be_done(self, state, source ,choices):
+        return (source.tapped and source.zone == ZONE.FIELD)
+    
+    def do_it(state, source ,choices):
+        source.tapped = False
+        #add triggers to super_stack, reduce length of choices list
+        return super().do_it(state,source,choices)
 
 # ----------
 
@@ -385,7 +434,7 @@ class ActivateOncePerTurn(VerbOnSourceCard):
     
     def do_it(self, state, source, choices):
         source.add_counter(self.counter_text)
-        #add triggers to super_tack, reduce length of choices list
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
         
 # ----------
@@ -400,7 +449,7 @@ class ActivateOnlyAsSorcery(VerbAtomic):
         return len(state.stack)==0
     
     def do_it(self, state, source, choices):
-        #add triggers to super_tack, reduce length of choices list
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
     
 # ----------
@@ -412,13 +461,13 @@ class MoveToZone(VerbOnSourceCard):
         self.origin = None #to let triggers check where card moved from
     
     def can_be_done(self, state, subject, choices):
-        if subject.zone in [ZONE.DECK,ZONE.HAND,ZONE.FIELD,ZONE.GRAVE,ZONE.STACK]:
+        if subject.zone in [ZONE.DECK,ZONE.HAND,ZONE.FIELD,ZONE.GRAVE]:
             return  subject in state.get_zone(subject.zone)
     
     def do_it(self, state, source, choices):
         self.origin = source.zone  #to let triggers check where card moved from
         #remove from origin
-        if self.origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
+        if self.origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
             state.get_zone(self.origin).remove(source)
         # add to destination
         source.zone = self.destination
@@ -431,7 +480,7 @@ class MoveToZone(VerbOnSourceCard):
         source.tapped = False
         source.summon_sick = True
         source.counters = [c for c in source.counters if c[0]=="$"] #sticky counters stay
-        #add triggers to super_tack, reduce length of choices list
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
 
 # ----------
@@ -446,10 +495,40 @@ class DrawCard(VerbAtomic):
         return True  #yes, even if the deck is 0, you CAN draw. you'll just lose
     
     def do_it(self, state, source, choices):
-        mover = MoveToZone(ZONE.HAND)
-        mover.do_it(state, state.deck[0]) #adds move triggers to super_stack
-        #add triggers to super_tack, reduce length of choices list
+        if len(state.deck)>0:
+            mover = MoveToZone(ZONE.HAND)
+            mover.do_it(state, state.deck[0]) #adds move triggers to super_stack
+            #add triggers to super_stack, reduce length of choices list
+            return super().do_it(state,source,choices)
+        else:
+            raise LoseTheGameError
+    
+# ----------
+
+class PlayLandForTurn(VerbAtomic):
+    """Doesn't actually move any cards, just toggles the gamestate to say
+    that we have played a land this turn"""
+    
+    def __init__(self):
+        super().__init__([])
+    
+    def can_be_done(self, state, subject ,choices):
+        return not state.has_played_land
+    
+    def do_it(self, state, source, choices):
+        state.has_played_land = True
+        #add triggers to super_stack, reduce length of choices list
         return super().do_it(state,source,choices)
+
+# ----------
+
+class AsEnterEffect(Verb):
+    pass #TODO
+
+
+
+
+
 
 #------------------------------------------------------------------------------
 
@@ -467,16 +546,83 @@ class DrawCard(VerbAtomic):
     
 #------------------------------------------------------------------------------
 
-
 class ActivateAbility(VerbAtomic):
     def __init__(self):
         super().__init__([])
-        
+
+    def can_be_done(self, state, source, choices):
+        """Activate the ability which is the first element of
+        `choices`.  The source of the ability is assumed to be
+        the `source` Cardboard.
+        """
+        assert(len(choices)==1)
+        ability = choices[0]
+        payment_choices = ability.cost.choose_choices(state,source)
+        return any( [ability.cost.can_afford(state,source,ch)
+                     for ch in payment_choices])
     
+    def do_it(self, state, source, choices):
+        """Activate the ability which is the first element of
+        `choices`, including making any choices necessary to do that.
+        The source of the ability is assumed to be the `source`
+        Cardboard.
+        """
+        assert(len(choices)==1)
+        ability = choices[0]
+        # check to make sure the execution is legal
+        if not ability.cost.can_afford(state,source,choices=None):
+            return []
+        game,[spell] = state.copy_and_track([source])
+        # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+        payment_choices = ability.cost.choose_choices(game,spell)
+        # 601.2c: choose targets and modes
+        target_choices = []
+        if isinstance(spell, Spell):
+            target_choices = ability.effect.choose_choices(game,spell)            
+        # 601.2f: determine total cost
+        # 601.2g: activate mana abilities -- I don't actually permit this.
+        # 601.2h: pay costs
+        new_tuple_list = [] # (GameState, source, choices) list
+        for choices1 in payment_choices:
+            for choices2 in target_choices:
+                # concatenate choice lists. the casting will chew through all
+                # the payment choices, leaving only the target choices in
+                # the resulting tuples. Then attach those to the StackCardboard
+                new_tuple_list = []
+                all_choices = choices1+choices2 # concatenated lists
+                if ability.cost.single_output: #mutates
+                    g,things = state.copy_and_track([source]+all_choices)
+                    new_tuple_list += ability.cost.do_it(g,things[0],things[1:])
+                else:
+                    new_tuple_list += ability.cost.do_it(game,spell,all_choices)
+        final_results = []
+        for g,s,targets in new_tuple_list:
+            # create the StackAbility and put it on the stack.
+            g.stack.append( GameState.StackAbility(ability, s, targets) )            
+            # 601.2i: ability has now "been activated".  Trigger abilities.
+            # for actually activating the ability
+            for g2,_,_ in super().do_it(g,s,[]):
+                # Mana Abilities resolve instantly
+                if ability.is_type(AddMana):
+                    games_list = g2.stack[-1].resolve(g)
+                else:
+                    games_list = [g2]
+                # clear the super_stack
+                for g3 in games_list:
+                    final_results += g3.ClearSuperStack()
+        return final_results
 
 
+    def choose_choices(self, state:GameState, source:Cardboard):
+        return []
 
+    def single_output(self):
+        return False
+    
+    def num_inputs(self):
+        return 1
 
+#------------------------------------------------------------------------------  
 
 class CastCard(VerbOnSourceCard):
     def __init__(self):
@@ -484,14 +630,16 @@ class CastCard(VerbOnSourceCard):
 
     def can_be_done(self, state, source, *args):
         """Cast the `source` card"""
-        return source.cost.can_afford(state,source,choices=None)
+        payment_choices = source.cost.choose_choices(state,source)
+        return any( [source.cost.can_afford(state,source,ch)
+                     for ch in payment_choices])
     
     def do_it(self, state, source, *args):
         """Puts the `source` card on the stack, including making any
         choices necessary to do that. Returns (GameState,Cardboard)
         copies but does not mutate."""
         # check to make sure the execution is legal
-        if not source.rules_text.cost.can_afford(state,source,choices=None):
+        if not source.cost.can_afford(state,source,choices=None):
             return []
         game,[spell] = state.copy_and_track([source])
         # 601.2a: remove spell from hand in prep for moving to stack
@@ -525,13 +673,19 @@ class CastCard(VerbOnSourceCard):
                 else:
                     new_tuple_list += spell.cost.do_it(game,spell,all_choices)
         final_results = []
-        for g,s,targets in new_tuple_list:
-            # finally finish moving the card to the stack (601.2a)
-            g.stack.append( Actions.StackCardboard(s,targets) )
+        for g,c,targets in new_tuple_list:
+            # Finally finish moving the card to the stack (601.2a)
+            # Special exception for lands, which go directly to play
+            if c.has_type(Land):
+                mover = MoveToZone(ZONE.FIELD)
+                mover.do_it(g,c,targets)
+            else:
+                g.stack.append( GameState.StackCardboard(c,targets) )
             # 601.2i: spell has now "been cast".  trigger abilities
             # I already triggered abilities from paying costs. Now just
             # trigger for actually casting the spell, and clear super_stack.
-            for g2,_,_ in super().do_it(g,s,[]):
+            for g2,_,_ in super().do_it(g,c,[]):
+                g.StateBasedActions()
                 final_results += g2.ClearSuperStack()
         return final_results
 
@@ -548,29 +702,6 @@ class CastCard(VerbOnSourceCard):
     def single_output(self):
         return False
     
-    # def num_inputs(self):
-    #     return 0
-
-
-
-
-# ----------
-
-# ----------
-
-
-class TapAny(Verb):
-    
-    def __init__(self, patterns:List[Match.CardPattern] ):
-        getter = Get.Chooser( Get.ListFromZone(patterns,ZONE.FIELD), 1, False)
-        super().__init__( TapSelf(), [getter] )
-
-
-
-
-
-
-
-        
-        
+    def num_inputs(self):
+        return 0
         

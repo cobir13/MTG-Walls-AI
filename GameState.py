@@ -10,19 +10,15 @@ import random
 from typing import List
 
 import Cardboard
-from Abilities import StackEffect, ManaAbility, AsEnterEffect
 import RulesText
 import ZONE
 from ManaHandler import ManaPool
 import Choices
 import tkinter as tk
 
-class WinTheGameError(Exception):
-    pass
+import Verbs
 
 
-class LoseTheGameError(Exception):
-    pass
 
 
 """
@@ -252,22 +248,6 @@ class GameState:
 
     ###-----MUTATING FUNCTIONS. They all return a list of StackEffects
 
-    def AddToPool(self, colorstr):
-        """MUTATES. Adds any triggered StackEffects to the super_stack."""
-        self.pool.AddMana(colorstr)
-
-    def TapPermanent(self, cardboard):
-        """MUTATES. Adds any triggered StackEffects to the super_stack."""
-        cardboard.tapped = True
-
-    def UntapPermanent(self, cardboard):
-        """MUTATES. Adds any triggered StackEffects to the super_stack."""
-        cardboard.tapped = False
-
-    def LoseLife(self, amount):
-        """MUTATES. Adds any triggered StackEffects to the super_stack."""
-        self.life -= amount
-
     def get_zone(self, zonename):
         if zonename == ZONE.DECK:
             zone = self.deck
@@ -283,43 +263,45 @@ class GameState:
             raise IndexError
         return zone
 
-    def MoveZone(self, cardboard, destination):
-        """Move the specified piece of cardboard from the zone it is currently
-        in to the specified destination zone.  Raises IndexError if the
-        cardboard is not in the zone it claims to be in.
-        Adds any triggered StackEffects to the super_stack.
-        MUTATES.
-        """
-        # remove from origin
-        origin = cardboard.zone
-        if origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
-            oldlist = self.get_zone(origin)
-            assert (cardboard in oldlist)
-            oldlist.remove(cardboard)
-        # add to destination
-        cardboard.zone = destination
-        zonelist = self.get_zone(destination)
-        zonelist.append(cardboard)
-        if destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:  # these zones must
-            zonelist.sort(key=Cardboard.Cardboard.get_id)  # always be sorted
-        # any time you change zones, reset the cardboard parameters
-        cardboard.tapped = False
-        cardboard.summon_sick = True
-        cardboard.counters = []
-        # return a list of anything that triggers off of this move! (this
-        # includes "as enters" abilities as well as normal etbs)
-        for source in self.field + self.grave + self.hand:
-            for abil in source.rules_text.trig_move:
-                if abil.IsTriggered(self, source, cardboard, origin):
-                    newEffect = StackEffect(source, [cardboard], abil)
-                    self.super_stack.append(newEffect)
+# =============================================================================
+#     def MoveZone(self, cardboard, destination):
+#         """Move the specified piece of cardboard from the zone it is currently
+#         in to the specified destination zone.  Raises IndexError if the
+#         cardboard is not in the zone it claims to be in.
+#         Adds any triggered StackEffects to the super_stack.
+#         MUTATES.
+#         """
+#         # remove from origin
+#         origin = cardboard.zone
+#         if origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE, ZONE.STACK]:
+#             oldlist = self.get_zone(origin)
+#             assert (cardboard in oldlist)
+#             oldlist.remove(cardboard)
+#         # add to destination
+#         cardboard.zone = destination
+#         zonelist = self.get_zone(destination)
+#         zonelist.append(cardboard)
+#         if destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:  # these zones must
+#             zonelist.sort(key=Cardboard.Cardboard.get_id)  # always be sorted
+#         # any time you change zones, reset the cardboard parameters
+#         cardboard.tapped = False
+#         cardboard.summon_sick = True
+#         cardboard.counters = []
+#         # return a list of anything that triggers off of this move! (this
+#         # includes "as enters" abilities as well as normal etbs)
+#         for source in self.field + self.grave + self.hand:
+#             for abil in source.rules_text.trig_move:
+#                 if abil.IsTriggered(self, source, cardboard, origin):
+#                     newEffect = StackEffect(source, [cardboard], abil)
+#                     self.super_stack.append(newEffect)
+# =============================================================================
 
     ##-----------------------------------------------------------------------##
 
     def StateBasedActions(self):
         """MUTATES. Performs any state-based actions like killing creatures if
         toughness is less than 0.
-        Adds any triggered StackEffects to the super_stack.
+        Adds any triggered StackAbilities to the super_stack.
         """
         i = 0
         while i < len(self.field):
@@ -334,37 +316,29 @@ class GameState:
         # legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
 
     def UntapStep(self):
-        """MUTATES. Adds any triggered StackEffects to the super_stack."""
+        """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         # newstate,_ = self.copy_and_track([])  #copy, but nothing to track
         self.pool = ManaPool("")
         self.stack = []
         self.turn_count += 1
         self.has_played_land = False
-        for cardboard in self.field:
-            self.UntapPermanent(cardboard)  # adds effects to self's super_stack
-            cardboard.summon_sick = False
-            cardboard.counters = [c for c in cardboard.counters if c[0] != "@"]
+        for card in self.field:
+            Verbs.UntapSelf().do_it(self,card,[])
+            card.summon_sick = False
+            # erase the invisible counters
+            card.counters = [c for c in card.counters if c[0] not in ("@","$")]
 
     def UpkeepStep(self):
-        """MUTATES. Adds any triggered StackEffects to the super_stack."""
+        """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         for cardboard in self.hand + self.field + self.grave:
             for abil in cardboard.rules_text.trig_upkeep:
-                newEffect = StackEffect(cardboard, [], abil)
+                newEffect = StackAbility(abil,cardboard,[])
                 self.super_stack.append(newEffect)
 
     def Draw(self):
-        """MUTATES. Adds any triggered StackEffects to the super_stack.
+        """MUTATES. Adds any triggered StackAbilities to the super_stack.
            Draws from index 0 of deck."""
-        if len(self.deck) > 0:
-            self.MoveZone(self.deck[0], ZONE.HAND)  # adds effects to super_stack
-            # #return a list of anything that triggers off of "draw" specifically
-            # for source in self.field+self.grave+self.hand:
-            #     for abil in source.cardtype.trig_draw:
-            #         if abil.IsTriggered(state,source,cardboard,origin):
-            #             newEffect = StackEffect(source,[cardboard],abil)
-            #             self.super_stack.append( newEffect )
-        else:
-            raise LoseTheGameError
+        Verbs.DrawCard().do_it(self,None,None)
 
     ###-----BRANCHING FUNCTIONS. Return a list of gamestates but do not mutate
 
@@ -374,24 +348,13 @@ class GameState:
             given Cardboard has been cast and any effects of that casting have
             been put onto the super_stack.
         """
+        caster = Verbs.CastCard()
         # check to make sure the execution is legal
-        if not cardboard.rules_text.cost.CanAfford(self, cardboard):
+        if caster.can_be_done(self,cardboard,None):
+            caster.do_it(self,cardboard,None)
+        else:
             return []
-        cast_list = []
-        for state, card in cardboard.rules_text.cost.Pay(self, cardboard):
-            # Iterate through all possible ways the cost could have been paid.
-            # Each has a GameState and a Cardboard being cast. Move the card
-            # being cast to the stack, which adds any triggers to super_stack.
-            if card.has_type(RulesText.Land):
-                # special exception for Lands, which don't use the stack. Just
-                # move it directly to play and then resolve super_stack
-                # state is a copy so can mutate it safely.
-                state.MoveZone(card, ZONE.FIELD)
-            else:
-                state.MoveZone(card, ZONE.STACK)
-            state.StateBasedActions()  # check state-based actions
-            cast_list += state.ClearSuperStack()  # list of GameStates
-        return cast_list
+
 
     def ActivateAbilities(self, cardboard, ability):
         """
@@ -399,56 +362,29 @@ class GameState:
             ActivatedAbility of the source Cardboard has been paid for and put
             on the stack.
         """
-        # check to make sure the execution is legal
-        if not ability.CanAfford(self, cardboard):
-            return []
-        # pay for ability
-        pairlist = ability.Pay(self, cardboard)  # [(GameState,Cardboard)] pairs
-        statelist = []
-        for game, source in pairlist:
-            if isinstance(ability, ManaAbility):
-                # special exception for ManaAbilities, which don't use the stack
-                statelist += ability.Execute(game, source)
-            else:
-                # add ability to stack
-                game.stack.append(StackEffect(source, [], ability))
-                statelist.append(game)
-        return statelist
+        activator = Verbs.ActivateAbility()
+        if activator.can_be_done(self,cardboard,[ability]):
+            tuple_list = activator.do_it(self,cardboard,[ability])
+            return [g for g,_,_ in tuple_list]
+
 
     def ResolveTopOfStack(self):
         """
-        DOES NOT MUTATE. Instead, returns a list of GameStates in which the
-            top item of the stack has been resolved.
-        If it was a Cardboard, it has been moved to the appropriate zone. If it
-            was a Spell specifically, the effect has been resolved. Any
-            enter-the-battlefield effects or similar effects that trigger
-            based on motion been placed on the stack.
-        If it was an ability (or really, a tuple of source,trigger,ability), 
-            then the ability has been resolved and any new abilities that
-            triggered as a result have been placed on the stack."""
+        DOES NOT MUTATE. Instead, returns a list of GameStates in
+            which the top item of the stack has been resolved.
+        If it was a StackCardboard, the card has been moved to the
+            appropriate zone. If it was a Spell specifically, the
+            effect has been resolved. Any enter-the-battlefield
+            effects or similar effects that trigger based on motion
+            have been placed on the stack.
+        If it was a StackAbility then the ability has been resolved
+            and any new abilities that triggered as a result have
+            been placed on the stack."""
         if len(self.stack) == 0:
             return []
-        elif isinstance(self.stack[-1], Cardboard.Cardboard):
-            card = self.stack[-1]
-            # Copy the gamestate so that we can mutate the copy safely.
-            # Move the card to its destination zone. This will probably put
-            # some effect on the super_stack, which we will then resolve
-            newstate = self.copy()
-            card = newstate.stack[-1]
-            if card.has_type(RulesText.Spell):
-                # returns [GameStates]. Card also moved to destination zone.
-                return card.rules_text.ResolveSpell(newstate)
-            elif card.has_type(RulesText.Permanent):
-                newstate.MoveZone(card, ZONE.FIELD)  # adds effects to super_stack
-                return newstate.ClearSuperStack()  # [GameStates]
-            else:
-                raise IOError("not permanent, instant, OR sorcery???")
-        elif isinstance(self.stack[-1], StackEffect):
-            newstate, _ = self.copy_and_track([])
-            effect = newstate.stack.pop(-1)
-            # this already includes putting all resulting triggers on the stack
-            # and clearing the super_stack
-            return effect.Enact(newstate)  # [GameStates]
+        assert( isinstance(self.stack[-1],StackObject) )
+        return self.stack[-1].resolve(self)  #
+
 
     def ClearSuperStack(self):
         """Returns a list of GameStates where the objects on the super_stack
@@ -464,13 +400,13 @@ class GameState:
                                              "Add to stack"):
             ii = item[0]  # index first, then object second
             newstate = self.copy()
-            effect = newstate.super_stack.pop(ii)
-            if isinstance(effect.ability, AsEnterEffect):
-                # if the StackEffect contains an AsEntersEffect, then enact
+            stack_ability = newstate.super_stack.pop(ii)
+            if stack_ability.ability.is_type(Verbs.AsEnterEffect):
+                # if the ability contains an AsEntersEffect, then enact
                 # it immediately rather than putting it on the stack.
-                results += effect.Enact(newstate)
+                results += stack_ability.resolve(self)
             else:
-                newstate.stack.append(effect)
+                newstate.stack.append(stack_ability)
                 results.append(newstate)
         # recurse
         finalresults = []
@@ -494,8 +430,11 @@ class GameState:
             addobject = False
             for ability in source.get_activated():
                 # check whether price can be paid
-                if ability.CanAfford(self, source):
-                    e = StackEffect(source, [], ability)
+                if ability.can_afford(self, source):
+                    # here StackAbility is convenient container. It is NOT
+                    # added to the stack yet. Ability has NOT been properly
+                    # activated yet.
+                    e = StackAbility(ability, source, [])
                     effects.append(e)
                     addobject = True
             if addobject:  # only add each object once, even if many abilities
@@ -514,7 +453,7 @@ class GameState:
                 continue  # skip cards that are equivalent to cards already used
             if len(self.stack) > 0 and "instant" not in card.rules_text.keywords:
                 continue  # if stack is full, can only cast instants
-            if card.rules_text.CanAfford(self, card):
+            if card.rules_text.can_afford(self, card):
                 cards.append(card)
                 activeobjects.append(card)
         return cards
@@ -583,235 +522,237 @@ class GameState:
 ###----------------------------------------------------------------------------
 
 
-class ManualGame(tk.Tk):
-
-    def __init__(self, startstate):
-        super().__init__()
-        self.history = [startstate]
-        # if you win or lose, game raises an error
-        self.report_callback_exception = self.HandleError
-        # how to pass and allow stack to resolve. sort of like F2 on MagicOnline
-        self.var_resolveall = tk.IntVar(self, 1)
-        # stack
-        tk.Label(self, text="STACK", wraplength=1).grid(row=0, column=0)
-        self.stack = tk.Frame(self, borderwidth=1, relief="solid")
-        self.stack.grid(row=0, column=1, padx=5, pady=5, sticky="W")
-        # current situation
-        tk.Label(self, text="STATE", wraplength=1).grid(row=1, column=0)
-        self.status = tk.Frame(self, borderwidth=1, relief="solid")
-        self.status.grid(row=1, column=1, padx=5, pady=5, sticky="W")
-        # battlefield
-        tk.Label(self, text="FIELD", wraplength=1).grid(row=2, column=0)
-        self.field = tk.Frame(self, bg="lightgray", borderwidth=1, relief="solid")
-        self.field.grid(row=2, column=1, padx=5, pady=15, sticky="W")
-        # hand
-        tk.Label(self, text="HAND", wraplength=1).grid(row=3, column=0)
-        self.hand = tk.Frame(self, borderwidth=1, relief="solid")
-        self.hand.grid(row=3, column=1, padx=5, pady=5, sticky="W")
-        # populate the display and start the game
-        self.RebuildDisplay()
-        self.mainloop()
-
-    @property
-    def game(self):
-        assert (not isinstance(self.history[-1], str))
-        return self.history[-1]
-
-    def RebuildStack(self):
-        for widgets in self.stack.winfo_children():
-            widgets.destroy()
-        for ii, obj in enumerate(self.game.stack):
-            # obj is either Cardboard or StackEffect. both have TkDisplay method
-            butt = obj.build_tk_display(self.stack)
-            butt.config(command=self.ResolveTopOfStack)
-            butt.grid(row=1, column=ii, padx=5, pady=3)
-
-    def RebuildStatus(self):
-        for widgets in self.status.winfo_children():
-            widgets.destroy()
-        # turn count
-        tk.Label(self.status, text="Turn:\n%i" % self.game.turn_count,
-                 ).grid(row=1, column=1, rowspan=2, padx=5, pady=5)
-        # life totals
-        tk.Label(self.status, text="Life total: %i" % self.game.life
-                 ).grid(row=1, column=2, padx=5, pady=2)
-        tk.Label(self.status, text="Opponent: %i" % self.game.opponent_life
-                 ).grid(row=2, column=2, padx=5, pady=2)
-        # cards remaining
-        tk.Label(self.status, text="Cards in deck: %i" % len(self.game.deck)
-                 ).grid(row=1, column=3, padx=5, pady=2)
-        tk.Label(self.status, text="Cards in grave: %i" % len(self.game.grave)
-                 ).grid(row=2, column=3, padx=5, pady=2)
-        # mana and land-drops
-        if str(self.game.pool) != "":
-            manastr = "Mana floating: (%s)" % str(self.game.pool)
-        else:
-            manastr = "Mana floating: None"
-        landstr = "Played land: %s" % ("yes" if self.game.has_played_land else "no")
-        tk.Label(self.status, text=manastr
-                 ).grid(row=1, column=4, padx=5, pady=2)
-        tk.Label(self.status, text=landstr
-                 ).grid(row=2, column=4, padx=5, pady=2)
-        # button to do the next thing
-        if len(self.game.stack) == 0:
-            b = tk.Button(self.status, text="Pass\nturn", bg="yellow", width=7,
-                          command=self.PassTurn)
-            b.grid(row=1, column=5, padx=5, pady=5)
-        else:
-            b = tk.Button(self.status, text="Resolve\nnext", bg="yellow", width=7,
-                          command=self.ResolveTopOfStack)
-            b.grid(row=1, column=5, padx=5, pady=2)
-        # undo button
-        b2 = tk.Button(self.status, text="undo", bg="yellow", command=self.Undo)
-        b2.grid(row=1, column=6, padx=5, pady=2)
-        # auto-resolve button
-        b3 = tk.Checkbutton(self.status, text="Auto-resolve all",
-                            variable=self.var_resolveall,
-                            indicatoron=True)  # ,onvalue=1,background='grey')#,selectcolor='green')
-        b3.grid(row=2, column=5, columnspan=2, padx=5, pady=5)
-
-    def RebuildHand(self):
-        for widgets in self.hand.winfo_children():
-            widgets.destroy()
-        for ii, card in enumerate(self.game.hand):
-            butt = card.build_tk_display(self.hand)
-            abils = [a for a in card.get_activated() if a.CanAfford(self.game, card)]
-            assert (len(abils) == 0)  # activated abilities in hand not yet implemented
-            if card.rules_text.CanAfford(self.game, card):
-                butt.config(state="normal",
-                            command=lambda c=card: self.CastSpell(c))
-            else:
-                butt.config(state="disabled")
-            butt.grid(row=1, column=ii, padx=5, pady=3)
-
-    def RebuildField(self):
-        for widgets in self.field.winfo_children():
-            widgets.destroy()
-        toprow = 0  # number in bottom row
-        botrow = 0  # number in top row
-        for card in self.game.field:
-            butt = card.build_tk_display(self.field)
-            # make the button activate this card's abilities
-            abils = [a for a in card.get_activated() if a.CanAfford(self.game, card)]
-            if len(abils) == 0:
-                butt.config(state="disabled")  # nothing to activate
-            elif len(abils) == 1:
-                command = lambda c=card, a=abils[0]: self.ActivateAbility(c, a)
-                butt.config(state="normal", command=command)
-            else:  # len(abils)>1:
-                # ask the user which one to use
-                print("ask the user which ability to use, I guess")
-            # add card-button to the GUI. Lands on bottom, cards on top
-            if card.has_type(RulesText.Creature):
-                butt.grid(row=1, column=toprow, padx=5, pady=3)
-                toprow += 1
-            else:
-                butt.grid(row=2, column=botrow, padx=5, pady=3)
-                botrow += 1
-
-    def RebuildDisplay(self):
-        self.RebuildStack()
-        self.RebuildStatus()
-        self.RebuildField()
-        self.RebuildHand()
-
-    def Undo(self):
-        if len(self.history) > 1:
-            self.history.pop(-1)  # delete last gamestate from history list
-            self.RebuildDisplay()
-
-    def CastSpell(self, spell):
-        universes = self.game.CastSpell(spell)
-        if len(universes) == 0:
-            return  # casting failed, nothing changed so do nothing
-        assert (len(universes) == 1)
-        self.history.append(universes[0])
-        if self.var_resolveall.get():
-            self.EmptyEntireStack()
-        else:
-            self.RebuildDisplay()
-
-    def ActivateAbility(self, source, ability):
-        universes = self.game.ActivateAbilities(source, ability)
-        if len(universes) == 0:
-            return  # activation failed, nothing changed so do nothing
-        assert (len(universes) == 1)
-        self.history.append(universes[0])
-        if self.var_resolveall.get():
-            self.EmptyEntireStack()
-        else:
-            self.RebuildDisplay()
-
-    def ResolveTopOfStack(self):
-        if len(self.game.stack) == 0:
-            return  # nothing to resolve, so don't change anything
-        universes = self.game.ResolveTopOfStack()
-        # if len(universes)==0:
-        #     return #nothing changed so do nothing
-        assert (len(universes) == 1)
-        self.history.append(universes[0])
-        if self.var_resolveall.get():
-            self.EmptyEntireStack()
-        else:
-            self.RebuildDisplay()
-
-    def EmptyEntireStack(self):
-        while len(self.game.stack) > 0:
-            universes = self.game.ResolveTopOfStack()
-            # if len(universes)==0:
-            #     return #nothing changed so do nothing
-            assert (len(universes) == 1)
-            self.history.append(universes[0])
-        self.RebuildDisplay()
-
-    def PassTurn(self):
-        newstate = self.game.copy()
-        newstate.UntapStep()
-        newstate.UpkeepStep()
-        newstate.Draw()  # technically should clear super_stack FIRST but whatever
-        # clear the super stack, then clear the normal stack
-        activelist = newstate.ClearSuperStack()
-        finalstates = set()
-        while len(activelist) > 0:
-            state = activelist.pop(0)
-            if len(state.stack) == 0:
-                finalstates.add(state)
-            else:
-                activelist += state.ResolveTopOfStack()
-        # all untap/upkeep/draw abilities are done
-        assert (len(finalstates) == 1)
-        self.history.append(finalstates.pop())
-        self.RebuildDisplay()
-
-    def HandleError(self, exc, val, tb, *args):
-        """overwrite tkinter's usual error-handling routine if it's something
-        I care about (like winning or losing the game)
-        exc is the error type (it is of class 'type')
-        val is the error itself (it is some subclass of Exception)
-        tb is the traceback object (it is of class 'traceback')
-        See https://stackoverflow.com/questions/4770993/how-can-i-make-silent-exceptions-louder-in-tkinter
-        """
-        if isinstance(val, WinTheGameError):
-            tk.Label(self.status, text="CONGRATS! YOU WON THE GAME!", bg="red",
-                     ).grid(row=0, column=0, columnspan=10, padx=5, pady=5)
-            for frame in [self.field, self.hand, self.stack, self.status]:
-                for widget in frame.winfo_children():
-                    if isinstance(widget, tk.Button):
-                        widget.config(state="disabled")
-        elif isinstance(val, LoseTheGameError):
-            tk.Label(self.status, text="SORRY, YOU LOST THE GAME", bg="red",
-                     ).grid(row=0, column=0, columnspan=10, padx=5, pady=5)
-            for frame in [self.field, self.hand, self.stack, self.status]:
-                for widget in frame.winfo_children():
-                    if isinstance(widget, tk.Button):
-                        widget.config(state="disabled")
-        elif isinstance(val, Choices.AbortChoiceError):
-            return  # just don't panic. gamestate is unchanged.
-        else:
-            super().report_callback_exception(exc, val, tb, *args)
-
-
-
+# =============================================================================
+# class ManualGame(tk.Tk):
+# 
+#     def __init__(self, startstate):
+#         super().__init__()
+#         self.history = [startstate]
+#         # if you win or lose, game raises an error
+#         self.report_callback_exception = self.HandleError
+#         # how to pass and allow stack to resolve. sort of like F2 on MagicOnline
+#         self.var_resolveall = tk.IntVar(self, 1)
+#         # stack
+#         tk.Label(self, text="STACK", wraplength=1).grid(row=0, column=0)
+#         self.stack = tk.Frame(self, borderwidth=1, relief="solid")
+#         self.stack.grid(row=0, column=1, padx=5, pady=5, sticky="W")
+#         # current situation
+#         tk.Label(self, text="STATE", wraplength=1).grid(row=1, column=0)
+#         self.status = tk.Frame(self, borderwidth=1, relief="solid")
+#         self.status.grid(row=1, column=1, padx=5, pady=5, sticky="W")
+#         # battlefield
+#         tk.Label(self, text="FIELD", wraplength=1).grid(row=2, column=0)
+#         self.field = tk.Frame(self, bg="lightgray", borderwidth=1, relief="solid")
+#         self.field.grid(row=2, column=1, padx=5, pady=15, sticky="W")
+#         # hand
+#         tk.Label(self, text="HAND", wraplength=1).grid(row=3, column=0)
+#         self.hand = tk.Frame(self, borderwidth=1, relief="solid")
+#         self.hand.grid(row=3, column=1, padx=5, pady=5, sticky="W")
+#         # populate the display and start the game
+#         self.RebuildDisplay()
+#         self.mainloop()
+# 
+#     @property
+#     def game(self):
+#         assert (not isinstance(self.history[-1], str))
+#         return self.history[-1]
+# 
+#     def RebuildStack(self):
+#         for widgets in self.stack.winfo_children():
+#             widgets.destroy()
+#         for ii, obj in enumerate(self.game.stack):
+#             # obj is either Cardboard or StackEffect. both have TkDisplay method
+#             butt = obj.build_tk_display(self.stack)
+#             butt.config(command=self.ResolveTopOfStack)
+#             butt.grid(row=1, column=ii, padx=5, pady=3)
+# 
+#     def RebuildStatus(self):
+#         for widgets in self.status.winfo_children():
+#             widgets.destroy()
+#         # turn count
+#         tk.Label(self.status, text="Turn:\n%i" % self.game.turn_count,
+#                  ).grid(row=1, column=1, rowspan=2, padx=5, pady=5)
+#         # life totals
+#         tk.Label(self.status, text="Life total: %i" % self.game.life
+#                  ).grid(row=1, column=2, padx=5, pady=2)
+#         tk.Label(self.status, text="Opponent: %i" % self.game.opponent_life
+#                  ).grid(row=2, column=2, padx=5, pady=2)
+#         # cards remaining
+#         tk.Label(self.status, text="Cards in deck: %i" % len(self.game.deck)
+#                  ).grid(row=1, column=3, padx=5, pady=2)
+#         tk.Label(self.status, text="Cards in grave: %i" % len(self.game.grave)
+#                  ).grid(row=2, column=3, padx=5, pady=2)
+#         # mana and land-drops
+#         if str(self.game.pool) != "":
+#             manastr = "Mana floating: (%s)" % str(self.game.pool)
+#         else:
+#             manastr = "Mana floating: None"
+#         landstr = "Played land: %s" % ("yes" if self.game.has_played_land else "no")
+#         tk.Label(self.status, text=manastr
+#                  ).grid(row=1, column=4, padx=5, pady=2)
+#         tk.Label(self.status, text=landstr
+#                  ).grid(row=2, column=4, padx=5, pady=2)
+#         # button to do the next thing
+#         if len(self.game.stack) == 0:
+#             b = tk.Button(self.status, text="Pass\nturn", bg="yellow", width=7,
+#                           command=self.PassTurn)
+#             b.grid(row=1, column=5, padx=5, pady=5)
+#         else:
+#             b = tk.Button(self.status, text="Resolve\nnext", bg="yellow", width=7,
+#                           command=self.ResolveTopOfStack)
+#             b.grid(row=1, column=5, padx=5, pady=2)
+#         # undo button
+#         b2 = tk.Button(self.status, text="undo", bg="yellow", command=self.Undo)
+#         b2.grid(row=1, column=6, padx=5, pady=2)
+#         # auto-resolve button
+#         b3 = tk.Checkbutton(self.status, text="Auto-resolve all",
+#                             variable=self.var_resolveall,
+#                             indicatoron=True)  # ,onvalue=1,background='grey')#,selectcolor='green')
+#         b3.grid(row=2, column=5, columnspan=2, padx=5, pady=5)
+# 
+#     def RebuildHand(self):
+#         for widgets in self.hand.winfo_children():
+#             widgets.destroy()
+#         for ii, card in enumerate(self.game.hand):
+#             butt = card.build_tk_display(self.hand)
+#             abils = [a for a in card.get_activated() if a.CanAfford(self.game, card)]
+#             assert (len(abils) == 0)  # activated abilities in hand not yet implemented
+#             if card.rules_text.CanAfford(self.game, card):
+#                 butt.config(state="normal",
+#                             command=lambda c=card: self.CastSpell(c))
+#             else:
+#                 butt.config(state="disabled")
+#             butt.grid(row=1, column=ii, padx=5, pady=3)
+# 
+#     def RebuildField(self):
+#         for widgets in self.field.winfo_children():
+#             widgets.destroy()
+#         toprow = 0  # number in bottom row
+#         botrow = 0  # number in top row
+#         for card in self.game.field:
+#             butt = card.build_tk_display(self.field)
+#             # make the button activate this card's abilities
+#             abils = [a for a in card.get_activated() if a.CanAfford(self.game, card)]
+#             if len(abils) == 0:
+#                 butt.config(state="disabled")  # nothing to activate
+#             elif len(abils) == 1:
+#                 command = lambda c=card, a=abils[0]: self.ActivateAbility(c, a)
+#                 butt.config(state="normal", command=command)
+#             else:  # len(abils)>1:
+#                 # ask the user which one to use
+#                 print("ask the user which ability to use, I guess")
+#             # add card-button to the GUI. Lands on bottom, cards on top
+#             if card.has_type(RulesText.Creature):
+#                 butt.grid(row=1, column=toprow, padx=5, pady=3)
+#                 toprow += 1
+#             else:
+#                 butt.grid(row=2, column=botrow, padx=5, pady=3)
+#                 botrow += 1
+# 
+#     def RebuildDisplay(self):
+#         self.RebuildStack()
+#         self.RebuildStatus()
+#         self.RebuildField()
+#         self.RebuildHand()
+# 
+#     def Undo(self):
+#         if len(self.history) > 1:
+#             self.history.pop(-1)  # delete last gamestate from history list
+#             self.RebuildDisplay()
+# 
+#     def CastSpell(self, spell):
+#         universes = self.game.CastSpell(spell)
+#         if len(universes) == 0:
+#             return  # casting failed, nothing changed so do nothing
+#         assert (len(universes) == 1)
+#         self.history.append(universes[0])
+#         if self.var_resolveall.get():
+#             self.EmptyEntireStack()
+#         else:
+#             self.RebuildDisplay()
+# 
+#     def ActivateAbility(self, source, ability):
+#         universes = self.game.ActivateAbilities(source, ability)
+#         if len(universes) == 0:
+#             return  # activation failed, nothing changed so do nothing
+#         assert (len(universes) == 1)
+#         self.history.append(universes[0])
+#         if self.var_resolveall.get():
+#             self.EmptyEntireStack()
+#         else:
+#             self.RebuildDisplay()
+# 
+#     def ResolveTopOfStack(self):
+#         if len(self.game.stack) == 0:
+#             return  # nothing to resolve, so don't change anything
+#         universes = self.game.ResolveTopOfStack()
+#         # if len(universes)==0:
+#         #     return #nothing changed so do nothing
+#         assert (len(universes) == 1)
+#         self.history.append(universes[0])
+#         if self.var_resolveall.get():
+#             self.EmptyEntireStack()
+#         else:
+#             self.RebuildDisplay()
+# 
+#     def EmptyEntireStack(self):
+#         while len(self.game.stack) > 0:
+#             universes = self.game.ResolveTopOfStack()
+#             # if len(universes)==0:
+#             #     return #nothing changed so do nothing
+#             assert (len(universes) == 1)
+#             self.history.append(universes[0])
+#         self.RebuildDisplay()
+# 
+#     def PassTurn(self):
+#         newstate = self.game.copy()
+#         newstate.UntapStep()
+#         newstate.UpkeepStep()
+#         newstate.Draw()  # technically should clear super_stack FIRST but whatever
+#         # clear the super stack, then clear the normal stack
+#         activelist = newstate.ClearSuperStack()
+#         finalstates = set()
+#         while len(activelist) > 0:
+#             state = activelist.pop(0)
+#             if len(state.stack) == 0:
+#                 finalstates.add(state)
+#             else:
+#                 activelist += state.ResolveTopOfStack()
+#         # all untap/upkeep/draw abilities are done
+#         assert (len(finalstates) == 1)
+#         self.history.append(finalstates.pop())
+#         self.RebuildDisplay()
+# 
+#     def HandleError(self, exc, val, tb, *args):
+#         """overwrite tkinter's usual error-handling routine if it's something
+#         I care about (like winning or losing the game)
+#         exc is the error type (it is of class 'type')
+#         val is the error itself (it is some subclass of Exception)
+#         tb is the traceback object (it is of class 'traceback')
+#         See https://stackoverflow.com/questions/4770993/how-can-i-make-silent-exceptions-louder-in-tkinter
+#         """
+#         if isinstance(val, WinTheGameError):
+#             tk.Label(self.status, text="CONGRATS! YOU WON THE GAME!", bg="red",
+#                      ).grid(row=0, column=0, columnspan=10, padx=5, pady=5)
+#             for frame in [self.field, self.hand, self.stack, self.status]:
+#                 for widget in frame.winfo_children():
+#                     if isinstance(widget, tk.Button):
+#                         widget.config(state="disabled")
+#         elif isinstance(val, LoseTheGameError):
+#             tk.Label(self.status, text="SORRY, YOU LOST THE GAME", bg="red",
+#                      ).grid(row=0, column=0, columnspan=10, padx=5, pady=5)
+#             for frame in [self.field, self.hand, self.stack, self.status]:
+#                 for widget in frame.winfo_children():
+#                     if isinstance(widget, tk.Button):
+#                         widget.config(state="disabled")
+#         elif isinstance(val, Choices.AbortChoiceError):
+#             return  # just don't panic. gamestate is unchanged.
+#         else:
+#             super().report_callback_exception(exc, val, tb, *args)
+# 
+# 
+# 
+# =============================================================================
 
 
 # -----------------------------------------------------------------------------
@@ -829,7 +770,7 @@ class StackObject:
     def name(self):
         pass
 
-
+# ----------
 
 class StackCardboard(StackObject):
 
@@ -841,9 +782,31 @@ class StackCardboard(StackObject):
         #or activation.  If targets are Cardboards, they are pointers.
         self.choices = choices
 
-    def resolve(self, gamestate):
-        """Returns list of GameStates resulting from performing this effect"""
-        return self.card.Execute(gamestate)
+    def resolve(self, state:GameState):
+        """Returns list of GameStates resulting from performing
+        this spell's effect. That might consist of carrying out
+        the Verbs of an instant or sorcery, or might consist of
+        moving a permanent from the stack to the battlefield and
+        putting all resulting triggers onto the stack.
+        Does not mutate the original GameState"""
+        assert(self is state.stack[-1])  #last item on the stack
+        new_state = state.copy()
+        # remove StackCardboard from the stack
+        stack_object = new_state.stack.pop(-1)
+        if hasattr(self.card, "effect"):
+            # perform the effect
+            tuple_list = stack_object.card.effect.do_it(new_state,
+                                                        stack_object.card,
+                                                        stack_object.choices)
+        else:
+            tuple_list = [(new_state,stack_object.card.copy(),[])]
+        #move the card to the destination zone and also clear the superstack
+        results = []
+        for state2,card2,_ in tuple_list:
+            mover = Verbs.MoveToZone(card2.rules_text.cast_destination)
+            for state3,_,_ in mover.do_it(state2,card2,[]): 
+                results += state3.ClearSuperStack()
+        return results
 
     def __str__(self):
         return self.card.name
@@ -871,8 +834,7 @@ class StackCardboard(StackObject):
     #                      padx=3, pady=3,
     #                      relief="solid", bg="lightblue")
 
-
-
+# ----------
 
 class StackAbility(StackObject):
 
@@ -885,10 +847,21 @@ class StackAbility(StackObject):
         #or activation.  If targets are Cardboards, they are pointers.
         self.choices = choices  # list of other relevant Cardboards. "Pointers".
 
-
-    def resolve(self, gamestate):
+    def resolve(self, state:GameState):
         """Returns list of GameStates resulting from performing this effect"""
-        return self.ability.apply_effect(gamestate, self.source, self.choices)
+        assert(self is state.stack[-1])  #last item on the stack
+        new_state = state.copy()
+        # remove StackCardboard from the stack
+        stack_object = new_state.stack.pop(-1)
+        #apply the effect
+        tuple_list = stack_object.ability.apply_effect(new_state,
+                                                    stack_object.source,
+                                                    stack_object.choices)
+        #clear the superstack and return!
+        results = []
+        for state2,_,_ in tuple_list:
+            results += state2.ClearSuperStack()
+        return results
 
     def __str__(self):
         return self.ability.name
@@ -916,51 +889,41 @@ class StackAbility(StackObject):
     #                      padx=3, pady=3,
     #                      relief="solid", bg="lightblue")
 
+# -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    print("testing ManualGame...")
-    import Decklist
-    import Choices
-
-    Choices.AUTOMATION = False
-
-    game = GameState()
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.FIELD)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Caretaker), ZONE.FIELD)
-
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Roots), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Battlement), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Company), ZONE.HAND)
-
-    for _ in range(5):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Blossoms), ZONE.DECK)
-    for _ in range(5):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Omens), ZONE.DECK)
-        game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.DECK)
-        game.MoveZone(Cardboard.Cardboard(Decklist.Battlement), ZONE.DECK)
-
-    # window = tk.Tk()
-
-    # Choices.SelecterGUI(game.hand,"test chooser GUI",1,False)
-
-    # window.mainloop()
-
-    game.UntapStep()
-    game.UpkeepStep()
-    gui = ManualGame(game)
+# =============================================================================
+# if __name__ == "__main__":
+#     print("testing ManualGame...")
+#     import Decklist
+#     import Choices
+# 
+#     Choices.AUTOMATION = False
+# 
+#     game = GameState()
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.FIELD)
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Caretaker), ZONE.FIELD)
+# 
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Roots), ZONE.HAND)
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Battlement), ZONE.HAND)
+#     game.MoveZone(Cardboard.Cardboard(Decklist.Company), ZONE.HAND)
+# 
+#     for _ in range(5):
+#         game.MoveZone(Cardboard.Cardboard(Decklist.Blossoms), ZONE.DECK)
+#     for _ in range(5):
+#         game.MoveZone(Cardboard.Cardboard(Decklist.Omens), ZONE.DECK)
+#         game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.DECK)
+#         game.MoveZone(Cardboard.Cardboard(Decklist.Battlement), ZONE.DECK)
+# 
+#     # window = tk.Tk()
+# 
+#     # Choices.SelecterGUI(game.hand,"test chooser GUI",1,False)
+# 
+#     # window.mainloop()
+# 
+#     game.UntapStep()
+#     game.UpkeepStep()
+#     gui = ManualGame(game)
+# =============================================================================
