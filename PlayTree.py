@@ -41,8 +41,8 @@ class TurnTracker():
         while len(self.activenodes)>0:
             node = self.activenodes.pop()  #pop a random node to work with
             #options are: cast spell, activate ability, let stack resolve
-            stackeffs = node.state.GetValidActivations()
-            castables = node.state.GetValidCastables()
+            stackeffs = node.state.get_valid_activations()
+            castables = node.state.get_valid_castables()
             #if no valid actions, this is a final node
             if len(stackeffs)+len(castables)+len(node.state.stack) == 0:
                 self.finalnodes.add(node)

@@ -4,18 +4,20 @@ Created on Mon Dec 28 21:13:28 2020
 
 @author: Cobi
 """
-from typing import List
-from Verbs import PlayLandForTurn
+from __future__ import annotations
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import Verb
+# from Verbs import PlayLandForTurn
 import ZONE
 
-# This is just a hack to make Spyder happy and let me do type-annotation
-Verb = "Verbs"
 
-##---------------------------------------------------------------------------##
+# ------------------------------------------------------------------------------
 
-class RulesText():
+class RulesText:
 
-    def __init__(self, name:str, cost:Verb, keywords:List[str]):
+    def __init__(self, name: str, cost: Verb, keywords: List[str]):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
@@ -29,13 +31,11 @@ class RulesText():
         # activated abilities
         self.activated = []  # includes mana abilities
         # triggered 
-        self.trig_verb = []   #triggered by verbs (actions that are done)
+        self.trig_verb = []  # triggered by verbs (actions that are done)
         self.trig_upkeep = []
         self.trig_attack = []
         self.trig_endstep = []
-        ###---I don't actually USE these, but in theory I could in the future
-        # self.trig_activate   #abilities that trigger when an ability is activated
-        # self.trig_draw = []  #abilities that trigger when a card is drawn
+        # I don't actually USE these, but in theory I could in the future
         # self.static = []     #static effects
         self.cast_destination = ZONE.UNKNOWN
 
@@ -49,7 +49,7 @@ class RulesText():
     def can_afford(self, gamestate, source):
         """Returns boolean: can this gamestate afford the cost?
         DOES NOT MUTATE."""
-        return self.cost.can_afford(gamestate, source)
+        return self.cost.can_be_done(gamestate, source)
 
     ###----------------------------------------------------------------------------
 
@@ -79,37 +79,36 @@ class Creature(Permanent):
 #     pass
 
 
-
-
-
 class Land(Permanent):
-
-    def __init__(self, name, keywords):        
-        super().__init__(name, PlayLandForTurn, keywords)        
-        # if "land" not in self.keywords:
-        #     self.keywords = ["land"] + self.keywords
+    pass
 
 
-
-
-    def EnterTapped(gamestate, source):
-        """useful for tap-lands. GameState,Cardboard -> [GameState]. MUTATES."""
-        effects = gamestate.TapPermanent(source)
-        gamestate.stack += effects
-        return [gamestate]
-
-    def ShockIntoPlay(gamestate, source):
-        """useful for shock lands.  GameState,Cardboard -> [GameState]. MUTATES."""
-        gamestate2, [source2] = gamestate.copy_and_track([source])
-        # Either the land enters tapped OR we take 2 damage
-        source.tapped = True  # effect is allowed to mutate
-        gamestate2.life -= 2
-        return [gamestate, gamestate2]
-
-    def LandAvailable(gamestate, source):
-        """useful for abilities checking if the land can be tapped for mana,
-        GameState,Cardboard -> bool"""
-        return (not source.tapped and source.zone == ZONE.FIELD)
+#     def __init__(self, name, keywords):
+#         super().__init__(name, PlayLandForTurn, keywords)
+#         # if "land" not in self.keywords:
+#         #     self.keywords = ["land"] + self.keywords
+#
+#
+#
+#
+#     def EnterTapped(gamestate, source):
+#         """useful for tap-lands. GameState,Cardboard -> [GameState]. MUTATES."""
+#         effects = gamestate.TapPermanent(source)
+#         gamestate.stack += effects
+#         return [gamestate]
+#
+#     def ShockIntoPlay(gamestate, source):
+#         """useful for shock lands.  GameState,Cardboard -> [GameState]. MUTATES."""
+#         gamestate2, [source2] = gamestate.copy_and_track([source])
+#         # Either the land enters tapped OR we take 2 damage
+#         source.tapped = True  # effect is allowed to mutate
+#         gamestate2.life -= 2
+#         return [gamestate, gamestate2]
+#
+#     def LandAvailable(gamestate, source):
+#         """useful for abilities checking if the land can be tapped for mana,
+#         GameState,Cardboard -> bool"""
+#         return (not source.tapped and source.zone == ZONE.FIELD)
 
 
 ###----------------------------------------------------------------------------
@@ -117,8 +116,8 @@ class Land(Permanent):
 
 class Spell(RulesText):
 
-    def __init__(self, name, cost:Verb, keywords:List[str], 
-                 effect:Verb, dest_zone=ZONE.GRAVE):
+    def __init__(self, name, cost: Verb, keywords: List[str],
+                 effect: Verb, dest_zone=ZONE.GRAVE):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.

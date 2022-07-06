@@ -8,8 +8,9 @@ Created on Tue Dec 29 11:50:12 2020
 from RulesText import Creature, Land, Spell
 import ZONE
 import MatchCardPatterns as Match
-from Abilities import ActivatedAbility2, TriggeredAbility2, TriggerOnMove
 import Verbs as V
+from Abilities import ActivatedAbility2, TriggeredAbility2, TriggerOnMove
+
 import Getters as Get
 
 
@@ -17,7 +18,7 @@ import Getters as Get
 
 ##---------------------------------------------------------------------------##
 
-Roots = Creature("Roots", V.PayMana(V.Const("1G")), ["defender"], 0, 5)
+Roots = Creature("Roots", V.PayMana("1G"), ["defender"], 0, 5)
 Roots.activated.append(
         ActivatedAbility2("Roots add G",
                  V.ManyVerbs([V.AddCounterToSelf("-0/-1"),
@@ -26,14 +27,14 @@ Roots.activated.append(
 
 ##---------------------------------------------------------------------------##
 
-Caryatid = Creature("Caryatid", V.PayMana(V.Const("1G")),
+Caryatid = Creature("Caryatid", V.PayMana("1G"),
                     ["defender", "hexproof"], 0, 3)
 Caryatid.activated.append(
         ActivatedAbility2("Caryatid add Au",V.TapSymbol(),V.AddMana("A")) )
 
 ##---------------------------------------------------------------------------##
 
-Caretaker = Creature("Caretaker", V.PayMana(V.Const("1G")), ["defender"], 0, 3)
+Caretaker = Creature("Caretaker", V.PayMana("1G"), ["defender"], 0, 3)
 Caretaker.activated.append(
         ActivatedAbility2("Caretaker add Au",
                           V.ManyVerbs( [V.TapSymbol(),
@@ -46,7 +47,7 @@ Caretaker.activated.append(
 
 ##---------------------------------------------------------------------------##
 
-Battlement = Creature("Battlement", V.PayMana(V.Const("1G")),
+Battlement = Creature("Battlement", V.PayMana("1G"),
                       ["defender"], 0, 4)
 Battlement.activated.append(
         ActivatedAbility2("Battlement add G",
@@ -56,7 +57,7 @@ Battlement.activated.append(
 
 ##---------------------------------------------------------------------------##
 
-Axebane = Creature("Axebane", V.PayMana(V.Const("2G")), ["defender"], 0, 3)
+Axebane = Creature("Axebane", V.PayMana("2G"), ["defender"], 0, 3)
 Axebane.activated.append(
         ActivatedAbility2("Axebane add Au",
                           V.TapSymbol(),
@@ -65,7 +66,7 @@ Axebane.activated.append(
 
 ##---------------------------------------------------------------------------##
 
-Blossoms = Creature("Blossoms", V.PayMana(V.Const("1G")), ["defender"], 0, 4)
+Blossoms = Creature("Blossoms", V.PayMana("1G"), ["defender"], 0, 4)
 Blossoms.trig_verb.append(
     TriggeredAbility2("Blossoms etb draw",
                       TriggerOnMove( [Match.IsSelf], None, ZONE.FIELD),
@@ -73,7 +74,7 @@ Blossoms.trig_verb.append(
 
 ##---------------------------------------------------------------------------##
 
-Omens = Creature("Omens", V.PayMana(V.Const("1W")), ["defender"], 0, 4)
+Omens = Creature("Omens", V.PayMana("1W"), ["defender"], 0, 4)
 Omens.trig_verb.append(
     TriggeredAbility2("Omens etb draw",
                       TriggerOnMove( [Match.IsSelf], None, ZONE.FIELD),
@@ -81,7 +82,7 @@ Omens.trig_verb.append(
 
 ##---------------------------------------------------------------------------##
 
-Arcades = Creature("Arcades", V.PayMana(V.Const("1WUG")),
+Arcades = Creature("Arcades", V.PayMana("1WUG"),
                    ["flying","vigilance"], 3, 5)
 Arcades.trig_verb.append(
     TriggeredAbility2("Arcades draw trigger",
@@ -92,7 +93,7 @@ Arcades.trig_verb.append(
 ##---------------------------------------------------------------------------##
 
 # Company = Spell(name="Company",
-#                 cost = V.PayMana(V.Const("3G")),
+#                 cost = V.PayMana("3G"),
 #                 keywords = ["instant"],
 #                 [ MatchCardboardFromTopOfDeck()]
                 #TODO
@@ -165,7 +166,7 @@ Arcades.trig_verb.append(
 #         newstate, [fetch] = gamestate.copy_and_track([source])
 #         newstate.LoseLife(1)
 #         newstate.MoveZone(fetch, ZONE.GRAVE)
-#         newstate.Shuffle()
+#         newstate.shuffle_deck()
 #         return newstate.ClearSuperStack()
 #     universes = []
 #     for landcard in targets:
@@ -173,7 +174,7 @@ Arcades.trig_verb.append(
 #         newstate.LoseLife(1)
 #         newstate.MoveZone(fetch, ZONE.GRAVE)
 #         newstate.MoveZone(newland, ZONE.FIELD)
-#         newstate.Shuffle()
+#         newstate.shuffle_deck()
 #         universes += newstate.ClearSuperStack()
 #     return universes
 # 
@@ -242,7 +243,7 @@ Arcades.trig_verb.append(
 #             if tutortarget is not None: #might be no valid targets
 #                 self.gamestate.deck.remove(tutortarget)
 #                 self.gamestate.hand.append(tutortarget)
-#             self.gamestate.Shuffle()
+#             self.gamestate.shuffle_deck()
 # ##---------------------------------------------------------------------------##
 # class Staff(RulesText.Permanent):
 #     def __init__(self):

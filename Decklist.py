@@ -6,7 +6,7 @@ Created on Tue Dec 29 11:50:12 2020
 """
 
 from RulesText import Creature, Land, Spell
-from Abilities import ManaAbility, TriggeredByMove, AsEnterEffect  # ,ActivatedAbility
+from Abilities_OLD import ManaAbility, TriggeredByMove, AsEnterEffect  # ,ActivatedAbility
 from Costs import Cost
 
 import ZONE
@@ -349,7 +349,7 @@ def FetchLandType(gamestate, source, keywords):
         newstate, [fetch] = gamestate.copy_and_track([source])
         newstate.LoseLife(1)
         newstate.MoveZone(fetch, ZONE.GRAVE)
-        newstate.Shuffle()
+        newstate.shuffle_deck()
         return newstate.ClearSuperStack()
     universes = []
     for landcard in targets:
@@ -357,7 +357,7 @@ def FetchLandType(gamestate, source, keywords):
         newstate.LoseLife(1)
         newstate.MoveZone(fetch, ZONE.GRAVE)
         newstate.MoveZone(newland, ZONE.FIELD)
-        newstate.Shuffle()
+        newstate.shuffle_deck()
         universes += newstate.ClearSuperStack()
     return universes
 
@@ -418,7 +418,7 @@ MistyRainforest.trig_move.append(
 #             if tutortarget is not None: #might be no valid targets
 #                 self.gamestate.deck.remove(tutortarget)
 #                 self.gamestate.hand.append(tutortarget)
-#             self.gamestate.Shuffle()
+#             self.gamestate.shuffle_deck()
 # ##---------------------------------------------------------------------------##
 # class Staff(RulesText.Permanent):
 #     def __init__(self):

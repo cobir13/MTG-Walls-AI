@@ -4,13 +4,13 @@ Created on Mon Dec 28 21:13:28 2020
 
 @author: Cobi
 """
-from typing import List
+
+from __future__ import annotations
 import ZONE
 import tkinter as tk
-
-# # This is just a hack to make Spyder happy and let me do type-annotation
-# RulesText = "RulesText"
-from RulesText import RulesText
+from typing import List, TYPE_CHECKING
+if TYPE_CHECKING:
+    from RulesText import RulesText
 
 
 ##---------------------------------------------------------------------------##
