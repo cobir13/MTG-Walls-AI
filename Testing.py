@@ -9,7 +9,7 @@ import ZONE
 import GameState
 import ManaHandler
 import RulesText
-import Decklist2
+import Decklist
 import Cardboard
 import Abilities
 import PlayTree
@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     # add in an extra mana to see what happens
     copygame2 = copygame1.copy()
-    copygame2.pool.AddMana("G")
+    copygame2.pool.add_mana("G")
     assert (
             len(copygame2.get_valid_activations()) == 0)  # no abilities to activate
     # all 3 roots only generate 1 option--to cast Roots
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     assert (len(copygame3.hand) == 2)  # two cards in hand
     assert (len(copygame3.field) == 1)  # one card in play
 
-    [copygame4] = copygame3.ResolveTopOfStack()
+    [copygame4] = copygame3.resolve_top_of_stack()
     assert (copygame4.pool == ManaHandler.ManaPool(""))  # no mana anymore
     assert (len(copygame4.stack) == 0)  # nothing on the stack
     assert (len(copygame4.hand) == 2)  # two cards in hand
@@ -76,7 +76,7 @@ if __name__ == "__main__":
     assert (len(copygame4.get_valid_activations()) == 1)
     assert (len(copygame4.get_valid_castables()) == 0)
     # Stack should be empty, so resolving the stack should be impossible
-    assert ([] == copygame4.ResolveTopOfStack())
+    assert ([] == copygame4.resolve_top_of_stack())
 
     # Just to check, original game is still unchanged:
     assert (len(game.field) == 1)
@@ -96,8 +96,8 @@ if __name__ == "__main__":
     assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
 
     # try untap and upkeep
-    carygame1.UntapStep()
-    carygame1.UpkeepStep()
+    carygame1.untap_step()
+    carygame1.upkeep_step()
     assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
     gameN = carygame1
     options = gameN.get_valid_activations() + gameN.get_valid_castables()
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         else:
             raise ValueError("incorrect type of object on stack!")
         while len(gameN.stack) > 0:
-            [gameN] = gameN.ResolveTopOfStack()
+            [gameN] = gameN.resolve_top_of_stack()
         options = gameN.get_valid_activations() + gameN.get_valid_castables()
     assert (len(gameN.hand) == 2)
     assert (len(gameN.field) == 3)
@@ -147,7 +147,7 @@ if __name__ == "__main__":
                 print("Taking last option in list")
             gameN = universes[-1]
             while len(gameN.stack) > 0:
-                universes = gameN.ResolveTopOfStack()
+                universes = gameN.resolve_top_of_stack()
                 if len(universes) > 1 and gameN.verbose:
                     print("Split! universes are:")
                     for u, _ in universes:
@@ -256,6 +256,7 @@ if __name__ == "__main__":
     assert (not (cp3 is cp4))
 
     # can I put these in a set?
+    # noinspection PySetFunctionToLiteral
     testset = set([game, cp, cp3])
     assert (len(testset) == 2)
     assert (cp4 in testset)
@@ -268,11 +269,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     game1._move_zone(game1.hand[0], ZONE.FIELD)
-    game1.UntapStep()
+    game1.untap_step()
     game1._move_zone(game1.hand[0], ZONE.FIELD)
     # game 2: [1] into play, then the other
     game2._move_zone(game2.hand[1], ZONE.FIELD)
-    game2.UntapStep()
+    game2.untap_step()
     game2._move_zone(game2.hand[0], ZONE.FIELD)
     assert (game1 == game2)
 
@@ -285,11 +286,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     game1._move_zone(game1.hand[0], ZONE.FIELD)
-    game1.UntapStep()
+    game1.untap_step()
     game1._move_zone(game1.hand[0], ZONE.FIELD)
     # game 2: [1] into play, then the other
     game2._move_zone(game2.hand[1], ZONE.FIELD)
-    game2.UntapStep()
+    game2.untap_step()
     game2._move_zone(game2.hand[0], ZONE.FIELD)
     assert (game1 != game2)  # creatures DO get summoning-sick.
 
@@ -401,7 +402,7 @@ if __name__ == "__main__":
             len(game.get_valid_activations()) == 0)  # no, caretaker still summon_sick. good.
     game.field.remove(caryatid)
 
-    game.UntapStep()
+    game.untap_step()
     assert (len(game.get_valid_activations()) == 0)  # nothing to tap
 
     # give it something to tap
@@ -430,7 +431,7 @@ if __name__ == "__main__":
 
     # see what happens with two active caretakers
     game3 = univ3
-    game3.UntapStep()
+    game3.untap_step()
     assert (
             len(game3.get_valid_activations()) == 2)  # 2 Caretakers combined, Caryatid
     care3 = [c for c in game3.field if c.rules_text == Decklist2.Caretaker][0]
@@ -452,7 +453,7 @@ if __name__ == "__main__":
     game6._move_zone(axe, ZONE.FIELD)
     game6._move_zone(battle, ZONE.FIELD)
     assert (len(game6.get_valid_activations()) == 0)  # still summon_sick. good.
-    game6.UntapStep()
+    game6.untap_step()
     [u_axe] = game6.ActivateAbilities(axe, axe.get_activated()[0])
     assert (u_axe.pool == ManaHandler.ManaPool("AAAAA"))
     [u_bat] = game6.ActivateAbilities(battle, battle.get_activated()[0])
@@ -489,7 +490,7 @@ if __name__ == "__main__":
     # if I untap, only difference is counters on Roots. I lose track of mana
     assert (len(tree.LatestNodes()) == 2)
     # mana not visible in LatestNodes necessarily, but IS visible in finalnodes
-    assert (any([n.state.pool.CanAffordCost(ManaHandler.ManaCost("8"))
+    assert (any([n.state.pool.can_afford_mana_cost(ManaHandler.ManaCost("8"))
                  for n in tree.trackerlist[-1].finalnodes]))
 
     # for n in tree.trackerlist[-1].finalnodes:
@@ -543,7 +544,7 @@ if __name__ == "__main__":
 
     # add Caryatid to hand and cast it, to be sure I didn't make all defenders draw
     final._move_zone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
-    final.UntapStep()
+    final.untap_step()
     tree2 = PlayTree.PlayTree(final, 5)
     tree2.PlayNextTurn()
     assert (len(tree2.LatestNodes()) == 1)
@@ -566,14 +567,14 @@ if __name__ == "__main__":
     assert (len(gameA.hand) == 0)  # haven't draw or put triggers on stack
     assert (len(gameA.deck) == 10)  # haven't draw or put triggers on stack
     # clear the super_stack and then stack. should come to the same thing.
-    gameA, gameA1 = gameA.ClearSuperStack()
+    gameA, gameA1 = gameA.clear_super_stack()
     assert (gameA != gameA1)  # different order of triggers
     while len(gameA.stack) > 0:
-        universes = gameA.ResolveTopOfStack()
+        universes = gameA.resolve_top_of_stack()
         assert (len(universes) == 1)
         gameA = universes[0]
     while len(gameA1.stack) > 0:
-        universes = gameA1.ResolveTopOfStack()
+        universes = gameA1.resolve_top_of_stack()
         assert (len(universes) == 1)
         gameA1 = universes[0]
     assert (gameA == gameA1)
@@ -586,9 +587,9 @@ if __name__ == "__main__":
     assert (len(gameA.super_stack) == 1)
     assert (len(gameA.hand) == 2)  # haven't draw or put triggers on stack
     assert (len(gameA.deck) == 8)  # haven't draw or put triggers on stack
-    [gameA] = gameA.ClearSuperStack()
+    [gameA] = gameA.clear_super_stack()
     while len(gameA.stack) > 0:
-        universes = gameA.ResolveTopOfStack()
+        universes = gameA.resolve_top_of_stack()
         assert (len(universes) == 1)
         gameA = universes[0]
     # should have drawn 2 cards
@@ -670,7 +671,7 @@ if __name__ == "__main__":
     game2._move_zone(game2.hand[0], ZONE.FIELD)
     assert (game2.stack == [])
     assert (len(game2.super_stack) == 1)
-    assert (len(game2.ClearSuperStack()) == 2)  # same 2 as before
+    assert (len(game2.clear_super_stack()) == 2)  # same 2 as before
 
     # add two shocks to the deck.  should both be fetchable. I expect four
     # fetchable targets and six total gamestates (due to shocked vs tapped)
@@ -728,7 +729,7 @@ if __name__ == "__main__":
     assert (len(game.super_stack) == 0)
 
     # resolve Collected Company
-    universes = game.ResolveTopOfStack()
+    universes = game.resolve_top_of_stack()
     assert (len(universes) == 4)
     for u in universes:
         assert (len(u.deck) == 4)
@@ -751,7 +752,7 @@ if __name__ == "__main__":
     # should be forests on top
     assert (all([c.rules_text == Decklist2.Forest for c in gameF.deck[:6]]))
     gameF._move_zone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
-    universes = gameF.ResolveTopOfStack()
+    universes = gameF.resolve_top_of_stack()
     assert (len(universes) == 1)
     u = universes[0]
     # now should be islands on top, forests on bottom
@@ -769,7 +770,7 @@ if __name__ == "__main__":
         game1._move_zone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
     assert (len(game1.deck) == 16)
     game1._move_zone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
-    universes = game1.ResolveTopOfStack()
+    universes = game1.resolve_top_of_stack()
     assert (len(universes) == 1)
     u = universes[0]
     # now should be islands on top, forests on bottom
@@ -786,7 +787,7 @@ if __name__ == "__main__":
     # should be forests on top
     assert (len(game4.deck) == 4)
     game4._move_zone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
-    universes = game4.ResolveTopOfStack()
+    universes = game4.resolve_top_of_stack()
     assert (len(universes) == 1)
     u = universes[0]
     assert (len(u.deck) == 2)
@@ -801,15 +802,15 @@ if __name__ == "__main__":
         game._move_zone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
     # put Collected Company directly onto the stack
     game._move_zone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
-    universes = game.ResolveTopOfStack()
+    universes = game.resolve_top_of_stack()
     assert (
                 len(universes) == 2)  # the two draws could be on stack in either order
     u0, u1 = universes
     assert (u0 != u1)
     while len(u0.stack) > 0:
-        [u0] = u0.ResolveTopOfStack()
+        [u0] = u0.resolve_top_of_stack()
     while len(u1.stack) > 0:
-        [u1] = u1.ResolveTopOfStack()
+        [u1] = u1.resolve_top_of_stack()
     assert (u0 == u1)
     assert (len(u0.hand) == 2 and len(u0.deck) == 8)
 
@@ -823,15 +824,15 @@ if __name__ == "__main__":
         game._move_zone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
     # put Collected Company directly onto the stack
     game._move_zone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
-    universes = game.ResolveTopOfStack()
+    universes = game.resolve_top_of_stack()
     assert (
                 len(universes) == 2)  # the two draws could be on stack in either order
     u0, u1 = universes
     assert (u0 == u1)
     while len(u0.stack) > 0:
-        [u0] = u0.ResolveTopOfStack()
+        [u0] = u0.resolve_top_of_stack()
     while len(u1.stack) > 0:
-        [u1] = u1.ResolveTopOfStack()
+        [u1] = u1.resolve_top_of_stack()
     assert (u0 == u1)
     assert (len(u0.hand) == 2 and len(u0.deck) == 8)
 
@@ -890,14 +891,14 @@ if __name__ == "__main__":
     assert (not tapsymbol.CanAfford(game, battle))  # summon-sick
     assert (tapsymbol.CanAfford(game, forest))  # land so it's fine
     assert (not payGG.CanAfford(game, forest))  # source irrelevant here
-    game.pool.AddMana("GGG")
+    game.pool.add_mana("GGG")
     assert (payGG.CanAfford(game, forest))  # source still irrelevant
     univ_list = payGG.Pay(game, forest)
     assert (len(univ_list) == 1)
     new_univ = univ_list[0][0]  # 1st in list, then 1st of gamestate,source
     assert (new_univ.pool == ManaHandler.ManaPool("G"))
     assert (game.pool == ManaHandler.ManaPool("GGG"))  # didn't mutate
-    game.UntapStep()
+    game.untap_step()
     assert (tapsymbol.CanAfford(game, battle))  # no longer summon-sick
     assert (tapsymbol.CanAfford(game, forest))  # land so it's fine
     assert (not tapsymbol.CanAfford(game, game.hand[0]))  # land so it's fine

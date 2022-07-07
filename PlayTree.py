@@ -62,7 +62,7 @@ class TurnTracker():
                     newnodes.append(TurnTracker.ActionNode(gamestate,histlog))
             if len(node.state.stack)>0:
                 #list of GameStates with the top effect on the stack resolved
-                for gamestate in node.state.ResolveTopOfStack():
+                for gamestate in node.state.resolve_top_of_stack():
                     newnodes.append(TurnTracker.ActionNode(gamestate,node.history))
             #add these new nodes to the tracker
             for newnode in newnodes:
@@ -85,13 +85,13 @@ class TurnTracker():
                 self.node = node
             def __eq__(self,other):
                 untapped = self.node.state.copy()
-                untapped.UntapStep()
+                untapped.untap_step()
                 untapped_other = other.node.state.copy()
-                untapped_other.UntapStep()
+                untapped_other.untap_step()
                 return untapped == untapped_other #usual _eq_ for GameStates
             def __hash__(self):
                 untapped = self.node.state.copy()
-                untapped.UntapStep()
+                untapped.untap_step()
                 return untapped.__hash__()
         fancyset = set()
         for node in self.finalnodes:
@@ -109,13 +109,13 @@ class TurnTracker():
                 self.node = node
             def __eq__(self,other):
                 untapped = self.node.state.copy()
-                untapped.UntapStep()
+                untapped.untap_step()
                 untapped_other = other.node.state.copy()
-                untapped_other.UntapStep()
+                untapped_other.untap_step()
                 return untapped == untapped_other #usual _eq_ for GameStates
             def __hash__(self):
                 untapped = self.node.state.copy()
-                untapped.UntapStep()
+                untapped.untap_step()
                 return untapped.__hash__()
         fancyset = set()
         for node in self.allnodes:
@@ -177,18 +177,18 @@ class PlayTree():
         for node in prevtracker.GetFinal():
             oldstate = node.state
             newstate = oldstate.copy()
-            newstate.UntapStep()
-            newstate.UpkeepStep()
-            newstate.Draw()  #technically should clear super_stack FIRST but whatever
+            newstate.untap_step()
+            newstate.upkeep_step()
+            newstate.draw_card()  #technically should clear super_stack FIRST but whatever
             #clear the super stack, then clear the normal stack
-            activelist = newstate.ClearSuperStack()
+            activelist = newstate.clear_super_stack()
             finalstates = set()
             while len(activelist)>0:
                 state = activelist.pop(0)
                 if len(state.stack)==0:
                     finalstates.add(state)
                 else:
-                    activelist += state.ResolveTopOfStack()
+                    activelist += state.resolve_top_of_stack()
             #all untap/upkeep/draw abilities are done. make nodes for these.
             for final in finalstates:
                 newnode = node.copy()

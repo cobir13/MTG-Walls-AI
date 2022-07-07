@@ -5,59 +5,38 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
-import random
+from typing import List, Tuple
+# if TYPE_CHECKING:
+#     import RulesText
+
+# import tkinter as tk
+from Abilities import ActivatedAbility
+import Stack
 from Cardboard import Cardboard  # actually needs
 import Getters as Get
 import ZONE
 from ManaHandler import ManaPool
 import Choices
-# import tkinter as tk
-
 import Verbs
-
-if TYPE_CHECKING:
-    import RulesText
-
-"""
-Notes comparing this program to the real Magic:The Gathering rules:
-    - cannot activate mana abilities WHILE casting a spell. (must pre-float
-        all mana to pay for the spell)
-    
-Notes on actually-correct things:
-    - "casting" a land doesn't use the stack
-    - mana abilities don't use the stack
-"""
 
 
 class GameState:
     """The current state of the game.
     
-    For anything relating to a decision (paying a cost, activating an ability,
-    casting a spell), do not mutate this state.  Rather, always create a new
-    state representing the new situation.
+    For anything relating to a decision (paying a cost, activating
+    an ability, casting a spell), do not mutate this state.  Rather,
+    always create a new state representing the new situation.
     
-    A GameState holds all of the Cardboard pieces representing the MtG cards.
-    It keeps track of which zones they are in, but THEY keep track of which
-    cards they represent.
+    A GameState holds all the Cardboard pieces representing the MtG
+    cards. It keeps track of which zones they are in, but THEY keep
+    track of which cards they represent.
     
-    A GameState also tracks and executes all the actions that can be taken
-    from this GameState. (It finds these by scraping the cards it contains,
-    not by maintaining separate lists of abilities. "The Game" does not
-    have abilities, only cards have abilities.) The GameState DOES have
-    functions for gameplay actions which come from base MtG rules, for
-    example emptying mana at the end of phases or untapping at the untap step.
-    All of these actions should be called by an outside function of some sort.
-    The GameState does not progress the game, it merely tracks the state of
-    the game and provides tools for others to progress the game with.
-    
-    THESE ACTIONS DO NOT MUTATE THE GAMESTATE ITSELF! All of these actions,
-    when executed, return copies of the GameState but with the action having
-    been executed.
-    
-    GameState moves Cardboards, Cardboards don't move themselves.
-    GameState activates abilities, abilities don't activate themselves.
-    GameState triggers abilities, abilities don't trigger themselves.
+    The GameState has functions for gameplay actions which come
+    from base MtG rules, for example emptying mana at the end of
+    phases or untapping at the untap step. All of these actions
+    should be called by an outside function of some sort. The
+    GameState does not progress the game, it merely tracks the state
+    of the game and provides tools for others to progress the game.
     """
 
     def __init__(self):
@@ -147,13 +126,13 @@ class GameState:
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id
 
-    def copy_and_track(self, tracklist):
-        """Returns a disconnected copy of the gamestate and also a list of
-        Cardboards in the new gamestate corresponding to the list of
-        Cardboards we were asked to track. This allows tracking "between
-        split universes."
-        If tracklist has non-Cardboard objects, they're also returned
-        Return signature is: GameState, [Cardboard] """
+    def copy_and_track(self, track_list) -> Tuple[GameState, List[Cardboard]]:
+        """Returns a disconnected copy of the gamestate and also
+        a list of Cardboard's in the new gamestate corresponding
+        to the list of Cardboard's we were asked to track. This
+        allows tracking "between split universes."
+        If track_list has non-Cardboard objects, they're also
+        returned"""
         # make new Gamestate and start copying attributes by value
         state = GameState()
         # copy mana pool
@@ -166,48 +145,46 @@ class GameState:
         state.has_played_land = self.has_played_land
         state.verbose = self.verbose
         # need to track any pointers in StackObjects
-        stackindex = len(tracklist)  # index for where stack portion begins
+        stack_index = len(track_list)  # index for where stack portion begins
         for obj in self.stack + self.super_stack:
-            if isinstance(obj, Verbs.StackCardboard):
-                tracklist += [obj.card] + obj.choices
-            elif isinstance(obj, Verbs.StackAbility):
-                tracklist += [obj.source] + obj.choices
-        # blank list to fill with corresponding copies of each card in tracklist
-        newtracklist = tracklist[:]  # a copy of tracklist
+            track_list += [obj.card] + obj.choices
+        # blank list to fill with corresponding copies of cards in track_list
+        new_track_list = track_list[:]  # a copy of track_list
 
         def copy_list_and_update_pointers_to_it(original_list):
             """Goes through a list and returns a list of
             copies of each element in the original list. Also
-            checks against tracklist to make sure that any pointers
+            checks against track_list to make sure that any pointers
             to the original elements now points at the new copies of
             the elements. Maintains order so that the new list
             does not need to be re-sorted."""
             new_list = []
-            for obj in original_list:
-                if isinstance(obj, list) or isinstance(obj, tuple):
-                    # recurse. I don't THINK this ever happens but just in case.
-                    new_object = copy_list_and_update_pointers_to_it(obj)
-                elif hasattr(obj, "copy"):
-                    new_object = obj.copy()
+            for obj2 in original_list:
+                if isinstance(obj2, list) or isinstance(obj2, tuple):
+                    # recurse. I THINK this never happens but just in case
+                    new_object = copy_list_and_update_pointers_to_it(obj2)
+                elif hasattr(obj2, "copy"):
+                    new_object = obj2.copy()
                 else:
                     # not copiable, probably int or similar
-                    new_object = obj
+                    new_object = obj2
                 new_list.append(new_object)
-                # now spin through tracklist. if we just copied a
+                # now spin through track_list. if we just copied a
                 # Cardboard that we are tracking, replace the old
                 # pointer in newtracklist with a pointer to the new
                 # copy.
                 # (For things like ints, we don't care if it's
                 # technically the old object or a new copy.)
                 if isinstance(new_object, Cardboard):
-                    for index, tracked_object in enumerate(tracklist):
+                    for index, tracked_object in enumerate(track_list):
                         # try to iterate through tracked_object just in case
                         try:
-                            newtracklist[index] = [new_object if obj is c else c
-                                                   for c in tracked_object]
+                            new_track_list[index] = [
+                                new_object if obj2 is c else c
+                                for c in tracked_object]
                         except TypeError:
-                            if obj is tracked_object:
-                                newtracklist[index] = new_object
+                            if obj2 is tracked_object:
+                                new_track_list[index] = new_object
             return new_list
 
         state.deck = copy_list_and_update_pointers_to_it(self.deck)
@@ -218,62 +195,66 @@ class GameState:
         def copy_stack_objects(original_list):
             """Goes through a list of StackObjects and rebuilds
             copies of them. StackObjects contain pointers to
-            Cardboards, so we get the new pointers to the newly
-            copied Cardboards by looking in the newtracklist.
+            Cardboard's, so we get the new pointers to the newly
+            copied Cardboard's by looking in the new_track_list.
             This assumes that the StackObjects are checked in the
-            same order that they were placed into the newtracklist.
-            Returns a list of new StackObjects and the new newtracklist"""
+            same order that they were placed into new_track_list.
+            Returns a list of new StackObjects and the new version
+            of new_track_list."""
             new_list = []
-            for obj in original_list:
-                new_card = newtracklist[stackindex]
-                i_end = stackindex + 1 + len(obj.choices)
-                new_choices = newtracklist[stackindex + 1:i_end]
+            for obj2 in original_list:
+                new_card = new_track_list[stack_index]
+                i_end = stack_index + 1 + len(obj2.choices)
+                new_choices = new_track_list[stack_index + 1:i_end]
                 # build the new StackObject
-                if isinstance(obj, Verbs.StackCardboard):
-                    new_stack_obj = Verbs.StackCardboard(new_card, new_choices)
-                elif isinstance(obj, Verbs.StackAbility):
-                    abil = obj.ability  # does this need a copy?
-                    new_stack_obj = Verbs.StackAbility(new_card, abil, new_choices)
+                if isinstance(obj2, Stack.StackCardboard):
+                    new_stack_obj = Stack.StackCardboard(new_card, new_choices)
+                elif isinstance(obj2, Stack.StackAbility):
+                    ability = obj2.ability  # does this need a copy?
+                    new_stack_obj = Stack.StackAbility(ability, new_card,
+                                                       new_choices)
                 else:
                     raise TypeError("Unknown type of StackObject!")
                 new_list.append(new_stack_obj)
                 # get rid of the references I just used. done with them now.
-                return new_list, newtracklist[:stackindex] + newtracklist[i_end:]
+                result = new_track_list[:stack_index] + new_track_list[i_end:]
+                return new_list, result
 
         # copy stack and superstack, replacing pointers in StackObjects as I go
-        state.stack, newtracklist = copy_stack_objects(self.stack)
-        state.super_stack, newtracklist = copy_stack_objects(self.super_stack)
+        state.stack, new_track_list = copy_stack_objects(self.stack)
+        state.super_stack, new_track_list = copy_stack_objects(
+            self.super_stack)
         # return
-        return state, newtracklist
+        return state, new_track_list
 
     def copy(self):
         return self.copy_and_track([])[0]
 
-    ###-----MUTATING FUNCTIONS. They all return a list of StackEffects
+    # -----MUTATING FUNCTIONS. They all return a list of StackEffects
 
-    def get_zone(self, zonename):
-        if zonename == ZONE.DECK:
+    def get_zone(self, zone_name):
+        if zone_name == ZONE.DECK:
             zone = self.deck
-        elif zonename == ZONE.HAND:
+        elif zone_name == ZONE.HAND:
             zone = self.hand
-        elif zonename == ZONE.FIELD:
+        elif zone_name == ZONE.FIELD:
             zone = self.field
-        elif zonename == ZONE.GRAVE:
+        elif zone_name == ZONE.GRAVE:
             zone = self.grave
-        elif zonename == ZONE.STACK:
+        elif zone_name == ZONE.STACK:
             zone = self.stack
         else:
             raise IndexError
         return zone
 
-    def re_sort(self, zonename):
+    def re_sort(self, zone_name):
         """sort the specified zone, if it is a zone that is supposed
         to be sorted"""
-        if zonename == ZONE.HAND:
+        if zone_name == ZONE.HAND:
             self.hand.sort(key=Cardboard.get_id)
-        elif zonename == ZONE.FIELD:
+        elif zone_name == ZONE.FIELD:
             self.field.sort(key=Cardboard.get_id)
-        elif zonename == ZONE.grave:
+        elif zone_name == ZONE.GRAVE:
             self.grave.sort(key=Cardboard.get_id)
 
     def _move_zone(self, cardboard, destination):
@@ -286,11 +267,9 @@ class GameState:
         """
         Verbs.MoveToZone(destination).do_it(self, cardboard, [])
 
+    # -------------------------------------------------------------------------
 
-
-    ##-----------------------------------------------------------------------##
-
-    def StateBasedActions(self):
+    def state_based_actions(self):
         """MUTATES. Performs any state-based actions like killing creatures if
         toughness is less than 0.
         Adds any triggered StackAbilities to the super_stack.
@@ -303,9 +282,9 @@ class GameState:
                 Verbs.MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
                 continue  # don't increment counter
             i += 1
-        # legend rule   --------------------------------------------------------ADD IN THE LEGEND RULE
+        # legend rule   # TODO
 
-    def UntapStep(self):
+    def untap_step(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         # newstate,_ = self.copy_and_track([])  #copy, but nothing to track
         self.pool = ManaPool("")
@@ -316,47 +295,22 @@ class GameState:
             Verbs.UntapSelf().do_it(self, card, [])
             card.summon_sick = False
             # erase the invisible counters
-            card.counters = [c for c in card.counters if c[0] not in ("@", "$")]
+            card.counters = [c for c in card.counters if
+                             c[0] not in ("@", "$")]
 
-    def UpkeepStep(self):
+    def upkeep_step(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         for cardboard in self.hand + self.field + self.grave:
-            for abil in cardboard.rules_text.trig_upkeep:
-                newEffect = Verbs.StackAbility(abil, cardboard, [])
-                self.super_stack.append(newEffect)
+            for ability in cardboard.rules_text.trig_upkeep:
+                new_effect = Stack.StackAbility(ability, cardboard, [])
+                self.super_stack.append(new_effect)
 
-    def Draw(self):
+    def draw_card(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
            Draws from index 0 of deck."""
-        Verbs.DrawCard().do_it(self, None, None)
+        Verbs.DrawCard().do_it(self, None, [])
 
-    ###-----BRANCHING FUNCTIONS. Return a list of gamestates but do not mutate
-
-    # def CastSpell(self, cardboard):
-    #     """
-    #     DOES NOT MUTATE. Instead returns a list of GameStates in which the
-    #         given Cardboard has been cast and any effects of that casting have
-    #         been put onto the super_stack.
-    #     """
-    #     caster = Verbs.CastCard()
-    #     # check to make sure the execution is legal
-    #     if caster.can_be_done(self, cardboard):
-    #         caster.do_it(self, cardboard, None)
-    #     else:
-    #         return []
-    #
-    # def ActivateAbilities(self, cardboard, ability):
-    #     """
-    #     DOES NOT MUTATE. Instead, returns a list of GameStates in which the
-    #         ActivatedAbility of the source Cardboard has been paid for and put
-    #         on the stack.
-    #     """
-    #     activator = Verbs.ActivateAbility()
-    #     if activator.can_be_done(self, cardboard):
-    #         tuple_list = activator.do_it(self, cardboard, [ability])
-    #         return [g for g, _, _ in tuple_list]
-
-    def ResolveTopOfStack(self):
+    def resolve_top_of_stack(self):
         """
         DOES NOT MUTATE. Instead, returns a list of GameStates in
             which the top item of the stack has been resolved.
@@ -370,10 +324,10 @@ class GameState:
             been placed on the stack."""
         if len(self.stack) == 0:
             return []
-        assert (isinstance(self.stack[-1], Verbs.StackObject))
-        return self.stack[-1].resolve(self)  #
+        assert (isinstance(self.stack[-1], Stack.StackObject))
+        return self.stack[-1].resolve(self)
 
-    def ClearSuperStack(self):
+    def clear_super_stack(self):
         """Returns a list of GameStates where the objects on the super_stack
         have been placed onto the stack in all possible orders or otherwise
         dealt with. If super_stack is empty, returns [self].
@@ -383,8 +337,9 @@ class GameState:
             return [self]
         results = []
         # pick a super_stack effect to move to the stack
-        for item in Choices.ChooseExactlyOne(list(enumerate(self.super_stack)),
-                                             "Add to stack"):
+        for item in Choices.choose_exactly_one(
+                        list(enumerate(self.super_stack)),
+                        "Add to stack"):
             ii = item[0]  # index first, then object second
             new_state = self.copy()
             stack_ability = new_state.super_stack.pop(ii)
@@ -398,57 +353,56 @@ class GameState:
         # recurse
         final_results = []
         for state in results:
-            final_results += state.ClearSuperStack()
+            final_results += state.clear_super_stack()
         return final_results
 
-    ##-----------------------------------------------------------------------##
+    # -------------------------------------------------------------------------
 
-    def get_valid_activations(self):
+    def get_valid_activations(self) -> List[
+        Tuple[ActivatedAbility, GameState, Cardboard, list]]:
         """
-        Return a list of all abilities that can be put on the stack right
-        now. Returned as list of StackEffects that have not yet been paid for.
+        Return a list of all abilities that can be put on the
+        stack right now. The form of the return is a tuple of
+        the inputs that Verb.ActivateAbility needs in order
+        to put a newly activated ability onto the stack.
         """
         effects = []
-        # look for all activated abilities that can be activated (incl. mana ab)
-        active_objects = []
+        active_objects = []  # objects I've already checked through
         for source in self.hand + self.field + self.grave:
             if any([source.is_equiv_to(ob) for ob in active_objects]):
-                continue  # skip cards that are equivalent to cards already used
+                continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
                 # check whether price can be paid
-                if ability.can_afford(self, source):
-                    # here StackAbility is convenient container. It is NOT
-                    # added to the stack yet. Ability has NOT been properly
-                    # activated yet.
-                    effects.append(Verbs.StackAbility(ability, source, []))
-                    add_object = True
-            if add_object:  # only add each object once, even if many abilities
+                for choices in ability.get_choice_options(self, source):
+                    if ability.can_afford(self, source, choices):
+                        # this ability with this set of choices is castable!
+                        effects.append((ability, self, source, choices))
+                        add_object = True
+            if add_object:  # track any object whose ability we looked at
                 active_objects.append(source)
         return effects
 
     def get_valid_castables(self):
-        """Return a list of all castable cards that can be put on the stack
-        right now, as a list of Cardboards which have not yet been paid for
-        or moved from their current zones. Think of these like pointers."""
+        """Return a list of all cast-able cards that can be put
+        on the stack right now, as a list of Cardboard's which
+        have not yet been paid for or moved from their current
+        zones. Think of these like pointers."""
         cards = []
         # look for all cards that can be cast
         active_objects = []
         for card in self.hand:
             if any([card.is_equiv_to(ob) for ob in active_objects]):
-                continue  # skip cards that are equivalent to cards already used
-            if len(self.stack) > 0 and "instant" not in card.rules_text.keywords:
+                continue  # skip cards equivalent to those already searched
+            if (len(self.stack) > 0
+                    and "instant" not in card.rules_text.keywords):  # TODO
                 continue  # if stack is full, can only cast instants
             if card.rules_text.can_afford(self, card):
                 cards.append(card)
                 active_objects.append(card)
         return cards
 
-    def shuffle_deck(self):
-        """Mutates. Reorder deck randomly."""
-        random.shuffle(self.deck)
-
-    ##-----------------------------------------------------------------------##
+    # -------------------------------------------------------------------------
 
     # def Attack(self):
     #     """Attack with anything that can"""
@@ -488,7 +442,7 @@ class GameState:
     #         for card in discardlist:
     #             self.hand.remove(card)
     #     #clear any floating mana
-    #     if self.verbose and self.pool.cmc()>0:
+    #     if self.verbose and self.pool.mana_value()>0:
     #         print("end with %s" %(str(self.pool)))
     #     for color in self.pool.data.keys():
     #         self.pool.data[color] = 0 
@@ -504,7 +458,7 @@ class GameState:
 #             raise IOError("LOSE DUE TO DAMAGE!")
 
 
-###----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 # =============================================================================
@@ -693,7 +647,7 @@ class GameState:
 #         newstate = self.game.copy()
 #         newstate.UntapStep()
 #         newstate.UpkeepStep()
-#         newstate.Draw()  # technically should clear super_stack FIRST but whatever
+#         newstate.draw_card()  # technically should clear super_stack FIRST but whatever
 #         # clear the super stack, then clear the normal stack
 #         activelist = newstate.ClearSuperStack()
 #         finalstates = set()

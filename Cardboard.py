@@ -9,11 +9,12 @@ from __future__ import annotations
 import ZONE
 import tkinter as tk
 from typing import List, TYPE_CHECKING
+
 if TYPE_CHECKING:
     from RulesText import RulesText
 
 
-##---------------------------------------------------------------------------##
+# -----------------------------------------------------------------------------
 
 class Cardboard:
     """Represents the physical piece of cardboard that is a Magic card.
@@ -21,13 +22,14 @@ class Cardboard:
 
     # needs to not overwrite equality, because I often check if a card is in
     # a list and I need the `in` functionality to use `is` rather than `==`.
-    # Unfortunately, this also means I can't drop Cardboard's into sets to sort.
+    # Unfortunately, this also means I can't drop Cardboards into sets to sort.
 
-    def __init__(self, rules_text:RulesText):
+    def __init__(self, rules_text: RulesText):
         self.rules_text: RulesText = rules_text
         self.tapped: bool = False
         self.summon_sick: bool = True
-        self.counters: List[str] = []  # sorted list of counters. Also other trackers
+        self.counters: List[
+            str] = []  # sorted list of counters. Also other trackers
         self.zone = ZONE.NEW
 
     def __str__(self):
@@ -47,7 +49,7 @@ class Cardboard:
         new_card.tapped = self.tapped
         new_card.summon_sick = self.summon_sick
         new_card.zone = self.zone
-        # counters is a LIST so it needs to be copied carefully, without reference
+        # counters is a LIST so it needs to be copied without reference
         new_card.counters = self.counters.copy()
         # cardtype never mutates so it's ok that they're both pointing at the
         # same instance of a RulesText
@@ -60,7 +62,7 @@ class Cardboard:
     @property
     def name(self):
         return self.rules_text.name
-    
+
     @property
     def cost(self):
         return self.rules_text.cost
@@ -76,7 +78,8 @@ class Cardboard:
         return self.rules_text.activated
 
     def get_id(self):
-        s = type(self.rules_text).__name__  # MtG card type (creature, land, etc)
+        s = type(
+            self.rules_text).__name__  # MtG card type (creature, land, etc)
         s += self.rules_text.name + "_"
         if self.tapped:
             s += "T"
@@ -100,16 +103,16 @@ class Cardboard:
         # equivalent or not. I defined EquivTo as a more intuitive, descriptive
         # definition of equality that I use for comparing two GameStates.
 
-    def has_type(self, cardtype:RulesText):
+    def has_type(self, card_type: type) -> bool:
         """Returns bool: "this Cardboard refers to a card which is the given
         RulesText type (in addition to possibly other types as well)" """
-        return isinstance(self.rules_text, cardtype)
-        
+        return isinstance(self.rules_text, card_type)
+
     # def has_keyword(self, keyword:str):
     #     return keyword in self.rules_text.keywords
 
-    # def cmc(self):
-    #     return self.rules_text.cost.manacost.cmc()
+    def mana_value(self):
+        return self.rules_text.mana_value
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
@@ -121,15 +124,17 @@ class Cardboard:
         """
         # string for mana cost (if any)
         cost_string = ""
-        if self.cmc() > 0:
-            cost_string = "(" + str(self.rules_text.cost.manacost) + ")"
+        if self.mana_value() > 0:
+            cost_string = "(" + str(self.rules_text.mana_cost) + ")"
         # string for name
         # text += "".join([l if l.islower() else " "+l for l in self.name])[1:]
         name_string = self.name
         # string for power and toughness, if any
-        ptstr = ""
-        if hasattr(self.rules_text,"power") and hasattr(self.rules_text,"toughness"):
-            ptstr = "%i/%i" % (self.rules_text.power, self.rules_text.toughness)
+        power_toughness_string = ""
+        if hasattr(self.rules_text, "power") and hasattr(self.rules_text,
+                                                         "toughness"):
+            power_toughness_string = "%i/%i" % (self.rules_text.power,
+                                                self.rules_text.toughness)
             # string for counters, if any
         counter_string = ""
         for c in set(self.counters):
@@ -144,8 +149,8 @@ class Cardboard:
             text += counter_string
             while text.count("\n") < 3:
                 text += "\n"
-            text += ptstr
-            text += " " * (30 - len(ptstr) - len(cost_string))
+            text += power_toughness_string
+            text += " " * (30 - len(power_toughness_string) - len(cost_string))
             text += cost_string
         else:
             text = " " * (20 - len(cost_string)) + cost_string + "\n"
@@ -153,38 +158,18 @@ class Cardboard:
             text += counter_string
             while text.count("\n") < 6:
                 text += "\n"
-            text += " " * (20 - len(ptstr)) + ptstr
+            text += " " * (20 - len(power_toughness_string))
+            text += power_toughness_string
         # build the button and return it
+        # noinspection SpellCheckingInspection
         button = tk.Button(parent_frame,
                            text=text, anchor="w",
                            height=4 if self.tapped else 7,
                            width=15 if self.tapped else 10,
                            wraplength=110 if self.tapped else 80,
                            padx=3, pady=3,
-                           relief="raised", bg="lightgreen")
+                           relief="raised", bg='lightgreen')
         return button
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 if __name__ == "__main__":
@@ -203,8 +188,8 @@ if __name__ == "__main__":
     c4.tapped = True
     c4.build_tk_display(frame).grid(row=0, column=2, padx=5)
 
-    c3 = Cardboard(Decklist.WindsweptHeath)
-    c3.tapped = True
-    c3.build_tk_display(frame).grid(row=0, column=3, padx=5)
+    # c3 = Cardboard(Decklist.WindsweptHeath)
+    # c3.tapped = True
+    # c3.build_tk_display(frame).grid(row=0, column=3, padx=5)
 
     window.mainloop()
