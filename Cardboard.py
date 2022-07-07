@@ -65,6 +65,13 @@ class Cardboard:
     def cost(self):
         return self.rules_text.cost
 
+    @property
+    def effect(self):
+        if hasattr(self.rules_text, "effect"):
+            return self.rules_text.effect
+        else:
+            return None
+
     def get_activated(self):
         return self.rules_text.activated
 

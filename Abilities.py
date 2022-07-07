@@ -69,10 +69,10 @@ class GenericAbility:
         cannot be paid.
         The original GameState and Source are NOT mutated.
         """
-        if not self.CanAfford(gamestate, source):
+        if not self.can_afford(gamestate, source, choices):
             return []
         else:
-            return self.cost.pay(gamestate, source)
+            return self.cost.do_it(gamestate, source, choices)
 
     def is_triggered(self, verb: Verb, state: GameState, source: Cardboard,
                      triggerer: Cardboard):
