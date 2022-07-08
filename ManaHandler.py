@@ -30,7 +30,7 @@ class ManaPool:
             self.data[s] += mana.data[s]
 
     def can_afford_mana_cost(self, cost):
-        if self.cmc() < cost.mana_value():
+        if self.cmc() < cost.cmc():
             return False
         gold = self.data["A"]
         for c in ["W", "U", "B", "R", "G", "C"]:

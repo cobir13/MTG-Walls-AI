@@ -123,16 +123,15 @@ def run_gui_to_select(options, name, num_to_select, can_be_less):
     # make a floating display window
     disp = tk.Toplevel()
     # lists of buttons, frames (for highlight effect), and "is selected" bools.
-    butt_list = [None] * len(options)
-    frame_list = [None] * len(options)
+    butt_list = []
+    frame_list = []
     selected = [False] * len(options)
     # label saying how many are left for the user to select
     instr = "Choose %s %i" % ("up to" if can_be_less else "exactly",
                               num_to_select)
     text_var = tk.StringVar()
     text_var.set("%s: %i remaining" % (instr, num_to_select - sum(selected)))
-    l = tk.Label(disp, textvariable=text_var)
-    l.grid(row=0, column=0, columnspan=20)
+    tk.Label(disp, textvariable=text_var).grid(row=0, column=0, columnspan=20)
 
     # build the toggle function. each button will call this function, later.
     def toggle(index):
@@ -152,7 +151,7 @@ def run_gui_to_select(options, name, num_to_select, can_be_less):
             obj = obj[-1]
         frame = tk.Frame(disp, borderwidth=0, background="lightgrey")
         frame.grid(row=1, column=ii, padx=2, pady=2)
-        frame_list[ii] = frame
+        frame_list.append(frame)
         if hasattr(obj, "TkDisplay"):
             butt = obj.build_tk_display(frame)
         else:
@@ -161,7 +160,9 @@ def run_gui_to_select(options, name, num_to_select, can_be_less):
                              relief="solid", bg="lightgray")
         butt.config(command=lambda index=ii: toggle(index))
         butt.grid(padx=10, pady=10)
-        butt_list[ii] = butt
+        butt_list.append(butt)
+    assert (len(butt_list) == len(options))
+    assert (len(frame_list) == len(options))
 
     # add an "accept" button
     def accept():

@@ -172,24 +172,24 @@ class Cardboard:
         return button
 
 
-if __name__ == "__main__":
-    import Decklist
-
-    window = tk.Tk()
-    frame = tk.Frame(window)
-    frame.grid(padx=5, pady=5)
-
-    c1 = Cardboard(Decklist.Roots)
-    c1.build_tk_display(frame).grid(row=0, column=0, padx=5)
-    c2 = Cardboard(Decklist.Caretaker)
-    c2.build_tk_display(frame).grid(row=0, column=1, padx=5)
-
-    c4 = Cardboard(Decklist.Caretaker)
-    c4.tapped = True
-    c4.build_tk_display(frame).grid(row=0, column=2, padx=5)
-
-    # c3 = Cardboard(Decklist.WindsweptHeath)
-    # c3.tapped = True
-    # c3.build_tk_display(frame).grid(row=0, column=3, padx=5)
-
-    window.mainloop()
+# if __name__ == "__main__":
+#     import Decklist
+#
+#     window = tk.Tk()
+#     frame = tk.Frame(window)
+#     frame.grid(padx=5, pady=5)
+#
+#     c1 = Cardboard(Decklist.Roots)
+#     c1.build_tk_display(frame).grid(row=0, column=0, padx=5)
+#     c2 = Cardboard(Decklist.Caretaker)
+#     c2.build_tk_display(frame).grid(row=0, column=1, padx=5)
+#
+#     c4 = Cardboard(Decklist.Caretaker)
+#     c4.tapped = True
+#     c4.build_tk_display(frame).grid(row=0, column=2, padx=5)
+#
+#     # c3 = Cardboard(Decklist.WindsweptHeath)
+#     # c3.tapped = True
+#     # c3.build_tk_display(frame).grid(row=0, column=3, padx=5)
+#
+#     window.mainloop()

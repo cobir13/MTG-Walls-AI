@@ -9,11 +9,12 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from Verbs import Verb
+    from VerbParents import Verb
     from GameState import GameState
     from Cardboard import Cardboard
     import MatchCardPatterns as Match
-from Verbs import MoveToZone, ManyVerbs
+from Verbs import MoveToZone
+from VerbParents import ManyVerbs
 
 
 class Trigger:

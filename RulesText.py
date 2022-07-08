@@ -10,7 +10,7 @@ from typing import List, TYPE_CHECKING
 import ManaHandler
 
 if TYPE_CHECKING:
-    from Verbs import Verb
+    from VerbParents import Verb
     from GameState import GameState
     from Cardboard import Cardboard
     from Abilities import ActivatedAbility, TriggeredAbility

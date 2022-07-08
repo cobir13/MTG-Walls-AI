@@ -9,6 +9,8 @@ from RulesText import Creature, Land, Spell
 import ZONE
 import MatchCardPatterns as Match
 import Verbs
+from VerbCastAndActivate import TapSymbol
+from VerbParents import VerbManyTimes, ManyVerbs
 from Abilities import ActivatedAbility, TriggeredAbility, TriggerOnMove
 
 import Getters as Get
@@ -18,9 +20,9 @@ import Getters as Get
 Roots = Creature("Roots", Verbs.PayMana("1G"), ["defender"], 0, 5)
 Roots.activated.append(
     ActivatedAbility("Roots add G",
-                     Verbs.ManyVerbs([Verbs.AddCounterToSelf("-0/-1"),
-                                      Verbs.ActivateOncePerTurn(
-                                          "Roots add G")]),
+                     ManyVerbs([Verbs.AddCounterToSelf("-0/-1"),
+                                Verbs.ActivateOncePerTurn(
+                                    "Roots add G")]),
                      Verbs.AddMana("A")))
 
 # -----------------------------------------------------------------------------
@@ -28,19 +30,19 @@ Roots.activated.append(
 Caryatid = Creature("Caryatid", Verbs.PayMana("1G"),
                     ["defender", "hexproof"], 0, 3)
 Caryatid.activated.append(
-    ActivatedAbility("Caryatid add Au", Verbs.TapSymbol(), Verbs.AddMana("A")))
+    ActivatedAbility("Caryatid add Au", TapSymbol(), Verbs.AddMana("A")))
 
 # -----------------------------------------------------------------------------
 
 Caretaker = Creature("Caretaker", Verbs.PayMana("1G"), ["defender"], 0, 3)
 Caretaker.activated.append(
     ActivatedAbility("Caretaker add Au",
-                     Verbs.ManyVerbs([Verbs.TapSymbol(),
-                                      Verbs.TapAny([Match.NotSelf(),
-                                                    Match.Untapped(),
-                                                    Match.CardType(Creature)
-                                                    ])
-                                      ]),
+                     ManyVerbs([TapSymbol(),
+                                Verbs.TapAny([Match.NotSelf(),
+                                              Match.Untapped(),
+                                              Match.CardType(Creature)
+                                              ])
+                                ]),
                      Verbs.AddMana("A")))
 
 # -----------------------------------------------------------------------------
@@ -49,18 +51,22 @@ Battlement = Creature("Battlement", Verbs.PayMana("1G"),
                       ["defender"], 0, 4)
 Battlement.activated.append(
     ActivatedAbility("Battlement add G",
-                     Verbs.TapSymbol(),
-                     Verbs.VerbManyTimes(Verbs.AddMana("G"), Get.NumberInZone(
-                         [Match.Keyword("defender")], ZONE.FIELD))))
+                     TapSymbol(),
+                     VerbManyTimes(Verbs.AddMana("G"),
+                                   Get.NumberInZone(
+                                       [Match.Keyword("defender")],
+                                       ZONE.FIELD))))
 
 # -----------------------------------------------------------------------------
 
 Axebane = Creature("Axebane", Verbs.PayMana("2G"), ["defender"], 0, 3)
 Axebane.activated.append(
     ActivatedAbility("Axebane add Au",
-                     Verbs.TapSymbol(),
-                     Verbs.VerbManyTimes(Verbs.AddMana("A"), Get.NumberInZone(
-                         [Match.Keyword("defender")], ZONE.FIELD))))
+                     TapSymbol(),
+                     VerbManyTimes(Verbs.AddMana("A"),
+                                   Get.NumberInZone(
+                                       [Match.Keyword("defender")],
+                                       ZONE.FIELD))))
 
 # -----------------------------------------------------------------------------
 

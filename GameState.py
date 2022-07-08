@@ -5,19 +5,21 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, Tuple
-# if TYPE_CHECKING:
-#     import RulesText
+from typing import TYPE_CHECKING, List, Tuple
+
+if TYPE_CHECKING:
+    from Abilities import ActivatedAbility
+    from VerbParents import Verb
 
 # import tkinter as tk
-from Abilities import ActivatedAbility
-import Stack
 from Cardboard import Cardboard  # actually needs
-import Getters as Get
+import Getters as Get  # actually needs
+import Choices  # actually needs
 import ZONE
 from ManaHandler import ManaPool
-import Choices
-import Verbs
+from Stack import StackAbility, StackObject
+from StackCardboard import StackCardboard
+from Verbs import MoveToZone, DrawCard, UntapSelf, AsEnterEffect
 
 
 class GameState:
@@ -207,12 +209,14 @@ class GameState:
                 i_end = stack_index + 1 + len(obj2.choices)
                 new_choices = new_track_list[stack_index + 1:i_end]
                 # build the new StackObject
-                if isinstance(obj2, Stack.StackCardboard):
-                    new_stack_obj = Stack.StackCardboard(new_card, new_choices)
-                elif isinstance(obj2, Stack.StackAbility):
+                if isinstance(obj2, StackCardboard):
+                    new_stack_obj = StackCardboard(new_card,
+                                                                 new_choices)
+                elif isinstance(obj2, StackAbility):
                     ability = obj2.ability  # does this need a copy?
-                    new_stack_obj = Stack.StackAbility(ability, new_card,
-                                                       new_choices)
+                    new_stack_obj = StackAbility(ability,
+                                                              new_card,
+                                                              new_choices)
                 else:
                     raise TypeError("Unknown type of StackObject!")
                 new_list.append(new_stack_obj)
@@ -257,7 +261,7 @@ class GameState:
         elif zone_name == ZONE.GRAVE:
             self.grave.sort(key=Cardboard.get_id)
 
-    def _move_zone(self, cardboard, destination):
+    def MoveZone(self, cardboard, destination):
         """Move the specified piece of cardboard from the zone
         it is currently in to the specified destination zone.
         Raises IndexError if the cardboard is not in the zone
@@ -265,7 +269,7 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        Verbs.MoveToZone(destination).do_it(self, cardboard, [])
+        MoveToZone(destination).do_it(self, cardboard, [])
 
     # -------------------------------------------------------------------------
 
@@ -279,7 +283,7 @@ class GameState:
             cardboard = self.field[i]
             toughness = Get.Toughness().get(self, cardboard)
             if toughness is not None and toughness <= 0:
-                Verbs.MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
+                MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
                 continue  # don't increment counter
             i += 1
         # legend rule   # TODO
@@ -292,7 +296,7 @@ class GameState:
         self.turn_count += 1
         self.has_played_land = False
         for card in self.field:
-            Verbs.UntapSelf().do_it(self, card, [])
+            UntapSelf().do_it(self, card, [])
             card.summon_sick = False
             # erase the invisible counters
             card.counters = [c for c in card.counters if
@@ -302,13 +306,13 @@ class GameState:
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         for cardboard in self.hand + self.field + self.grave:
             for ability in cardboard.rules_text.trig_upkeep:
-                new_effect = Stack.StackAbility(ability, cardboard, [])
+                new_effect = StackAbility(ability, cardboard, [])
                 self.super_stack.append(new_effect)
 
     def draw_card(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
            Draws from index 0 of deck."""
-        Verbs.DrawCard().do_it(self, None, [])
+        DrawCard().do_it(self, None, [])
 
     def resolve_top_of_stack(self):
         """
@@ -324,7 +328,7 @@ class GameState:
             been placed on the stack."""
         if len(self.stack) == 0:
             return []
-        assert (isinstance(self.stack[-1], Stack.StackObject))
+        assert (isinstance(self.stack[-1], StackObject))
         return self.stack[-1].resolve(self)
 
     def clear_super_stack(self):
@@ -338,12 +342,12 @@ class GameState:
         results = []
         # pick a super_stack effect to move to the stack
         for item in Choices.choose_exactly_one(
-                        list(enumerate(self.super_stack)),
-                        "Add to stack"):
+                list(enumerate(self.super_stack)),
+                "Add to stack"):
             ii = item[0]  # index first, then object second
             new_state = self.copy()
             stack_ability = new_state.super_stack.pop(ii)
-            if stack_ability.ability.is_type(Verbs.AsEnterEffect):
+            if stack_ability.ability.is_type(AsEnterEffect):
                 # if the ability contains an AsEntersEffect, then enact
                 # it immediately rather than putting it on the stack.
                 results += stack_ability.resolve(self)
