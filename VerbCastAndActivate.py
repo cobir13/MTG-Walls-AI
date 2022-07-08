@@ -142,6 +142,7 @@ class CastCard(VerbOnSubjectCard):
                 mover.do_it(g1, s1, targets)  # mutate in-place
             else:
                 g1.stack.append(StackCardboard(s1, targets))  # mutate in-place
+                g1.num_spells_cast += 1
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already
         # been added to the superstack during ability.cost.pay. Now add

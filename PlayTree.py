@@ -4,222 +4,170 @@ Created on Mon Dec 28 21:13:59 2020
 
 @author: Cobi
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING, List, Set
 
-import random
+if TYPE_CHECKING:
+    import GameState
 
-import RulesText
-import ZONE
-from ManaHandler import ManaPool
-import GameState
+from VerbCastAndActivate import ActivateAbility, CastCard
 
 
-    
-    
-class TurnTracker():
+class PlayTree:
     """
     Holds all gamestates that occur over the course of a turn.
-    
-    It is given the starting state of a turn, after untap and upkeep and draw.
-    It calculates all possible moves until it runs out of moves and the
-    turn is over.
-    
+
     Stores the initial states, the final states, and all intermediate states.
     """
-    
-    def __init__(self,startnodes):
-        # startnode = TurnTracker.ActionNode(gamestate,[],None)
-        self.allnodes = set(startnodes)     #set of all ActionNode intermediate states
-        self.finalnodes = set()             #set of ActionNodes with no more options
-        self.activenodes = set(startnodes)  #set of nodes that still need processing
-        self.traverse_counter = 0 #for debug tracking, no real use
 
-    def InitFromGameState(gamestate,history=[]):
-        startnode = TurnTracker.ActionNode(gamestate,history)
-        return TurnTracker([startnode])
-    
-    def PlayTurn(self):
-        while len(self.activenodes)>0:
-            node = self.activenodes.pop()  #pop a random node to work with
-            #options are: cast spell, activate ability, let stack resolve
-            stackeffs = node.state.get_valid_activations()
-            castables = node.state.get_valid_castables()
-            #if no valid actions, this is a final node
-            if len(stackeffs)+len(castables)+len(node.state.stack) == 0:
-                self.finalnodes.add(node)
-                #it's already in allnodes so don't need to add it to that
-                continue    
-            #if there ARE valid actions, make new nodes by taking them
-            newnodes = []
-            for effect in stackeffs:
-                #list of GameStates with the ability effect paid for, on stack
-                for gamestate in effect.PutOnStack(node.state):
-                    histlog = node.history + ["Use "+effect.name]
-                    newnodes.append(TurnTracker.ActionNode(gamestate,histlog))
+    def __init__(self, start_states: List[GameState], turn_limit: int):
+        # NOTE: for all of these sets of GameStates, the super_stack is
+        # guaranteed to be empty but the normal stack may have things!
+
+        # Every intermediate GameState that has been reached so far this turn.
+        self.all_intermediate: Set[GameState] = set(start_states)
+        # set of GameStates that have no more options for the player to take.
+        self.final_states: Set[GameState] = set()
+        # set of GameStates which have options left to explore to see what
+        # new GameStates they will create.
+        self.active_states: Set[GameState] = set(start_states)
+        # for debugging, track total number of states visited. (This is more
+        # than total intermediate states, since some intermediate states are
+        # reached multiple times through different sequences of actions
+        self.traverse_counter: int = 0
+        # hold the tree for the next turn of the game
+        self.next_turn: PlayTree | None = None
+
+    def get_turn_n(self):
+        return []
+
+    def main_phase_for_all_active_states(self):
+        while len(self.active_states) > 0:
+            # remove a random GameState from the active list and explore it
+            state = self.active_states.pop()
+            # options are: cast spell, activate ability, let stack resolve
+            activables = state.state.get_valid_activations()
+            castables = state.state.get_valid_castables()
+            # if no valid actions, this is a final state
+            if len(activables) + len(castables) + len(state.stack) == 0:
+                self.final_states.add(state)
+                # It is already in allnodes so don't need to add it to there.
+                # Just move on to the next GameState in active_states
+                continue
+            # if there ARE valid actions, make new nodes by taking them
+            new_nodes = []
+            for ability, source, choice_list in activables:
+                activator = ActivateAbility(ability)
+                game_tuple_list = activator.do_it(state, source, choice_list)
+                # list of (GameState, source Cardboard, list) tuples.
+                for g, _, _ in game_tuple_list:
+                    new_nodes += g.clear_super_stack()
             for card in castables:
-                #list of GameStates with the card cost paid for, card on stack
-                for gamestate in node.state.CastSpell(card):
-                    histlog = node.history + ["Cast "+card.name]
-                    newnodes.append(TurnTracker.ActionNode(gamestate,histlog))
-            if len(node.state.stack)>0:
-                #list of GameStates with the top effect on the stack resolved
-                for gamestate in node.state.resolve_top_of_stack():
-                    newnodes.append(TurnTracker.ActionNode(gamestate,node.history))
-            #add these new nodes to the tracker
-            for newnode in newnodes:
+                choice_list = card.cost.choose_choices(state, card)
+                game_tuple_list = CastCard().do_it(state, card, choice_list)
+                for g, _, _ in game_tuple_list:
+                    new_nodes += g.clear_super_stack()
+            if len(state.stack) > 0:
+                # list of GameStates with the top effect on the stack resolved
+                for g in state.resolve_top_of_stack():
+                    new_nodes += g.clear_super_stack()
+            # add these new nodes to the PlayTree's tracker
+            for new_state in new_nodes:
                 self.traverse_counter += 1
-                #if node already exists, then we're done with this node
-                if newnode in self.allnodes:
-                    continue #already seen this state, so we're done.
-                #if node is new, then add it to active nodes! & track it!
-                else:
-                    self.activenodes.add(newnode)
-                    self.allnodes.add(newnode)
+                # if state already exists, then we're done with this state
+                if new_state not in self.all_intermediate:
+                    self.active_states.add(new_state)
+                    self.all_intermediate.add(new_state)
 
-   
-    def GetFinal(self):
-        """Return a list of final nodes. Uses a fancier version of equivalency,
-        where nodes are equal if their states would be equal IF THEY WERE
-        UNTAPPED. They aren't actually untapped yet, this just checks ahead."""
-        class FancyNode():
-            def __init__(self,node):
-                self.node = node
-            def __eq__(self,other):
-                untapped = self.node.state.copy()
-                untapped.untap_step()
-                untapped_other = other.node.state.copy()
-                untapped_other.untap_step()
-                return untapped == untapped_other #usual _eq_ for GameStates
-            def __hash__(self):
-                untapped = self.node.state.copy()
-                untapped.untap_step()
-                return untapped.__hash__()
-        fancyset = set()
-        for node in self.finalnodes:
-            fancyset.add(FancyNode(node))
-        return [fn.node for fn in fancyset]
-
-    def GetAll(self):
-        """Return a list of all nodes. Uses a fancier version of equivalency,
-        where nodes are equal if their states would be equal WHEN WE UNTAP
-        NEXT TURN. They aren't actually untapped yet, this just checks ahead.
-        I can use this if I want to permit the AI to "stop early" before
-        exhausting all possible moves."""
-        class FancyNode():
-            def __init__(self,node):
-                self.node = node
-            def __eq__(self,other):
-                untapped = self.node.state.copy()
-                untapped.untap_step()
-                untapped_other = other.node.state.copy()
-                untapped_other.untap_step()
-                return untapped == untapped_other #usual _eq_ for GameStates
-            def __hash__(self):
-                untapped = self.node.state.copy()
-                untapped.untap_step()
-                return untapped.__hash__()
-        fancyset = set()
-        for node in self.allnodes:
-            fancyset.add(FancyNode(node))
-        #return the not-yet-untapped nodes, but only those with empty stacks
-        return [fn.node for fn in fancyset if len(fn.node.state.stack)==0]
-    
-    
-    class ActionNode():
+    def begin_phase_for_all_active_states(self):
+        """Apply untap, upkeep, draw to all currently-active
+        states, updating the active and intermediate state
+        sets as appropriate. This should end with active
+        states having empty superstacks but possibly still
+        having triggers on the stack. Who knows, maybe the
+        player wants a chance to respond to those
+        triggers!
         """
-        Node. Holds a gamestate and the history of actions taken this turn to
-        reach this gamestate.  Class within class.
-        """
-        def __init__(self,gamestate,history):
-            self.state = gamestate
-            self.history = []       #list of descriptions of arriving at this
-            if gamestate.verbose:   #state. Only use for verbose gamestates.
-                self.history = history 
-                
-        def __hash__(self):
-            return self.state.__hash__()
-        
-        def __eq__(self,other):
-            return self.state == other.state
-            
-        def __str__(self):
-            return str(self.state)
-        
-        def PrintEvolution(self):    
-            print("\n".join(self.history)+"\n"+str(self.state))
-            
-        def AddToHistory(self,description):
-            if self.state.verbose:
-                self.history.append(description)
-        
-        def copy(self):
-            return TurnTracker.ActionNode(self.state.copy(),
-                                          [s for s in self.history])
-        
-            
-    
-class PlayTree():
-    
-    def __init__(self,startstate,turnlimit):
-        self.startstate = startstate  #initial GameState
-        self.turnlimit = turnlimit
-        turn1 = TurnTracker.InitFromGameState(startstate)
-        self.trackerlist = [turn1]  #one tracker object per turn of the game
-                            #[-1].finalnodes should always be full
-        turn1.PlayTurn() #do this AFTER adding tracker, in case Win or Lose error
+        new_nodes = []
+        for state in self.active_states:
+            state2 = state.copy()
+            state2.step_untap()
+            state2.step_upkeep()
+            state2.step_draw()
+            new_nodes += state2.clear_super_stack()
+        # The states in new_node may have things on the stack! That's ok.
+        # They are the new active_states.
+        self.active_states = set(new_nodes)
+        self.all_intermediate.update(new_nodes)
+        self.traverse_counter += len(new_nodes)
 
-                                    
-    
-    def PlayNextTurn(self):
-        #get final state of previous turn
-        prevtracker = self.trackerlist[-1]
-        #apply untap, upkeep, and draw to these nodes
-        newnodes = set()
-        for node in prevtracker.GetFinal():
-            oldstate = node.state
-            newstate = oldstate.copy()
-            newstate.untap_step()
-            newstate.upkeep_step()
-            newstate.draw_card()  #technically should clear super_stack FIRST but whatever
-            #clear the super stack, then clear the normal stack
-            activelist = newstate.clear_super_stack()
-            finalstates = set()
-            while len(activelist)>0:
-                state = activelist.pop(0)
-                if len(state.stack)==0:
-                    finalstates.add(state)
-                else:
-                    activelist += state.resolve_top_of_stack()
-            #all untap/upkeep/draw abilities are done. make nodes for these.
-            for final in finalstates:
-                newnode = node.copy()
-                newnode.AddToHistory("untap,upkeep,draw")
-                newnode.state = final
-                newnodes.add(newnode)
-        #use these nodes as starting point for next turn's tracker
-        newtracker = TurnTracker(newnodes)
-        self.trackerlist.append(newtracker)
-        newtracker.PlayTurn() #do this AFTER adding tracker, in case Win or Lose error
+    # def PrintLatest(self):
+    #     finalnodes = self.LatestNodes()
+    #     if len(finalnodes) == 0:
+    #         print("\n-------start of upkeep of turn %i----------" % (
+    #             len(self.trackerlist)))
+    #         for node in self.LatestTracker().activenodes:
+    #             print(node)
+    #             print("-----------------")
+    #     else:
+    #         print(
+    #             "\n-------end of turn %i----------" % (len(self.tracklist)))
+    #         for node in finalnodes:
+    #             print(node)
+    #             print("-----------------")
 
-    
-    def LatestTracker(self):
-        return self.trackerlist[-1]
-
-    def LatestNodes(self):
-        return self.trackerlist[-1].GetFinal()
-    
-    def PrintLatest(self):
-        finalnodes = self.LatestNodes()
-        if len(finalnodes)==0:
-            print("\n-------start of upkeep of turn %i----------" %(len(self.trackerlist)) )
-            for node in self.LatestTracker().activenodes:
-                print(node)
-                print("-----------------")
-        else:
-            print("\n-------end of turn %i----------" %(len(self.trackerlist)) )
-            for node in finalnodes:
-                print(node)
-                print("-----------------")
-    
-    
-
-
+    # def GetFinal(self):
+    #     """Return a list of final nodes. Uses a fancier version
+    #     of equivalency, where nodes are equal if their states
+    #     would be equal IF THEY WERE UNTAPPED. They aren't
+    #     actually untapped yet, this just checks ahead."""
+    #
+    #     class FancyNode():
+    #         def __init__(self, node):
+    #             self.node = node
+    #
+    #         def __eq__(self, other):
+    #             untapped = self.node.state.copy()
+    #             untapped.step_untap()
+    #             untapped_other = other.node.state.copy()
+    #             untapped_other.step_untap()
+    #             return untapped == untapped_other  # usual GameState _eq_
+    #
+    #         def __hash__(self):
+    #             untapped = self.node.state.copy()
+    #             untapped.step_untap()
+    #             return untapped.__hash__()
+    #
+    #     fancyset = set()
+    #     for node in self.finalnodes:
+    #         fancyset.add(FancyNode(node))
+    #     return [fn.node for fn in fancyset]
+    #
+    # def GetAll(self):
+    #     """Return a list of all nodes. Uses a fancier version of equivalency,
+    #     where nodes are equal if their states would be equal WHEN WE UNTAP
+    #     NEXT TURN. They aren't actually untapped yet, this just checks ahead.
+    #     I can use this if I want to permit the AI to "stop early" before
+    #     exhausting all possible moves."""
+    #
+    #     class FancyNode():
+    #         def __init__(self, node):
+    #             self.node = node
+    #
+    #         def __eq__(self, other):
+    #             untapped = self.node.state.copy()
+    #             untapped.step_untap()
+    #             untapped_other = other.node.state.copy()
+    #             untapped_other.step_untap()
+    #             return untapped == untapped_other  # usual GameState _eq_
+    #
+    #         def __hash__(self):
+    #             untapped = self.node.state.copy()
+    #             untapped.step_untap()
+    #             return untapped.__hash__()
+    #
+    #     fancyset = set()
+    #     for node in self.allnodes:
+    #         fancyset.add(FancyNode(node))
+    #     # return the not-yet-untapped nodes, but only those with empty stacks
+    #     return [fn.node for fn in fancyset if len(fn.node.state.stack) == 0]

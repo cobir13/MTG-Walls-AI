@@ -49,6 +49,11 @@ class Verb:
         Cardboard, and any (copied) choices which have not yet been
         used up.
         """
+        # add a note to the GameState's history that this Verb has occurred,
+        # assuming that the GameState is tracking such things.
+        # TODO: move to PlayTree or ActivateAbility & CastAbility?
+        if state.verbose:
+            state.history.append(str(self))
         # `trigger_source` is source of the trigger. Not to be confused
         # with `source`, which is the source of the Verb which is
         # potentially CAUSING the trigger.

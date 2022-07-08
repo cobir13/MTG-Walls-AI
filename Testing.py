@@ -4,14 +4,32 @@ Created on Tue Dec 29 22:15:57 2020
 
 @author: Cobi
 """
+from __future__ import annotations
+from typing import TYPE_CHECKING, Tuple
+if TYPE_CHECKING:
+    from Abilities import ActivatedAbility
+    from Cardboard import Cardboard
 
 import ZONE
-import GameState
+from GameState import GameState
 import ManaHandler
 import Decklist
 import Cardboard
-
+from VerbCastAndActivate import ActivateAbility, CastCard
 import time
+
+
+def cast_thing(state,
+               th: Tuple[ActivatedAbility, Cardboard, list] | Cardboard):
+    if isinstance(th, tuple):
+        ability, source, choice_list = th
+        g_list = ActivateAbility(ability).do_it(state, source, choice_list)
+    else:
+        card = th
+        choice_list = card.cost.choose_choices(state, card)
+        g_list = CastCard().do_it(state, card, choice_list)
+    return [g for g, _, _ in g_list]
+
 
 if __name__ == "__main__":
 
@@ -19,7 +37,7 @@ if __name__ == "__main__":
     print("Testing Wall of Roots...")
     start_clock = time.perf_counter()
 
-    game = GameState.GameState()
+    game = GameState()
     game.verbose = False  # True
     assert (len(game.get_valid_activations()) == 0)
     assert (len(game.get_valid_castables()) == 0)
@@ -33,7 +51,7 @@ if __name__ == "__main__":
     assert (len(game.get_valid_activations()) == 1)  # 1 ability to activate
     assert (len(game.get_valid_castables()) == 0)  # no castable cards
 
-    [copygame1] = game.get_valid_activations()[0].PutOnStack(game)
+    [copygame1] = cast_thing(game, game.get_valid_activations()[0])
     # remember, mana abilities don't use the stack! mana is added immediately
     assert (len(
         copygame1.field[0].counters) > 0)  # counters on the Wall of Roots
@@ -54,7 +72,7 @@ if __name__ == "__main__":
     assert ([o is cardboard for o in copygame2.hand] == [True, False,
                                                          False])  # 1st spell in hand
 
-    [copygame3] = copygame2.CastSpell(cardboard)  # puts it on the stack
+    [copygame3] = cast_thing(copygame2, cardboard)  # puts it on the stack
     assert (copygame3.pool == ManaHandler.ManaPool(""))  # no mana anymore
     assert (len(copygame3.stack) == 1)  # one spell on the stack
     assert (len(copygame3.hand) == 2)  # two cards in hand
@@ -91,7 +109,7 @@ if __name__ == "__main__":
     #
     # # try untap and upkeep
     # carygame1.untap_step()
-    # carygame1.upkeep_step()
+    # carygame1.step_upkeep()
     # assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
     # gameN = carygame1
     # options = gameN.get_valid_activations() + gameN.get_valid_castables()
@@ -156,7 +174,7 @@ if __name__ == "__main__":
     # print("Testing basic lands and BasicLoop...")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # # field
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
@@ -179,7 +197,7 @@ if __name__ == "__main__":
     # print("Testing shock-lands...")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
     # # hand
@@ -213,7 +231,7 @@ if __name__ == "__main__":
     # print("""Testing equality of gamestates...""")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # # field
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.FIELD)
@@ -256,7 +274,7 @@ if __name__ == "__main__":
     # assert (cp4 in testset)
     #
     # # two lands. put into play in opposite order. Should be equivalent.
-    # game1 = GameState.GameState()
+    # game1 = GameState()
     # game1.verbose = False
     # game1.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
     # game1.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.HAND)
@@ -273,7 +291,7 @@ if __name__ == "__main__":
     #
     # # two creatures. put into play in opposite order. Should be NOT equivalent
     # # because of summoning sickness
-    # game1 = GameState.GameState()
+    # game1 = GameState()
     # game1.verbose = False
     # game1.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
     # game1.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
@@ -294,7 +312,7 @@ if __name__ == "__main__":
     # print("Testing TurnTracker...")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # # field
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
@@ -320,7 +338,7 @@ if __name__ == "__main__":
     # # print("\n\n")
     #
     # # fixing TurnTracker history duplication: second minor test
-    # game2 = GameState.GameState()
+    # game2 = GameState()
     # game2.verbose = True
     # game2.MoveZone(Cardboard.Cardboard(Decklist2.HallowedFountain),
     #                  ZONE.HAND)
@@ -344,7 +362,7 @@ if __name__ == "__main__":
     # print("Testing PlayTree...")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.HAND)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
@@ -380,7 +398,7 @@ if __name__ == "__main__":
     # print("Testing Caretakers, Axebane, Battlement...")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
@@ -460,7 +478,7 @@ if __name__ == "__main__":
     # print("Can PlayTree find 8 mana on turn 3...")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = True
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
@@ -499,7 +517,7 @@ if __name__ == "__main__":
     # print("Testing Wall of Blossoms, Arcades, and ETBs")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = True
     # # field
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.FIELD)
@@ -549,7 +567,7 @@ if __name__ == "__main__":
     # assert (len(final2.deck) == 6)
     #
     # # but what if there was an Arcades in play?
-    # gameA = GameState.GameState()
+    # gameA = GameState()
     # # deck
     # for x in range(10):
     #     gameA.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
@@ -594,7 +612,7 @@ if __name__ == "__main__":
     # # set up a sample game and play the first few turns. Should be able to
     # # cast Arcades on turn 3 and then draw a lot of cards
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # # hand
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.HAND)
@@ -633,7 +651,7 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # # make a game with some fetchable lands in deck and fetchlands in hand
-    # game = GameState.GameState()
+    # game = GameState()
     # game.verbose = False
     # # deck
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.DECK)
@@ -693,7 +711,7 @@ if __name__ == "__main__":
     # assert (totallife == (19 * 4) + (17 * 2))
     #
     # # what if deck has no valid targets?
-    # gameE = GameState.GameState()
+    # gameE = GameState()
     # # deck
     # for i in range(10):
     #     gameE.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
@@ -711,7 +729,7 @@ if __name__ == "__main__":
     # print("Testing Collected Company and simultaneous ETBs")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # # deck of 6 cards
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
@@ -739,7 +757,7 @@ if __name__ == "__main__":
     #     assert (not any(["land" in c.rules_text.keywords for c in u.field]))
     #
     # # deck of 6 forests on top, then 10 islands
-    # gameF = GameState.GameState()
+    # gameF = GameState()
     # for _ in range(6):
     #     gameF.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
     # for _ in range(10):
@@ -757,7 +775,7 @@ if __name__ == "__main__":
     # assert (len(u.grave) == 1)
     #
     # # deck of 5 forests on top, one Caretaker, then 10 islands
-    # game1 = GameState.GameState()
+    # game1 = GameState()
     # for _ in range(5):
     #     game1.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
     # game1.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
@@ -776,7 +794,7 @@ if __name__ == "__main__":
     # assert (len(u.grave) == 1)
     #
     # # deck of only 4 cards total, all Caretakers
-    # game4 = GameState.GameState()
+    # game4 = GameState()
     # for _ in range(4):
     #     game4.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
     # # should be forests on top
@@ -790,7 +808,7 @@ if __name__ == "__main__":
     # assert (len(u.grave) == 1)
     #
     # # Does Blossoms trigger correctly? start with 12 cards in deck
-    # game = GameState.GameState()
+    # game = GameState()
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.DECK)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Omens), ZONE.DECK)
     # for _ in range(10):
@@ -812,7 +830,7 @@ if __name__ == "__main__":
     # # Note: if I put two identical Blossoms into play simultaneously, I STILL
     # # will get two GameStates even though they are identical! And that's ok.
     # # it's not worth the effort to optimize this out, right now.
-    # game = GameState.GameState()
+    # game = GameState()
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.DECK)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.DECK)
     # for _ in range(10):
@@ -838,7 +856,7 @@ if __name__ == "__main__":
     # print("Testing WildCards, Cost2, and other new templating tech")
     # start_clock = time.perf_counter()
     #
-    # game = GameState.GameState()
+    # game = GameState()
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.FIELD)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.FIELD)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
