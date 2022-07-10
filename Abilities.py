@@ -54,6 +54,16 @@ class TriggerOnMove(Trigger):
 
 
 # ----------
+class AsEnterEffect(TriggerOnMove):
+    """A specific subcategory of TriggerOnMove.  This is an
+    enters-the-battlefield effect except more so: triggered abilities of this
+    type bypass the stack and are handled IMMEDIATELY when the super_stack is
+    cleared. This can be seen in `GameState.clear_super_stack`.
+    """
+    pass
+
+
+# ----------
 
 class GenericAbility:
     def __init__(self, name, effect: Verb):
@@ -97,7 +107,11 @@ class GenericAbility:
             return self.trigger.is_triggered(verb, state, source, trigger_card)
 
     def __str__(self):
-        return self.name
+        txt_cost = "" if self.cost is None else str(self.cost)
+        txt_trig = "" if self.trigger is None else str(self.trigger)
+
+        txt_efct = str(self.effect)
+        return "Ability(%s,%s->%s)" % (txt_cost, txt_trig, txt_efct)
 
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)

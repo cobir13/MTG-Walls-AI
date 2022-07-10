@@ -13,8 +13,8 @@ if TYPE_CHECKING:
     from VerbParents import Verb
     from GameState import GameState
     from Cardboard import Cardboard
-    from Abilities import ActivatedAbility, TriggeredAbility
-from Verbs import PlayLandForTurn, PayMana
+from Abilities import ActivatedAbility, TriggeredAbility, Trigger
+from Verbs import PlayLandForTurn, PayMana, NullVerb
 import ZONE
 
 
@@ -22,7 +22,7 @@ import ZONE
 
 class RulesText:
 
-    def __init__(self, name: str, cost: Verb, keywords: List[str]):
+    def __init__(self):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
@@ -30,9 +30,9 @@ class RulesText:
                       List of lowercase tags describing this card. Includes
                       MtG types as well as relevant keywords.
         """
-        self.name: str = name
-        self.cost: Verb = cost
-        self.keywords: List[str] = [s.lower() for s in keywords]
+        self.name: str = ""
+        self.cost: Verb = NullVerb()
+        self.keywords: List[str] = []
         # activated abilities
         self.activated: List[ActivatedAbility] = []  # includes mana abilities
         # triggered by verbs (actions that are done)
@@ -64,7 +64,8 @@ class RulesText:
         if len(mana_verbs) == 0:
             return 0
         else:
-            return sum([pay_mana.mana_cost.mana_value() for pay_mana in mana_verbs])
+            return sum([pay_mana.mana_cost.mana_value()
+                        for pay_mana in mana_verbs])
 
     @property
     def mana_cost(self):
@@ -72,23 +73,34 @@ class RulesText:
         cost_str = "".join([str(v.mana_cost) for v in mana_verbs])
         return ManaHandler.ManaCost(cost_str)
 
+    def add_keywords(self, words: List[str]):
+        self.keywords += [w.lower() for w in words]
+
+    def add_activated(self, name: str, cost: Verb, effect: Verb):
+        self.activated.append(ActivatedAbility(name, cost, effect))
+
+    def add_triggered(self, name: str, trigger: Trigger, effect: Verb):
+        self.trig_verb.append(TriggeredAbility(name, trigger, effect))
 # ----------------------------------------------------------------------------
 
 
 class Permanent(RulesText):
 
-    def __init__(self, name, cost, keywords):
-        super().__init__(name, cost, keywords)
+    def __init__(self):
+        super().__init__()
         self.cast_destination = ZONE.FIELD
 
 
 class Creature(Permanent):
 
-    def __init__(self, name, cost, keywords, power, toughness):
-        super().__init__(name, cost, keywords)
+    def __init__(self):
+        super().__init__()
+        self.power = 0
+        self.toughness = 0
+
+    def set_power_toughness(self, power: int, toughness: int):
         self.power = power
         self.toughness = toughness
-
 
 # class Human(Creature):
 #     pass
@@ -102,14 +114,9 @@ class Creature(Permanent):
 
 class Land(Permanent):
 
-    def __init__(self, name, keywords):
-        super().__init__(name, PlayLandForTurn(), keywords)
-        # if "land" not in self.keywords:
-        #     self.keywords = ["land"] + self.keywords
-
-
-#
-#
+    def __init__(self):
+        super().__init__()
+        self.cost = PlayLandForTurn
 #
 #     def EnterTapped(gamestate, source) -> List[GameState]:
 #         """useful for tap-lands. MUTATES."""
@@ -136,8 +143,7 @@ class Land(Permanent):
 
 class Spell(RulesText):
 
-    def __init__(self, name, cost: Verb, keywords: List[str],
-                 effect: Verb, destination_zone=ZONE.GRAVE):
+    def __init__(self):
         """
         name (str)  : name of this card.
         cost (Cost) : mana and additional cost to cast this card.
@@ -149,6 +155,6 @@ class Spell(RulesText):
         destination_zone   : The ZONE the Cardboard is moved to
                              after resolution.
         """
-        super().__init__(name, cost, keywords)
-        self.cast_destination = destination_zone
-        self.effect = effect
+        super().__init__()
+        self.cast_destination = ZONE.GRAVE
+        self.effect: Verb = NullVerb()

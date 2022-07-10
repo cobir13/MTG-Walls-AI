@@ -27,6 +27,9 @@ class Getter:
     def single_output(self):
         return True
 
+    def __str__(self):
+        return type(self).__name__
+
 
 class Const(Getter):
     def __init__(self, value):
@@ -34,6 +37,9 @@ class Const(Getter):
 
     def get(self, state: GameState, source: Cardboard):
         return self.value
+
+    def __str__(self):
+        return str(self.value)
 
 
 class CardSingle(Getter):
@@ -90,8 +96,12 @@ class NumberInZone(Integer):
         return len([c for c in zone if all([p.match(c, state, source)
                                             for p in self.patterns])])
 
+    def __str__(self):
+        patterns = ",".join([str(p) for p in self.patterns])
+        return super().__str__() + "(" + patterns + ")"
 
 # ----------
+
 
 class ListFromZone(CardList):
     def __init__(self, patterns: List[Match.CardPattern], zone):
@@ -107,6 +117,7 @@ class ListFromZone(CardList):
 
 # ----------
 
+
 class ListTopOfDeck(CardList):
     def __init__(self, patterns: List[Match.CardPattern], get_depth: Integer):
         super().__init__()
@@ -119,6 +130,9 @@ class ListTopOfDeck(CardList):
         return [c for c in top_of_deck
                 if all([p.match(c, state, source) for p in self.patterns])]
 
+    def __str__(self):
+        patterns = ",".join([str(p) for p in self.patterns])
+        return super().__str__() + "(%s|%s" % (str(self.get_depth), patterns)
 
 # ----------
 
@@ -201,3 +215,9 @@ class Chooser(Getter):
     @property
     def single_output(self):
         return False
+
+    def __str__(self):
+        less_ok = "<=" if self.can_be_less else ""
+        n = self.num_to_choose
+        getter = str(self.getter)
+        return "Choose(%s%i from %s)" % (less_ok, n, getter)

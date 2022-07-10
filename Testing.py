@@ -6,97 +6,143 @@ Created on Tue Dec 29 22:15:57 2020
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, Tuple
+
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility
-    from Cardboard import Cardboard
 
 import ZONE
 from GameState import GameState
 import ManaHandler
 import Decklist
-import Cardboard
+from Cardboard import Cardboard, CardNull
 from VerbCastAndActivate import ActivateAbility, CastCard
 import time
 
-
-def cast_thing(state,
-               th: Tuple[ActivatedAbility, Cardboard, list] | Cardboard):
-    if isinstance(th, tuple):
-        ability, source, choice_list = th
-        g_list = ActivateAbility(ability).do_it(state, source, choice_list)
-    else:
-        card = th
-        choice_list = card.cost.choose_choices(state, card)
-        g_list = CastCard().do_it(state, card, choice_list)
-    return [g for g, _, _ in g_list]
-
-
 if __name__ == "__main__":
 
+    def cast_thing(state,
+                   th: Tuple[ActivatedAbility, Cardboard, list] | Cardboard):
+        if isinstance(th, tuple):
+            ability, source, choice_list = th
+            g_list = ActivateAbility(ability).do_it(state, source, choice_list)
+        else:
+            card = th
+            choice_list = card.cost.choose_choices(state, card)
+            g_list = CastCard().do_it(state, card, choice_list)
+        return [g for g, _, _ in g_list]
+
+
     # -----------------------------------------------------------------------
+
     print("Testing Wall of Roots...")
     start_clock = time.perf_counter()
 
-    game = GameState()
-    game.verbose = False  # True
-    assert (len(game.get_valid_activations()) == 0)
-    assert (len(game.get_valid_castables()) == 0)
+    game_orig = GameState()
+    game_orig.verbose = False  # True
+    assert len(game_orig.get_valid_activations()) == 0
+    assert len(game_orig.get_valid_castables()) == 0
 
+    # four copies of Wall of Roots in hand
     for i in range(4):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Roots), ZONE.HAND)
-    game.MoveZone(game.hand[0], ZONE.FIELD)
-    assert (len(game.super_stack) == 0)  # nothing to trigger, yet
+        game_orig.MoveZone(Cardboard(Decklist.Roots()), ZONE.HAND)
+    assert (len(game_orig.hand) == 4)
+    assert (len(game_orig.field) == 0)
 
-    # activate the one ability!
-    assert (len(game.get_valid_activations()) == 1)  # 1 ability to activate
-    assert (len(game.get_valid_castables()) == 0)  # no castable cards
+    # make sure the AddMana Verb works properly
+    tuple_list = Decklist.Verbs.AddMana("U").do_it(game_orig, CardNull(), [])
+    assert len(tuple_list) == 1
+    mana_game, _, choices = tuple_list[0]
+    assert len(choices) == 0
+    assert mana_game.pool == ManaHandler.ManaPool("U")
+    # because AddMana mutates, returned game IS original game
+    assert game_orig.pool == ManaHandler.ManaPool("U")
+    assert mana_game is game_orig
 
-    [copygame1] = cast_thing(game, game.get_valid_activations()[0])
-    # remember, mana abilities don't use the stack! mana is added immediately
-    assert (len(
-        copygame1.field[0].counters) > 0)  # counters on the Wall of Roots
-    assert (len(copygame1.get_valid_activations()) == 0)
-    assert (len(copygame1.get_valid_castables()) == 0)
-    assert (len(copygame1.stack) == 0)
-    assert (copygame1.pool == ManaHandler.ManaPool("G"))
+    # check the abilities of Wall of Roots in hand. it has 1 but can't be used.
+    roots = game_orig.hand[0]
+    assert len(roots.get_activated()) == 1
+    roots_abil = roots.get_activated()[0]
+    choices = roots_abil.get_choice_options(game_orig, roots)
+    assert choices == [[]]  # list of empty list
+    assert not ActivateAbility(roots_abil).can_be_done(game_orig, roots, [])
 
-    # add in an extra mana to see what happens
-    copygame2 = copygame1.copy()
-    copygame2.pool.add_mana("G")
-    assert (
-            len(copygame2.get_valid_activations()) == 0)  # no abilities to activate
-    # all 3 roots only generate 1 option--to cast Roots
-    assert (len(copygame2.get_valid_castables()) == 1)
+    # move a Wall of Roots to field and try again
+    game_orig.MoveZone(game_orig.hand[0], ZONE.FIELD)
+    assert len(game_orig.hand) == 3
+    assert len(game_orig.field) == 1
+    roots = game_orig.field[0]
+    assert len(roots.get_activated()) == 1
+    assert len(roots.counters) == 0  # no counters on it yet
+    roots_abil = roots.get_activated()[0]
+    choices = roots_abil.get_choice_options(game_orig, roots)
+    assert choices == [[]]  # list of empty list
+    assert ActivateAbility(roots_abil).can_be_done(game_orig, roots, [])
+
+    # make sure the cost can actually be paid
+    cost_game = game_orig.copy()
+    cost_roots = cost_game.field[0]
+    assert roots_abil.cost.can_be_done(cost_game, cost_roots, [])
+    tuple_list = roots_abil.cost.do_it(cost_game, cost_roots, [])
+    assert len(tuple_list) == 1
+    assert roots_abil.cost.mutates  # this particular cost mutates
+    assert cost_game is tuple_list[0][0]  # so output is same as original
+    assert len(cost_roots.counters) == 2
+    for value in cost_roots.counters:
+        assert "-0/-1" == value or "@" in value
+    # should no longer be possible to do
+    assert not roots_abil.cost.can_be_done(cost_game, cost_roots, [])
+    assert len(cost_game.get_valid_activations()) == 0
+
+    # untap to reset things, then try to activate the ability "properly"
+    game_orig.step_untap()
+    assert len(game_orig.get_valid_activations()) == 1
+    game_list = cast_thing(game_orig, game_orig.get_valid_activations()[0])
+    assert len(game_list) == 1
+    activ_game = game_list[0]
+    assert activ_game is not game_orig
+    new_roots = activ_game.field[0]
+    assert roots is not new_roots
+    assert new_roots.has_type(Decklist.Roots)
+    assert len(roots.counters) == 0  # no counters on original
+    assert len(new_roots.counters) == 2  # -0/-1 and @used
+    assert activ_game.pool == ManaHandler.ManaPool("G")
+    assert game_orig.pool == ManaHandler.ManaPool("")  # original unchanged
+    assert len(new_roots.get_activated()) == 1  # still has one ability
+    assert len(activ_game.get_valid_activations()) == 0
+
+    # try to cast something
+    assert len(activ_game.get_valid_castables()) == 0  # not enough mana yet
+    assert activ_game.pool == ManaHandler.ManaPool("G")
+    copygame = activ_game.copy()
+    copygame.pool.add_mana("G")  # add mana directly
+    # all 3 roots in hand only generate 1 option--to cast Roots
+    assert (len(copygame.get_valid_castables()) == 1)
     # cast the newly castable spell
-    cardboard = copygame2.get_valid_castables()[0]
-    assert ([o is cardboard for o in copygame2.hand] == [True, False,
-                                                         False])  # 1st spell in hand
-
-    [copygame3] = cast_thing(copygame2, cardboard)  # puts it on the stack
+    cardboard = copygame.get_valid_castables()[0]
+    assert [o is cardboard for o in copygame.hand] == [True, False, False]
+    [copygame3] = cast_thing(copygame, cardboard)  # puts it on the stack
     assert (copygame3.pool == ManaHandler.ManaPool(""))  # no mana anymore
     assert (len(copygame3.stack) == 1)  # one spell on the stack
     assert (len(copygame3.hand) == 2)  # two cards in hand
     assert (len(copygame3.field) == 1)  # one card in play
-
     [copygame4] = copygame3.resolve_top_of_stack()
-    assert (copygame4.pool == ManaHandler.ManaPool(""))  # no mana anymore
+    assert (copygame4.pool == ManaHandler.ManaPool(""))  # still no mana
     assert (len(copygame4.stack) == 0)  # nothing on the stack
     assert (len(copygame4.hand) == 2)  # two cards in hand
     assert (len(copygame4.field) == 2)  # two cards in play
-
-    # should be one ability (new Roots) and no castable spells (not enough mana)
+    # should be one ability (new Roots) & no castable spells (not enough mana)
     assert (len(copygame4.get_valid_activations()) == 1)
     assert (len(copygame4.get_valid_castables()) == 0)
     # Stack should be empty, so resolving the stack should be impossible
     assert ([] == copygame4.resolve_top_of_stack())
-
     # Just to check, original game is still unchanged:
-    assert (len(game.field) == 1)
-    assert (str(game.pool) == "")
+    assert (len(activ_game.field) == 1)
+    assert (str(activ_game.pool) == "G")
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
-    # ###--------------------------------------------------------------------
+    # -----------------------------------------------------------------------
+
     # print("Testing Sylvan Caryatid, Untap, and Upkeep...")
     # start_clock = time.perf_counter()
     #
@@ -166,7 +212,8 @@ if __name__ == "__main__":
     #                     print("     ---\n", u, "\n     ---")
     #                 print("Taking last option in list")
     #             gameN = universes[-1]
-    #         options = gameN.get_valid_activations() + gameN.get_valid_castables()
+    #         options = gameN.get_valid_activations() +
+    #                                      gameN.get_valid_castables()
     #     return gameN
     #
     #
@@ -254,9 +301,9 @@ if __name__ == "__main__":
     # forest2 = forest.copy()
     # forest2.zone = ZONE.NEW
     # cp.MoveZone(forest2, ZONE.FIELD)
-    # assert (
-    #         forest != forest2)  # Cardboard uses "is" for eq  (or else "in list" breaks)
-    # assert (forest is not forest2)
+    # Cardboard uses "is" for eq  (or else "in list" breaks)
+    # assert forest != forest2
+    # assert forest is not forest2
     # assert (game == cp)
     # # tap both of these forests for mana
     # cp3 = game.ActivateAbilities(forest, forest.get_activated()[0])[0]
@@ -289,8 +336,8 @@ if __name__ == "__main__":
     # game2.MoveZone(game2.hand[0], ZONE.FIELD)
     # assert (game1 == game2)
     #
-    # # two creatures. put into play in opposite order. Should be NOT equivalent
-    # # because of summoning sickness
+    # # two creatures. put into play in opposite order. Should be NOT
+    # # equivalent, because of summoning sickness
     # game1 = GameState()
     # game1.verbose = False
     # game1.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
@@ -326,9 +373,7 @@ if __name__ == "__main__":
     # tracker = PlayTree.TurnTracker.InitFromGameState(game)
     # tracker.PlayTurn()
     # assert (len(tracker.finalnodes) == 8)
-    # # 58  pre-stack. 215 mana on stack.  98 mana off stack.  84 land off stack.
     # assert (len(tracker.allnodes) == 84)
-    # # 105 pre-stack. 340 mana on stack. 170 mana off stack. 146 land off stack.
     # assert (tracker.traverse_counter == 146)
     # assert (len(tracker.GetFinal()) == 6)
     # assert (len(tracker.GetAll()) == 18)
@@ -403,15 +448,15 @@ if __name__ == "__main__":
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
     # game.MoveZone(game.hand[0], ZONE.FIELD)
-    # assert (len(game.super_stack) == 0)  # nothing to trigger off of this move
+    # assert (len(game.super_stack) == 0)  # nothing triggers off of this move
     #
     # assert (game.field[0].summon_sick)
     # assert (len(game.get_valid_activations()) == 0)
     # # what if I give the caretaker something to tap?
     # caryatid = Cardboard.Cardboard(Decklist2.Caryatid)
     # game.MoveZone(caryatid, ZONE.FIELD)
-    # assert (
-    #         len(game.get_valid_activations()) == 0)  # no, caretaker still summon_sick. good.
+    # no, caretaker still summon_sick. good.
+    # assert len(game.get_valid_activations()) == 0
     # game.field.remove(caryatid)
     #
     # game.untap_step()
@@ -429,8 +474,8 @@ if __name__ == "__main__":
     #
     # # give it TWO things to tap
     # game.MoveZone(game.hand[0], ZONE.FIELD)
-    # assert (
-    #         len(game.get_valid_activations()) == 1)  # still only 1 ability even if 2 "targets"
+    # still only 1 ability even if 2 "targets"
+    # assert len(game.get_valid_activations()) == 1
     # universes = game.get_valid_activations()[0].PutOnStack(
     #     game)  # mana so just happens
     # assert (len(universes) == 2)  # two possible things to tap
@@ -439,22 +484,23 @@ if __name__ == "__main__":
     # assert (univ3.pool == ManaHandler.ManaPool("A"))
     # assert (len(univ2.field) == len(univ3.field))
     # # check that they are really tapped differently
-    # assert ([c.tapped for c in univ2.field] != [c.tapped for c in univ3.field])
+    # assert [c.tapped for c in univ2.field] != [c.tapped for c in univ3.field]
     #
     # # see what happens with two active caretakers
     # game3 = univ3
     # game3.untap_step()
-    # assert (
-    #         len(game3.get_valid_activations()) == 2)  # 2 Caretakers combined, Caryatid
-    # care3 = [c for c in game3.field if c.rules_text == Decklist2.Caretaker][0]
+    # 2 Caretakers combined, plus Caryatid
+    # assert len(game3.get_valid_activations()) == 2
+    # care3 = [c for c in game3.field
+    #          if c.rules_text == Decklist2.Caretaker][0]
     # universes = game3.ActivateAbilities(care3, care3.get_activated()[0])
     # assert (len(universes) == 2)
     # [univ4, univ5] = universes
     # assert (univ4.pool == ManaHandler.ManaPool("A"))
     # assert (univ5.pool == ManaHandler.ManaPool("A"))
     # assert (len(univ4.field) == len(univ5.field))
-    # assert ([c.tapped for c in univ4.field] != [c.tapped for c in univ5.field])
-    # # one universe should have 1 action left (caryatid), other doesn't (lone caretaker)
+    # assert [c.tapped for c in univ4.field] != [c.tapped for c in univ5.field]
+    # # One universe has action left (caryatid), other doesn't (lone caretaker)
     # assert ({len(univ4.get_valid_activations()),
     #          len(univ5.get_valid_activations())} == {0, 1})
     #
@@ -464,8 +510,7 @@ if __name__ == "__main__":
     # game6 = univ2.copy()
     # game6.MoveZone(axe, ZONE.FIELD)
     # game6.MoveZone(battle, ZONE.FIELD)
-    # assert (
-    #             len(game6.get_valid_activations()) == 0)  # still summon_sick. good.
+    # assert len(game6.get_valid_activations()) == 0  # still summon_sick
     # game6.untap_step()
     # [u_axe] = game6.ActivateAbilities(axe, axe.get_activated()[0])
     # assert (u_axe.pool == ManaHandler.ManaPool("AAAAA"))
@@ -502,7 +547,7 @@ if __name__ == "__main__":
     # assert (len(tree.trackerlist[-1].finalnodes) == 6)
     # # if I untap, only difference is counters on Roots. I lose track of mana
     # assert (len(tree.LatestNodes()) == 2)
-    # # mana not visible in LatestNodes necessarily, but IS visible in finalnodes
+    # # mana not visible in LatestNodes but IS visible in finalnodes
     # assert (any([n.state.pool.can_afford_mana_cost(ManaHandler.ManaCost("8"))
     #              for n in tree.trackerlist[-1].finalnodes]))
     #
@@ -555,7 +600,7 @@ if __name__ == "__main__":
     # assert (any([c.rules_text == Decklist2.Island for c in final.hand]))
     # assert (any([c.rules_text == Decklist2.Island for c in final.field]))
     #
-    # # add Caryatid to hand and cast it, to be sure I didn't make all defenders draw
+    # # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
     # final.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
     # final.untap_step()
     # tree2 = PlayTree.PlayTree(final, 5)
@@ -679,7 +724,7 @@ if __name__ == "__main__":
     # assert (len(universes) == 2)
     # assert (not universes[0].field[0].is_equiv_to(universes[1].field[0]))
     #
-    # # I will MOVE the fetch into play instead. should put onto super_stack first
+    # # MOVE the fetch into play instead. should put onto super_stack first
     # game2 = game.copy()
     # game2.MoveZone(game2.hand[0], ZONE.FIELD)
     # assert (game2.stack == [])
@@ -816,8 +861,7 @@ if __name__ == "__main__":
     # # put Collected Company directly onto the stack
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = game.resolve_top_of_stack()
-    # assert (
-    #         len(universes) == 2)  # the two draws could be on stack in either order
+    # assert len(universes) == 2  # two draws could be on stack in either order
     # u0, u1 = universes
     # assert (u0 != u1)
     # while len(u0.stack) > 0:
@@ -838,8 +882,7 @@ if __name__ == "__main__":
     # # put Collected Company directly onto the stack
     # game.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = game.resolve_top_of_stack()
-    # assert (
-    #         len(universes) == 2)  # the two draws could be on stack in either order
+    # assert len(universes) == 2  # two draws could be on stack in either order
     # u0, u1 = universes
     # assert (u0 == u1)
     # while len(u0.stack) > 0:
@@ -852,70 +895,5 @@ if __name__ == "__main__":
     # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
     #
     # ###--------------------------------------------------------------------
-    #
-    # print("Testing WildCards, Cost2, and other new templating tech")
-    # start_clock = time.perf_counter()
-    #
-    # game = GameState()
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.FIELD)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.FIELD)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Battlement), ZONE.FIELD)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Axebane), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    #
-    # # ###---testing WildCards
-    #
-    # # wild = Actions.WildCard( zone=ZONE.DECK )
-    # # assert(sum([wild.compare(c) for c in game.field])==0)
-    # # assert(sum([wild.compare(c) for c in game.hand])==0)
-    # # wild = Actions.WildCard( zone=ZONE.FIELD )
-    # # assert(sum([wild.compare(c) for c in game.field])==4)
-    # # assert(sum([wild.compare(c) for c in game.hand])==0)
-    #
-    # # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature )
-    # # assert(sum([wild.compare(c) for c in game.field])==3)
-    # # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
-    # #                          toughness=3)
-    # # assert(sum([wild.compare(c) for c in game.field])==2)
-    # # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
-    # #                          toughness=(">",3))
-    # # assert(sum([wild.compare(c) for c in game.field])==1)
-    # # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Creature,
-    # #                          toughness=(">",2))
-    # # assert(sum([wild.compare(c) for c in game.field])==3)
-    # # wild = Actions.WildCard( zone=ZONE.FIELD, toughness=("<",5))
-    # # assert(sum([wild.compare(c) for c in game.field])==3)
-    #
-    # # wild = Actions.WildCard( zone=ZONE.FIELD, rules_text=RulesText.Land)
-    # # assert(sum([wild.compare(c) for c in game.field])==1)
-    # # assert(sum([wild.compare(c) for c in game.hand])==0)
-    # # wild = Actions.WildCard( zone=ZONE.HAND, rules_text=RulesText.Land)
-    # # assert(sum([wild.compare(c) for c in game.field])==0)
-    # # assert(sum([wild.compare(c) for c in game.hand])==1)
-    #
-    # ###---testing Cost2 with ActionNoChoice's
-    #
-    # battle = [c for c in game.field if "battle" in c.name.lower()][0]
-    # forest = [c for c in game.field if "forest" in c.name.lower()][0]
-    #
-    # tapsymbol = Actions.Cost2([Actions.TapSymbol()])
-    # payGG = Actions.Cost2([Actions.PayMana("GG")])
-    # assert (not tapsymbol.CanAfford(game, battle))  # summon-sick
-    # assert (tapsymbol.CanAfford(game, forest))  # land so it's fine
-    # assert (not payGG.CanAfford(game, forest))  # source irrelevant here
-    # game.pool.add_mana("GGG")
-    # assert (payGG.CanAfford(game, forest))  # source still irrelevant
-    # univ_list = payGG.Pay(game, forest)
-    # assert (len(univ_list) == 1)
-    # new_univ = univ_list[0][0]  # 1st in list, then 1st of gamestate,source
-    # assert (new_univ.pool == ManaHandler.ManaPool("G"))
-    # assert (game.pool == ManaHandler.ManaPool("GGG"))  # didn't mutate
-    # game.untap_step()
-    # assert (tapsymbol.CanAfford(game, battle))  # no longer summon-sick
-    # assert (tapsymbol.CanAfford(game, forest))  # land so it's fine
-    # assert (not tapsymbol.CanAfford(game, game.hand[0]))  # land so it's fine
-    #
-    # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
     #
     # print("\n\npasses all tests!")

@@ -18,7 +18,7 @@ class StackCardboard(StackObject):
 
     @property
     def effect(self) -> Verb:
-        # Cards always need to be moved to their destiniation zone as part
+        # Cards always need to be moved to their destination zone as part
         # of their resolution. So, construct a Verb that does this
         mover = MoveToZone(self.card.rules_text.cast_destination)
         # If the card ALSO has an effect, then we'll need to do that effect
@@ -30,7 +30,7 @@ class StackCardboard(StackObject):
             return mover
 
     def __str__(self):
-        return self.card.name
+        return "Spell:" + self.card.name
 
     def __repr__(self):
         return "Spell: " + self.card.name

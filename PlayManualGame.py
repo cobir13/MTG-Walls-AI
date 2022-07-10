@@ -197,7 +197,7 @@ class ManualGame(tk.Tk):
         newstate = self.game.copy()
         newstate.UntapStep()
         newstate.UpkeepStep()
-        newstate.step_draw()  # technically should clear super_stack FIRST but whatever
+        newstate.step_draw()  # should clear super_stack FIRST? but whatever
         # clear the super stack, then clear the normal stack
         activelist = newstate.ClearSuperStack()
         finalstates = set()
@@ -218,7 +218,8 @@ class ManualGame(tk.Tk):
         exc is the error type (it is of class 'type')
         val is the error itself (it is some subclass of Exception)
         tb is the traceback object (it is of class 'traceback')
-        See https://stackoverflow.com/questions/4770993/how-can-i-make-silent-exceptions-louder-in-tkinter
+        See https://stackoverflow.com/questions/4770993/how-can-i-make-silent
+            -exceptions-louder-in-tkinter
         """
         if isinstance(val, WinTheGameError):
             tk.Label(self.status, text="CONGRATS! YOU WON THE GAME!", bg="red",
@@ -250,21 +251,21 @@ if __name__ == "__main__":
     Choices.AUTOMATION = False
 
     game = GameState()
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.FIELD)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Caretaker), ZONE.FIELD)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.FIELD)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Caretaker()), ZONE.FIELD)
 
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Roots), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Battlement), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Company), ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Roots()), ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Battlement()), ZONE.HAND)
+    game.MoveZone(Cardboard.Cardboard(Decklist.Company()), ZONE.HAND)
 
     for _ in range(5):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Blossoms), ZONE.DECK)
+        game.MoveZone(Cardboard.Cardboard(Decklist.Blossoms()), ZONE.DECK)
     for _ in range(5):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Omens), ZONE.DECK)
-        game.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.DECK)
-        game.MoveZone(Cardboard.Cardboard(Decklist.Battlement), ZONE.DECK)
+        game.MoveZone(Cardboard.Cardboard(Decklist.Omens()), ZONE.DECK)
+        game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.DECK)
+        game.MoveZone(Cardboard.Cardboard(Decklist.Battlement()), ZONE.DECK)
 
     # window = tk.Tk()
 

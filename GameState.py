@@ -6,8 +6,8 @@ Created on Mon Dec 28 21:13:59 2020
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
-if TYPE_CHECKING:
-    from Abilities import ActivatedAbility
+# if TYPE_CHECKING:
+#     from Abilities import ActivatedAbility
 
 from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
@@ -15,9 +15,9 @@ import ZONE
 from ManaHandler import ManaPool
 from Stack import StackAbility, StackObject
 from StackCardboard import StackCardboard
-from Verbs import MoveToZone, DrawCard, UntapSelf, AsEnterEffect
+from Verbs import MoveToZone, DrawCard, UntapSelf
 import Choices
-
+from Abilities import AsEnterEffect, ActivatedAbility
 
 class GameState:
     """The current state of the game.
@@ -343,7 +343,7 @@ class GameState:
             ii = item[0]  # index first, then object second
             new_state = self.copy()
             stack_ability = new_state.super_stack.pop(ii)
-            if stack_ability.ability.is_type(AsEnterEffect):
+            if isinstance(stack_ability.ability.trigger, AsEnterEffect):
                 # if the ability contains an AsEntersEffect, then enact
                 # it immediately rather than putting it on the stack.
                 results += stack_ability.resolve(self)

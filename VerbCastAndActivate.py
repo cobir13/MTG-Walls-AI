@@ -132,16 +132,20 @@ class CastCard(VerbOnSubjectCard):
         # The casting will chew through all the payment choices, leaving only
         # the target choices in the resulting tuples. Then those tuples are
         # returned as a list of (GameState, Cardboard, choices) tuples.
-        list_of_tuples = subject.cost.pay(copy_of_game, copy_of_spell,
-                                          copy_of_choices)
+        list_of_tuples = subject.cost.do_it(copy_of_game, copy_of_spell,
+                                            copy_of_choices)
         # Build a StackCardboard and add it to the stack
         for g1, s1, targets in list_of_tuples:
             # Special exception for lands, which go directly to play
             if subject.has_type(Land):
-                mover = MoveToZone(ZONE.FIELD)
-                mover.do_it(g1, s1, targets)  # mutate in-place
+                # mutate in-place
+                MoveToZone(ZONE.FIELD).do_it(g1, s1, targets)
             else:
-                g1.stack.append(StackCardboard(s1, targets))  # mutate in-place
+                # MoveToZone doesn't actually PUT the Cardboard anywhere. It
+                # knows the stack is for StackObjects only. Just removes from
+                # hand. Mutates in-place.
+                MoveToZone(ZONE.STACK).do_it(g1, s1, targets)
+                g1.stack.append(StackCardboard(s1, targets))
                 g1.num_spells_cast += 1
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already

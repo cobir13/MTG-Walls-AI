@@ -10,8 +10,7 @@ import ZONE
 import tkinter as tk
 from typing import List, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from RulesText import RulesText
+from RulesText import RulesText
 
 
 # -----------------------------------------------------------------------------
@@ -170,6 +169,59 @@ class Cardboard:
                            padx=3, pady=3,
                            relief="raised", bg='lightgreen')
         return button
+
+
+class CardNull(Cardboard):
+
+    def __init__(self):
+        super().__init__(RulesText())
+        self.rules_text: None
+        self.tapped: bool = False
+        self.summon_sick: bool = True
+        self.counters = []
+        self.zone = ZONE.NEW
+
+    def __str__(self):
+        return "Null"
+
+    def __repr__(self):
+        return "NullCard"
+
+    def copy(self):
+        return CardNull()
+
+    def add_counter(self, addition):
+        return
+
+    @property
+    def name(self):
+        return "Null"
+
+    @property
+    def cost(self):
+        return None
+
+    @property
+    def effect(self):
+        return None
+
+    def get_activated(self):
+        return []
+
+    def get_id(self):
+        return ""
+
+    def is_equiv_to(self, other):
+        return False
+
+    def __eq__(self, other):
+        return False
+
+    def has_type(self, card_type: type) -> bool:
+        return False
+
+    def mana_value(self):
+        return None
 
 
 # if __name__ == "__main__":

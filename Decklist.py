@@ -4,95 +4,149 @@ Created on Tue Dec 29 11:50:12 2020
 
 @author: Cobi
 """
-
+import VerbParents
 from RulesText import Creature, Land, Spell
 import ZONE
 import MatchCardPatterns as Match
 import Verbs
 from VerbCastAndActivate import TapSymbol
-from VerbParents import VerbManyTimes, ManyVerbs
-from Abilities import ActivatedAbility, TriggeredAbility, TriggerOnMove
+from VerbParents import VerbManyTimes, ManyVerbs, ChooseVerb
+from Abilities import TriggerOnMove, AsEnterEffect
 
 import Getters as Get
 
-# -----------------------------------------------------------------------------
-
-Roots = Creature("Roots", Verbs.PayMana("1G"), ["defender"], 0, 5)
-Roots.activated.append(
-    ActivatedAbility("Roots add G",
-                     ManyVerbs([Verbs.AddCounterToSelf("-0/-1"),
-                                Verbs.ActivateOncePerTurn(
-                                    "Roots add G")]),
-                     Verbs.AddMana("A")))
 
 # -----------------------------------------------------------------------------
 
-Caryatid = Creature("Caryatid", Verbs.PayMana("1G"),
-                    ["defender", "hexproof"], 0, 3)
-Caryatid.activated.append(
-    ActivatedAbility("Caryatid add Au", TapSymbol(), Verbs.AddMana("A")))
+class Roots(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Roots"
+        self.cost = Verbs.PayMana("1G")
+        self.add_keywords(["defender"])
+        self.set_power_toughness(0, 5)
+        self.add_activated("Roots add G",
+                           ManyVerbs([Verbs.AddCounterToSelf("-0/-1"),
+                                      Verbs.ActivateOncePerTurn(
+                                          "Roots add G")]),
+                           Verbs.AddMana("G"))
+
 
 # -----------------------------------------------------------------------------
 
-Caretaker = Creature("Caretaker", Verbs.PayMana("1G"), ["defender"], 0, 3)
-Caretaker.activated.append(
-    ActivatedAbility("Caretaker add Au",
-                     ManyVerbs([TapSymbol(),
-                                Verbs.TapAny([Match.NotSelf(),
-                                              Match.Untapped(),
-                                              Match.CardType(Creature)
-                                              ])
-                                ]),
-                     Verbs.AddMana("A")))
+class Caryatid(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Caryatid"
+        self.cost = Verbs.PayMana("1G")
+        self.add_keywords(["defender", "hexproof"])
+        self.set_power_toughness(0, 3)
+        self.add_activated("Caryatid add Au", TapSymbol(), Verbs.AddMana("A"))
+
 
 # -----------------------------------------------------------------------------
 
-Battlement = Creature("Battlement", Verbs.PayMana("1G"),
-                      ["defender"], 0, 4)
-Battlement.activated.append(
-    ActivatedAbility("Battlement add G",
-                     TapSymbol(),
-                     VerbManyTimes(Verbs.AddMana("G"),
-                                   Get.NumberInZone(
-                                       [Match.Keyword("defender")],
-                                       ZONE.FIELD))))
+class Caretaker(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Caretaker"
+        self.cost = Verbs.PayMana("G")
+        self.add_keywords(["defender"])
+        self.set_power_toughness(0, 3)
+        self.add_activated("Caretaker add Au",
+                           ManyVerbs([TapSymbol(),
+                                      Verbs.TapAny([Match.NotSelf(),
+                                                    Match.Untapped(),
+                                                    Match.CardType(Creature)
+                                                    ])
+                                      ]),
+                           Verbs.AddMana("A"))
+
 
 # -----------------------------------------------------------------------------
 
-Axebane = Creature("Axebane", Verbs.PayMana("2G"), ["defender"], 0, 3)
-Axebane.activated.append(
-    ActivatedAbility("Axebane add Au",
-                     TapSymbol(),
-                     VerbManyTimes(Verbs.AddMana("A"),
-                                   Get.NumberInZone(
-                                       [Match.Keyword("defender")],
-                                       ZONE.FIELD))))
+class Battlement(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Battlement"
+        self.cost = Verbs.PayMana("1G")
+        self.add_keywords(["defender"])
+        self.set_power_toughness(0, 4)
+        self.add_activated("Battlement add G",
+                           TapSymbol(),
+                           VerbManyTimes(Verbs.AddMana("G"),
+                                         Get.NumberInZone(
+                                             [Match.Keyword("defender")],
+                                             ZONE.FIELD)))
+
 
 # -----------------------------------------------------------------------------
 
-Blossoms = Creature("Blossoms", Verbs.PayMana("1G"), ["defender"], 0, 4)
-Blossoms.trig_verb.append(
-    TriggeredAbility("Blossoms etb draw",
-                     TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
-                     Verbs.DrawCard()))
+class Axebane(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Axebane"
+        self.cost = Verbs.PayMana("2G")
+        self.add_keywords(["defender"])
+        self.set_power_toughness(0, 3)
+        self.add_activated("Axebane add Au",
+                           TapSymbol(),
+                           VerbManyTimes(Verbs.AddMana("A"),
+                                         Get.NumberInZone(
+                                             [Match.Keyword("defender")],
+                                             ZONE.FIELD)))
+
 
 # -----------------------------------------------------------------------------
 
-Omens = Creature("Omens", Verbs.PayMana("1W"), ["defender"], 0, 4)
-Omens.trig_verb.append(
-    TriggeredAbility("Omens etb draw",
-                     TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
-                     Verbs.DrawCard()))
+class Blossoms(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Blossoms"
+        self.cost = Verbs.PayMana("1G")
+        self.add_keywords(["defender"])
+        self.set_power_toughness(0, 4)
+        self.add_triggered("Blossoms etb draw",
+                           TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
+                           Verbs.DrawCard())
+
 
 # -----------------------------------------------------------------------------
 
-Arcades = Creature("Arcades", Verbs.PayMana("1WUG"),
-                   ["flying", "vigilance"], 3, 5)
-Arcades.trig_verb.append(
-    TriggeredAbility("Arcades draw trigger",
-                     TriggerOnMove([Match.Keyword("defender")], None,
-                                   ZONE.FIELD),
-                     Verbs.DrawCard()))
+class Omens(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Omens"
+        self.cost = Verbs.PayMana("1W")
+        self.add_keywords(["defender"])
+        self.set_power_toughness(0, 4)
+        self.add_triggered("Omens etb draw",
+                           TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
+                           Verbs.DrawCard())
+
+
+# -----------------------------------------------------------------------------
+
+class Arcades(Creature):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Arcades"
+        self.cost = Verbs.PayMana("1WUG")
+        self.add_keywords(["flying", "vigilance"])
+        self.set_power_toughness(3, 5)
+        self.add_triggered("Arcades draw trigger",
+                           TriggerOnMove([Match.Keyword("defender")], None,
+                                         ZONE.FIELD),
+                           Verbs.DrawCard())
+
 
 # -----------------------------------------------------------------------------
 
@@ -108,45 +162,57 @@ Arcades.trig_verb.append(
 # but return both halves?
 
 # =============================================================================
-# # ---------------------------------------------------------------------------
-# 
-# ###---basic lands
-# 
-# Forest = Land("Forest", ["basic", "forest"])
-# Forest.activated.append(
-#     ManaAbility("Forest add G",
-#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-#                 lambda g, s: ManaAbility.AddColor(g, s, "G")))
-# 
-# Plains = Land("Plains", ["basic", "plains"])
-# Plains.activated.append(
-#     ManaAbility("Plains add W",
-#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-#                 lambda g, s: ManaAbility.AddColor(g, s, "W")))
-# 
-# Island = Land("Island", ["basic", "island"])
-# Island.activated.append(
-#     ManaAbility("Island add U",
-#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-#                 lambda g, s: ManaAbility.AddColor(g, s, "U")))
-# 
-# ###---shock lands
-# AsEnterShock = AsEnterEffect("ShockIntoPlay", Land.ShockIntoPlay)
-# 
-# TempleGarden = Land("TempleGarden", ["forest", "plains"])
-# TempleGarden.activated.append(
-#     ManaAbility("TempleGarden add W/G",
-#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-#                 lambda g, s: ManaAbility.AddDual(g, s, "W", "G")))
-# TempleGarden.trig_move.append(AsEnterShock)
-# 
+
+# -----basic lands
+
+class Forest(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Forest"
+        self.add_activated("Forest add G", TapSymbol(), Verbs.AddMana("G"))
+
+
+class Plains(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Plains"
+        self.add_activated("Plains add W", TapSymbol(), Verbs.AddMana("W"))
+
+
+class Island(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Island"
+        self.add_activated("Island add U", TapSymbol(), Verbs.AddMana("U"))
+
+
+###---shock lands
+
+
+class TempleGarden(Forest, Plains):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "TempleGarden"
+        # activating for two colors comes from the two inheritances
+        self.add_triggered("shock",
+                           AsEnterEffect([Match.IsSelf()], None, ZONE.FIELD),
+                           ChooseVerb([Verbs.TapSelf(),
+                                       Verbs.LoseOwnLife(Get.ConstInteger(2))],
+                                      Get.Chooser(Get.Const([0, 1]), 1, False))
+                           )
+
+#
 # BreedingPool = Land("BreedingPool", ["forest", "island"])
 # BreedingPool.activated.append(
 #     ManaAbility("BreedingPool add U/G",
 #                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
 #                 lambda g, s: ManaAbility.AddDual(g, s, "U", "G")))
 # BreedingPool.trig_move.append(AsEnterShock)
-# 
+#
 # HallowedFountain = Land("HallowedFountain", ["plains", "island"])
 # HallowedFountain.activated.append(
 #     ManaAbility("HallowedFountain add W/U",

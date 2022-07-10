@@ -29,12 +29,6 @@ class LoseTheGameError(Exception):
     pass
 
 
-# #------------------------------------------------------------------------------
-
-
-# ------------------------------------------------------------------------------
-
-
 # ------------------------------------------------------------------------------
 
 class PayMana(VerbAtomic):
@@ -127,9 +121,6 @@ class TapSelf(VerbOnSubjectCard):
         return super().do_it(state, subject, choices)
 
 
-
-
-
 # ----------
 
 class TapAny(VerbOnTarget):
@@ -159,12 +150,11 @@ class UntapSelf(VerbOnSubjectCard):
 # ----------
 
 class AddCounterToSelf(VerbOnSubjectCard):
-    """Marks the given `subject` as only able to activate this ability once
-    per turn"""
+    """Adds the given counter string to the subject card"""
 
     def __init__(self, counter_text: str):
         super().__init__()
-        self.counter_text = "@" + counter_text  # "@" is invisible counter
+        self.counter_text = counter_text
 
     def can_be_done(self, state: GameState, subject: Cardboard,
                     choices: list) -> bool:
@@ -228,6 +218,7 @@ class Shuffle(VerbAtomic):
         # add triggers to super_stack, reduce length of choices list
         """Mutates. Reorder deck randomly."""
         random.shuffle(state.deck)
+        return super().do_it(state, subject, choices)
 
     @property
     def mutates(self):
@@ -250,14 +241,18 @@ class MoveToZone(VerbOnSubjectCard):
             return subject in state.get_zone(subject.zone)
 
     def do_it(self, state, subject, choices=()):
+        # NOTE: Cardboard can't live on the stack. only StackObjects do. So
+        # reassign card zone and remove/add to zones as appropriate, but never
+        # directly add or remove from the stack. StackCardboard does the rest.
         self.origin = subject.zone  # so trigger knows where card moved from
         # remove from origin
         if self.origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
             state.get_zone(self.origin).remove(subject)
         # add to destination
         subject.zone = self.destination
-        zone_list = state.get_zone(self.destination)
-        zone_list.append(subject)
+        if self.destination in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
+            zone_list = state.get_zone(self.destination)
+            zone_list.append(subject)
         # sort the zones that need to always be sorted
         state.re_sort(self.destination)
         # any time you change zones, reset the cardboard parameters
@@ -271,8 +266,24 @@ class MoveToZone(VerbOnSubjectCard):
 
 # ----------
 
-class AsEnterEffect(Verb):
-    pass  # TODO
+class NullVerb(Verb):
+    """This Verb does literally nothing, ever."""
+
+    def __init__(self):
+        super().__init__()
+
+    def can_be_done(self, state: GameState, subject: Cardboard,
+                    choices: list) -> bool:
+        return True
+
+    def do_it(self, state, subject: Cardboard | None, choices):
+        # add triggers to super_stack, reduce length of choices list
+        """Mutates. Reorder deck randomly."""
+        return [(state, subject, choices)]
+
+    @property
+    def mutates(self):
+        return False
 
 
 # ----------

@@ -23,6 +23,9 @@ class CardPattern:
     def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
         raise Exception
 
+    def __str__(self):
+        return type(self).__name__
+
 
 class CardType(CardPattern):
     def __init__(self, card_type: type):
@@ -30,6 +33,9 @@ class CardType(CardPattern):
 
     def match(self, card, gamestate, source):
         return isinstance(card, self.type_to_match)
+
+    def __str__(self):
+        return super().__str__() + "(" + self.type_to_match.__name__ + ")"
 
 
 class Keyword(CardPattern):
@@ -39,6 +45,9 @@ class Keyword(CardPattern):
     def match(self, card, gamestate, source):
         return self.keyword_to_match in Get.Keywords().get(gamestate, card)
 
+    def __str__(self):
+        return super().__str__() + "(" + self.keyword_to_match + ")"
+
 
 class Name(CardPattern):
     def __init__(self, name: str):
@@ -46,6 +55,9 @@ class Name(CardPattern):
 
     def match(self, card, gamestate, source):
         return self.name_to_match == Get.Name().get(gamestate, card)
+
+    def __str__(self):
+        return super().__str__() + "(" + self.name_to_match + ")"
 
 
 # class Zone(CardPattern):
@@ -60,6 +72,9 @@ class Counter(CardPattern):
 
     def match(self, card, gamestate, source=None):
         return self.counter_to_match in Get.Counters().get(gamestate, card)
+
+    def __str__(self):
+        return super().__str__() + "(" + self.counter_to_match + ")"
 
 
 class Tapped(CardPattern):
@@ -109,6 +124,10 @@ class NumericPattern(CardPattern):
             return card_value != self.value
         else:
             raise ValueError("shouldn't be possible to get here!")
+
+    def __str__(self):
+        txt = "(%s %s %s)" % (str(self.getter), self.comparator, self.value)
+        return super().__str__() + txt
 
 
 class Power(NumericPattern):
