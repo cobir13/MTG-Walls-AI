@@ -102,6 +102,7 @@ class Creature(Permanent):
         self.power = power
         self.toughness = toughness
 
+
 # class Human(Creature):
 #     pass
 
@@ -117,29 +118,9 @@ class Land(Permanent):
     def __init__(self):
         super().__init__()
         self.cost = PlayLandForTurn
-#
-#     def EnterTapped(gamestate, source) -> List[GameState]:
-#         """useful for tap-lands. MUTATES."""
-#         effects = gamestate.TapPermanent(source)
-#         gamestate.stack += effects
-#         return [gamestate]
-#
-#     def ShockIntoPlay(gamestate, source) -> List[GameState]:
-#         """useful for shock lands.  MUTATES."""
-#         gamestate2, [source2] = gamestate.copy_and_track([source])
-#         # Either the land enters tapped OR we take 2 damage
-#         source.tapped = True  # effect is allowed to mutate
-#         gamestate2.life -= 2
-#         return [gamestate, gamestate2]
-#
-#     def LandAvailable(gamestate, source) -> List[GameState]:
-#         """useful for abilities checking if the land can be tapped for mana,
-#         GameState,Cardboard -> bool"""
-#         return (not source.tapped and source.zone == ZONE.FIELD)
 
 
 # -----------------------------------------------------------------------------
-
 
 class Spell(RulesText):
 
@@ -158,3 +139,11 @@ class Spell(RulesText):
         super().__init__()
         self.cast_destination = ZONE.GRAVE
         self.effect: Verb = NullVerb()
+
+
+class Instant(Spell):
+    pass
+
+
+class Sorcery(Spell):
+    pass

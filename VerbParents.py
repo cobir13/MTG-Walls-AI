@@ -74,12 +74,6 @@ class Verb:
         # Verb already 'used up'.
         return [(state, subject, choices[len(self.getter_list):])]
 
-    # def __str__(self):
-    #     text = type(self).__name__
-    #     if len(self.sub_verbs) > 0:
-    #         text += "(" + ",".join([str(v) for v in self.sub_verbs]) + ")"
-    #     return text
-
     def __str__(self):
         text = type(self).__name__
         if len(self.sub_verbs) > 0 or len(self.getter_list) > 0:
@@ -186,7 +180,7 @@ class VerbOnTarget(Verb):
 class ManyVerbs(Verb):
     def __init__(self, list_of_verbs: List[Verb]):
         super().__init__()
-        assert(len(list_of_verbs) > 1)
+        assert (len(list_of_verbs) > 1)
         self.sub_verbs = list_of_verbs
         self.getter_list = []
 
@@ -199,13 +193,13 @@ class ManyVerbs(Verb):
         for v in self.sub_verbs:
             # if verb allowed to mutate, mutate gamestates in place
             if v.mutates:
-                for g,c,ch in tuple_list:
-                    v.do_it(g,c,ch)
+                for g, c, ch in tuple_list:
+                    v.do_it(g, c, ch)
             # if verb returns new list, use that to overwrite tuple_list
             else:
                 new_tuple_list = []
-                for g,c,ch in tuple_list:
-                    new_tuple_list += v.do_it(g,c,ch)
+                for g, c, ch in tuple_list:
+                    new_tuple_list += v.do_it(g, c, ch)
                 tuple_list = new_tuple_list
         # The do_it functions of each Verb will handle triggers for those
         # sub-verbs. no need to call super().do_it because nothing triggers.
@@ -218,33 +212,50 @@ class ManyVerbs(Verb):
 
 # ----------
 
-class ChooseVerb(Verb):
-    def __init__(self, list_of_verbs: List[Verb], chooser: Get.Chooser):
+class ChooseAVerb(Verb):
+    def __init__(self, list_of_verbs: List[Verb]):
         super().__init__()
         assert (len(list_of_verbs) > 1)
         self.sub_verbs = list_of_verbs
-        self.getter_list = [chooser]
-        # TODO I still need chooser to have correct type. return index or verb?
+        self.getter_list = [Get.Chooser(Get.Const(self.sub_verbs), 1, False)]
 
     def __str__(self):
         return " or ".join([v.__str__() for v in self.sub_verbs])
 
+    def can_be_done(self, state: GameState, subject: Cardboard,
+                    choices: list) -> bool:
+        """first element of choices is the choice of which verb to use"""
+        chosen_verb: Verb = choices[0]
+        return chosen_verb.can_be_done(state, subject, choices[1:])
+
     def do_it(self, state: GameState, subject: Cardboard,
               choices: list) -> List[Tuple[GameState, Cardboard, list]]:
-        # first element of choices is the index of which verb to use
-        return self.sub_verbs[choices[0]].do_it(state, subject, choices[1:])
+        """first element of choices is the choice of which verb to use"""
+        chosen_verb: Verb = choices[0]
+        return chosen_verb.do_it(state, subject, choices[1:])
 
     @property
     def mutates(self):
         return any([v.mutates for v in self.sub_verbs])
 
+    def choose_choices(self, state: GameState, subject: Cardboard):
+        # choices are: the verb I choose, together with IT'S choices
+        possible_verbs = self.getter_list[0].get(state, subject)
+        final = []
+        for (verb) in possible_verbs:
+            choices_for_this_verb = verb.choose_choices(state, subject)
+            final += [[verb] + sublist for sublist in choices_for_this_verb]
+        return final
+
 
 # ----------
 
 class VerbManyTimes(Verb):
-    def __init__(self, verb: Verb, getter: Get.Integer):
+    def __init__(self, verb: Verb, getter: Get.Integer | int):
         super().__init__()
         self.sub_verbs = [verb]
+        if isinstance(getter, int):
+            getter = Get.ConstInteger(getter)
         self.getter_list = [getter]
 
     def can_be_done(self, state: GameState, subject: Cardboard,
@@ -270,17 +281,74 @@ class VerbManyTimes(Verb):
     def __str__(self):
         return str(self.sub_verbs[0]) + "(" + str(self.getter_list[0]) + ")"
 
+
 # ----------
 
+class VerbOnSplitList(Verb):
+    def __init__(self, act_on_chosen: VerbOnSubjectCard,
+                 act_on_non_chosen: VerbOnSubjectCard | None,
+                 chooser: Get.Chooser):
+        super().__init__()
+        assert act_on_non_chosen.num_inputs == 0
+        assert act_on_chosen.num_inputs == 0
+        self.sub_verbs = [act_on_chosen, act_on_non_chosen]
+        # chooser isn't in getter_list because ALL the options are being used
+        # up one way or another, so it's not working like a normal getter.
+        self.chooser = chooser
 
-# ------------------------------------------------------------------------------
+    def can_be_done(self, state: GameState, subject: Cardboard,
+                    choices: list) -> bool:
+        # Note that NO CHOICES ARE BEING PASSED TO THE SUB_VERBS. This is
+        # because they are assumed to take no inputs and act only on their
+        # subjects.
+        all_options = self.chooser.getter.get(state, subject)
+        act_on_chosen, act_on_non_chosen = self.sub_verbs
+        for card in all_options:
+            if card in choices:
+                if not act_on_chosen.can_be_done(state, card, []):
+                    return False
+            else:
+                if not act_on_non_chosen.can_be_done(state, card, []):
+                    return False
+        return True
 
-# class VerbOnSplitList(Verb):
-#     def __init__(self, act_on_chosen:Verb, options:list, chosen:list,
-#                  act_on_non_chosen:Verb = None):
-#         super().__init__()
-#         self.act_on_chosen = act_on_chosen
-#         self.act_on_non_chosen = act_on_non_chosen
-#         self.options = options
-#         self.chosen = chosen
-#         #TODO
+    def do_it(self, state: GameState, subject: Cardboard,
+              choices: list) -> List[Tuple[GameState, Cardboard, list]]:
+        """
+        This function will appy the act_on_chosen Verb to each card in
+        choices, and will apply the act_on_non_chosen to each other card
+        in the list of options (which is found from the getter within
+        the chooser, to find the list the chooser is choosing from).
+        """
+        all_options = self.chooser.getter.get(state, subject)
+        act_on_chosen, act_on_non_chosen = self.sub_verbs
+        # put all_options and also choices into tuple_list to track them
+        tuple_list = [(state, subject, all_options + choices)]
+        for ii in range(len(all_options)):
+            new_tuples = []
+            for g, s, concat in tuple_list:
+                chosen_copied = concat[len(all_options):]
+                option = concat[ii]
+                # check if this option has been chosen or not
+                if option in chosen_copied:
+                    new_tuples += act_on_chosen.do_it(g, option, concat)
+                    # Note: act_on_chosen has num_inputs == 0 so it will
+                    # return (copies of) the contatenated list, without
+                    # eating through any. Same with act_on_non_chosen below.
+                else:
+                    new_tuples += act_on_non_chosen.do_it(g, option, concat)
+            tuple_list = new_tuples  # overwrite
+        return [(g, s, []) for g, s, _ in tuple_list]
+
+    def __str__(self):
+        act_on_chosen, act_on_non_chosen = self.sub_verbs
+        act_yes = str(act_on_chosen)
+        comp = "<=" if self.chooser.can_be_less else ""
+        num = self.chooser.num_to_choose
+        get_str = str(self.chooser.getter)
+        act_no = str(act_on_non_chosen)
+        s = "%s on %s%i of %s else %s" % (act_yes, comp, num, get_str, act_no)
+        return s
+
+    def choose_choices(self, state: GameState, subject: Cardboard):
+        return self.chooser.get(state, subject)

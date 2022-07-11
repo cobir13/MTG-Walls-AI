@@ -113,6 +113,12 @@ class Cardboard:
     def mana_value(self):
         return self.rules_text.mana_value
 
+    def reset_to_default_cardboard(self):
+        self.tapped = False
+        self.summon_sick = True
+        self.counters = [c for c in self.counters if
+                         c[0] == "$"]  # sticky counters stay
+
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
         Note: clicking the button won't do anything yet. Setting up the button
@@ -222,7 +228,6 @@ class CardNull(Cardboard):
 
     def mana_value(self):
         return None
-
 
 # if __name__ == "__main__":
 #     import Decklist

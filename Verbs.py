@@ -70,8 +70,10 @@ class AddMana(VerbAtomic):
 # =============================================================================
 
 class LoseOwnLife(VerbAtomic):
-    def __init__(self, damage_getter: Get.Integer):
+    def __init__(self, damage_getter: Get.Integer | int):
         super().__init__()
+        if isinstance(damage_getter, int):
+            damage_getter = Get.ConstInteger(damage_getter)
         self.getter_list = [damage_getter]
 
     def can_be_done(self, state: GameState, subject: Cardboard,
@@ -88,8 +90,10 @@ class LoseOwnLife(VerbAtomic):
 # ----------
 
 class DealDamageToOpponent(VerbAtomic):
-    def __init__(self, damage_getter: Get.Integer):
+    def __init__(self, damage_getter: Get.Integer | int):
         super().__init__()
+        if isinstance(damage_getter, int):
+            damage_getter = Get.ConstInteger(damage_getter)
         self.getter_list = [damage_getter]
 
     def can_be_done(self, state: GameState, subject: Cardboard,
@@ -228,7 +232,18 @@ class Shuffle(VerbAtomic):
 # ----------
 
 class MoveToZone(VerbOnSubjectCard):
-    """Moves the subject card to the given zone"""
+    """Moves the subject card to the given zone
+    NOTE: cannot actually remove the subject card from the
+    stack (because it's wrapped in a StackObject).
+    NOTE: cannot actually add the subject card to the stack
+    (because it's wrapped in a StackObject) or to the deck
+    (because it's unclear if it should be added to the top
+    or to the bottom).
+    In both of these cases, the function does as much of the
+    move as it can (sets Cardboard.zone, removes even if it
+    can't add, etc.) and hopes that the calling function will
+    know to do the rest.
+    """
 
     def __init__(self, destination_zone):
         super().__init__()
@@ -237,7 +252,8 @@ class MoveToZone(VerbOnSubjectCard):
 
     def can_be_done(self, state: GameState, subject: Cardboard,
                     choices: list) -> bool:
-        if subject.zone in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
+        if subject.zone in [ZONE.DECK, ZONE.DECK_BOTTOM, ZONE.HAND,
+                            ZONE.FIELD, ZONE.GRAVE]:
             return subject in state.get_zone(subject.zone)
 
     def do_it(self, state, subject, choices=()):
@@ -246,20 +262,22 @@ class MoveToZone(VerbOnSubjectCard):
         # directly add or remove from the stack. StackCardboard does the rest.
         self.origin = subject.zone  # so trigger knows where card moved from
         # remove from origin
-        if self.origin in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
+        if self.origin in [ZONE.DECK, ZONE.DECK_BOTTOM, ZONE.HAND,
+                           ZONE.FIELD, ZONE.GRAVE]:
             state.get_zone(self.origin).remove(subject)
         # add to destination
         subject.zone = self.destination
-        if self.destination in [ZONE.DECK, ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
+        if self.destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
+            # these three zones must remain sorted at all times
             zone_list = state.get_zone(self.destination)
-            zone_list.append(subject)
-        # sort the zones that need to always be sorted
-        state.re_sort(self.destination)
+            zone_list.append(subject)  # can add to any index b/c about to sort
+            state.re_sort(self.destination)
+        elif self.destination == ZONE.DECK:
+            state.deck.insert(0, subject)  # add to top (index 0) of deck
+        elif self.destination == ZONE.DECK_BOTTOM:
+            state.deck.append(subject)   # add to bottom (index -1) of deck
         # any time you change zones, reset the cardboard parameters
-        subject.tapped = False
-        subject.summon_sick = True
-        subject.counters = [c for c in subject.counters if
-                            c[0] == "$"]  # sticky counters stay
+        subject.reset_to_default_cardboard()
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
 
@@ -326,5 +344,3 @@ class PlayLandForTurn(VerbAtomic):
         state.has_played_land = True
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
-
-

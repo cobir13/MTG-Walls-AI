@@ -119,9 +119,12 @@ class ListFromZone(CardList):
 
 
 class ListTopOfDeck(CardList):
-    def __init__(self, patterns: List[Match.CardPattern], get_depth: Integer):
+    def __init__(self, patterns: List[Match.CardPattern],
+                 get_depth: Integer | int):
         super().__init__()
         self.patterns = patterns
+        if isinstance(get_depth, int):
+            get_depth = ConstInteger(get_depth)
         self.get_depth = get_depth
 
     def get(self, state: GameState, source: Cardboard) -> List[Cardboard]:
@@ -194,23 +197,27 @@ class ManaValue(Integer):
 
 class Chooser(Getter):
 
-    def __init__(self, getter: Getter, num_to_choose: int, can_be_less: bool):
+    def __init__(self, getter: Getter, num_to_choose: Integer | int,
+                 can_be_fewer: bool):
         self.getter = getter
+        if isinstance(num_to_choose, int):
+            num_to_choose = ConstInteger(num_to_choose)
         self.num_to_choose = num_to_choose
-        self.can_be_less = can_be_less
+        self.can_be_less = can_be_fewer
 
     def get(self, state: GameState, source: Cardboard) -> List[tuple]:
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
         options = self.getter.get(state, source)  # list of tuples of items
+        num = self.num_to_choose.get(state, source)
         if self.can_be_less:
-            return Choices.choose_n_or_fewer(options, self.num_to_choose)
+            return Choices.choose_n_or_fewer(options, num)
         else:
-            if self.num_to_choose == 1:
+            if num == 1:
                 return [(c,) for c in Choices.choose_exactly_one(options)]
             else:
-                return Choices.choose_exactly_n(options, self.num_to_choose)
+                return Choices.choose_exactly_n(options, num)
 
     @property
     def single_output(self):
@@ -218,6 +225,6 @@ class Chooser(Getter):
 
     def __str__(self):
         less_ok = "<=" if self.can_be_less else ""
-        n = self.num_to_choose
+        n = str(self.num_to_choose)
         getter = str(self.getter)
-        return "Choose(%s%i from %s)" % (less_ok, n, getter)
+        return "Choose(%s%s from %s)" % (less_ok, n, getter)

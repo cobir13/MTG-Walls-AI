@@ -19,6 +19,7 @@ from Verbs import MoveToZone, DrawCard, UntapSelf
 import Choices
 from Abilities import AsEnterEffect, ActivatedAbility
 
+
 class GameState:
     """The current state of the game.
     
@@ -233,7 +234,7 @@ class GameState:
     # -----MUTATING FUNCTIONS. They all return a list of StackEffects
 
     def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
-        if zone_name == ZONE.DECK:
+        if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
             zone = self.deck
         elif zone_name == ZONE.HAND:
             zone = self.hand
@@ -256,6 +257,7 @@ class GameState:
             self.field.sort(key=Cardboard.get_id)
         elif zone_name == ZONE.GRAVE:
             self.grave.sort(key=Cardboard.get_id)
+        # no other zones are sorted, so we're done.
 
     def MoveZone(self, cardboard, destination):
         """Move the specified piece of cardboard from the zone

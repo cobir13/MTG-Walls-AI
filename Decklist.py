@@ -4,13 +4,12 @@ Created on Tue Dec 29 11:50:12 2020
 
 @author: Cobi
 """
-import VerbParents
-from RulesText import Creature, Land, Spell
+from RulesText import Creature, Land, Instant  # , Sorcery
 import ZONE
 import MatchCardPatterns as Match
 import Verbs
 from VerbCastAndActivate import TapSymbol
-from VerbParents import VerbManyTimes, ManyVerbs, ChooseVerb
+from VerbParents import VerbManyTimes, ManyVerbs, ChooseAVerb, VerbOnSplitList
 from Abilities import TriggerOnMove, AsEnterEffect
 
 import Getters as Get
@@ -150,16 +149,23 @@ class Arcades(Creature):
 
 # -----------------------------------------------------------------------------
 
-# Company = Spell(name="Company",
-#                 cost = Verbs.PayMana("3G"),
-#                 keywords = ["instant"],
-#                 [ MatchCardboardFromTopOfDeck()]
-# TODO
-# I know I don't have the tech for this yet
-# I need the weird "Verb on half of the list and then do a
-# different verb on the other half of the list" templating.
-# maybe make a Choose.Split or something? Select half
-# but return both halves?
+
+class Company(Instant):
+    def __int__(self):
+        super().__init__()
+        self.name = "CollectedCompany"
+        self.cost = Verbs.PayMana("3G")
+        get_from = Get.ListTopOfDeck(patterns=[Match.CardType(Creature),
+                                               Match.ManaValue("<=", 3)],
+                                     get_depth=6)
+        self.effect = VerbOnSplitList(
+            act_on_chosen=Verbs.MoveToZone(ZONE.FIELD),
+            act_on_non_chosen=Verbs.MoveToZone(ZONE.DECK_BOTTOM),
+            chooser=Get.Chooser(getter=get_from,
+                                num_to_choose=2,
+                                can_be_fewer=True)
+        )
+
 
 # =============================================================================
 
@@ -189,8 +195,7 @@ class Island(Land):
         self.add_activated("Island add U", TapSymbol(), Verbs.AddMana("U"))
 
 
-###---shock lands
-
+# -----shock lands
 
 class TempleGarden(Forest, Plains):
 
@@ -200,26 +205,33 @@ class TempleGarden(Forest, Plains):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect([Match.IsSelf()], None, ZONE.FIELD),
-                           ChooseVerb([Verbs.TapSelf(),
-                                       Verbs.LoseOwnLife(Get.ConstInteger(2))],
-                                      Get.Chooser(Get.Const([0, 1]), 1, False))
+                           ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
                            )
 
+
+class BreedingPool(Forest, Island):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "BreedingPool"
+        # activating for two colors comes from the two inheritances
+        self.add_triggered("shock",
+                           AsEnterEffect([Match.IsSelf()], None, ZONE.FIELD),
+                           ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
+                           )
+
+
+class HallowedFountain(Plains, Island):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "HallowedFountain"
+        # activating for two colors comes from the two inheritances
+        self.add_triggered("shock",
+                           AsEnterEffect([Match.IsSelf()], None, ZONE.FIELD),
+                           ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
+                           )
 #
-# BreedingPool = Land("BreedingPool", ["forest", "island"])
-# BreedingPool.activated.append(
-#     ManaAbility("BreedingPool add U/G",
-#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-#                 lambda g, s: ManaAbility.AddDual(g, s, "U", "G")))
-# BreedingPool.trig_move.append(AsEnterShock)
-#
-# HallowedFountain = Land("HallowedFountain", ["plains", "island"])
-# HallowedFountain.activated.append(
-#     ManaAbility("HallowedFountain add W/U",
-#                 Cost(None, Land.LandAvailable, ManaAbility.TapToPay),
-#                 lambda g, s: ManaAbility.AddDual(g, s, "W", "U")))
-# HallowedFountain.trig_move.append(AsEnterShock)
-# 
 # 
 # ###---fetch lands
 # 

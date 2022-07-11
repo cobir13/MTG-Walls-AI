@@ -1,10 +1,12 @@
 
 """Zones"""
-DECK = 0
-HAND = 1
-FIELD = 2
-GRAVE = 3
-EXILE = 4
-STACK = 5
-NEW = 6
+DECK = 0  # default is top of deck (which is index 0)
+DECK_BOTTOM = 1  # to move to or draw from the bottom of the deck
+HAND = 2
+FIELD = 3
+GRAVE = 4
+# EXILE = 5
+STACK = 6
+NEW = 7
 UNKNOWN = -1
+
