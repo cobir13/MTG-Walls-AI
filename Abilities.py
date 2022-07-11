@@ -72,27 +72,6 @@ class GenericAbility:
         self.trigger: Trigger | None = None
         self.effect: Verb = effect
 
-    def can_afford(self, state: GameState, source: Cardboard, choices: list):
-        """Returns boolean: can this gamestate afford the cost?
-        DOES NOT MUTATE."""
-        if self.cost is None:
-            return False
-        else:
-            return self.cost.can_be_done(state, source, choices)
-
-    def pay(self, state: GameState, source: Cardboard, choices):
-        """
-        Returns a list of (GameState,Cardboard) pairs in which the
-        cost has been paid. The list is length 1 if there is exactly
-        one way to pay the cost, and the list is length 0 if the cost
-        cannot be paid.
-        The original GameState and Source are NOT mutated.
-        """
-        if not self.can_afford(state, source, choices):
-            return []
-        else:
-            return self.cost.do_it(state, source, choices)
-
     def is_triggered(self, verb: Verb, state: GameState, source: Cardboard,
                      trigger_card: Cardboard):
         """
@@ -113,10 +92,12 @@ class GenericAbility:
         return "Ability(%s,%s -> %s)" % (txt_cost, txt_trig, txt_efct)
 
     def is_type(self, verb_type):
-        return self.effect.is_type(verb_type)
+        return (self.effect.is_type(verb_type)
+                or (self.cost is not None and self.cost.is_type(verb_type)))
 
     def get_choice_options(self, state: GameState, source: Cardboard):
         if self.cost is not None:
+            # bundle cost and effect together and get all those options
             overall_verb = ManyVerbs([self.cost, self.effect])
             return overall_verb.choose_choices(state, source)
         else:

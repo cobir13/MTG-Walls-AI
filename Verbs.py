@@ -351,7 +351,9 @@ class MoveToZone(VerbOnSubjectCard):
 # ----------
 
 class NullVerb(Verb):
-    """This Verb does literally nothing, ever."""
+    """This Verb does literally nothing, ever. It is always
+    do-able, has 0 inputs, does not mutate, and is silent.
+    It's a Null Verb. Exactly what it says on the tin."""
 
     def __init__(self):
         super().__init__()
@@ -361,13 +363,15 @@ class NullVerb(Verb):
         return True
 
     def do_it(self, state, subject: Cardboard | None, choices):
-        # add triggers to super_stack, reduce length of choices list
-        """Mutates. Reorder deck randomly."""
         return [(state, subject, choices)]
 
     @property
     def mutates(self):
         return False
+
+    @property
+    def num_inputs(self):
+        return 0
 
     def add_self_to_state_history(self, state: GameState,
                                   subject: Cardboard, choices: list):

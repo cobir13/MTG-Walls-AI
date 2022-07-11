@@ -9,8 +9,11 @@ from __future__ import annotations
 import ZONE
 import tkinter as tk
 from typing import List, TYPE_CHECKING
+if TYPE_CHECKING:
+    import GameState
 
 from RulesText import RulesText
+from VerbParents import ManyVerbs
 
 
 # -----------------------------------------------------------------------------
@@ -118,6 +121,14 @@ class Cardboard:
         self.summon_sick = True
         self.counters = [c for c in self.counters if
                          c[0] == "$"]  # sticky counters stay
+
+    def get_choice_options(self, state: GameState):
+        if self.effect is not None:
+            # bundle cost and effect together and get all those options
+            overall_verb = ManyVerbs([self.cost, self.effect])
+            return overall_verb.choose_choices(state, self)
+        else:
+            return self.cost.choose_choices(state, self)
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.

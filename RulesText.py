@@ -44,19 +44,12 @@ class RulesText:
         # self.static = []     #static effects
         self.cast_destination = ZONE.UNKNOWN
 
-    # abilities and triggers within a card are always called by the gamestate
-    # by passing the source Cardboard into the function. Thus, the ability
-    # doesn't need to know parent Cardboard ahead of time.  This allows me to
-    # make CardTypes that are generic and never mutated and maintain the
-    # distinction between Cardboard and RulesText. This distinction makes it
-    # easier to copy and iterate Gamestates.
-
-    def can_afford(self, state: GameState, source: Cardboard):
-        """Returns boolean: can this gamestate afford the cost?
-        DOES NOT MUTATE."""
-        choice_list = self.cost.choose_choices(state, source)
-        return any([self.cost.can_be_done(state, source, ch)
-                    for ch in choice_list])
+    # def can_afford(self, state: GameState, source: Cardboard):
+    #     """Returns boolean: can this gamestate afford the cost?
+    #     DOES NOT MUTATE."""
+    #     choice_list = self.cost.choose_choices(state, source)
+    #     return any([self.cost.can_be_done(state, source, ch)
+    #                 for ch in choice_list])
 
     @property
     def mana_value(self):
