@@ -5,7 +5,9 @@ Created on Tue Dec 29 22:15:57 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, List
+
+import Verbs
 
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility
@@ -16,12 +18,14 @@ import ManaHandler
 import Decklist
 from Cardboard import Cardboard, CardNull
 from VerbCastAndActivate import ActivateAbility, CastCard
+from PlayTree import PlayTree
 import time
 
 if __name__ == "__main__":
 
     def cast_thing(state,
-                   th: Tuple[ActivatedAbility, Cardboard, list] | Cardboard):
+                   th: Tuple[ActivatedAbility, Cardboard, list] | Cardboard
+                   ) -> List[GameState]:
         if isinstance(th, tuple):
             ability, source, choice_list = th
             g_list = ActivateAbility(ability).do_it(state, source, choice_list)
@@ -38,7 +42,7 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
     game_orig = GameState()
-    game_orig.verbose = False  # True
+    game_orig.is_tracking_history = False  # True
     assert len(game_orig.get_valid_activations()) == 0
     assert len(game_orig.get_valid_castables()) == 0
 
@@ -139,66 +143,98 @@ if __name__ == "__main__":
     assert (len(activ_game.field) == 1)
     assert (str(activ_game.pool) == "G")
 
+    # check that game history is NOT tracking (since tracking is off)
+    assert not game_orig.is_tracking_history
+    assert game_orig.previous_state is None
+    assert game_orig.events_since_previous == ""
+    assert not activ_game.is_tracking_history
+    assert activ_game.previous_state is None
+    assert activ_game.events_since_previous == ""
+
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
 
-    # print("Testing Sylvan Caryatid, Untap, and Upkeep...")
-    # start_clock = time.perf_counter()
-    #
-    # # add a caryatid to the all-roots game
-    # carygame1, _ = game.copy_and_track([])
-    # carygame1.MoveZone(Cardboard.Cardboard(Decklist.Caryatid), ZONE.FIELD)
-    # # should only see one valid ability to activate, since Caryatid not hasty
-    # assert (len(carygame1.get_valid_activations()) == 1)
-    # assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
-    #
-    # # try untap and upkeep
-    # carygame1.untap_step()
-    # carygame1.step_upkeep()
-    # assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
-    # gameN = carygame1
-    # options = gameN.get_valid_activations() + gameN.get_valid_castables()
-    # assert (len(options) == 2)
-    # while len(options) > 0:
-    #     if isinstance(options[0], Abilities.StackEffect):
-    #         [gameN] = options[0].PutOnStack(gameN)
-    #     elif isinstance(options[0], Cardboard.Cardboard):
-    #         [gameN] = gameN.CastSpell(options[0])  # puts it on the stack
-    #     else:
-    #         raise ValueError("incorrect type of object on stack!")
-    #     while len(gameN.stack) > 0:
-    #         [gameN] = gameN.resolve_top_of_stack()
-    #     options = gameN.get_valid_activations() + gameN.get_valid_castables()
-    # assert (len(gameN.hand) == 2)
-    # assert (len(gameN.field) == 3)
-    # assert (gameN.pool == ManaHandler.ManaPool("G"))
-    #
-    # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
-    #
-    #
-    # ###--------------------------------------------------------------------
-    #
+    print("Testing Sylvan Caryatid, Untap & Upkeep, GameState history...")
+    start_clock = time.perf_counter()
+
+    # add a caryatid to the all-roots game
+    carygame1, _ = game_orig.copy_and_track([])
+    carygame1.is_tracking_history = True  # start tracking
+    carygame1.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.FIELD)
+    # should only see one valid ability to activate, since Caryatid not hasty
+    assert (len(carygame1.get_valid_activations()) == 1)
+    assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
+
+    # try to untap and upkeep to get rid of summonning sickness
+    carygame1.step_untap()
+    carygame1.step_upkeep()
+    assert len(carygame1.get_valid_castables()) == 0  # no castable cards
+    gameN = carygame1
+    options = gameN.get_valid_activations() + gameN.get_valid_castables()
+    assert len(options) == 2
+    # as long as there are things to do, do them! auto-choose 1st option
+    while len(options) > 0:
+        gameN = cast_thing(gameN, options[0])[0]
+        while len(gameN.stack) > 0:
+            gameN = gameN.resolve_top_of_stack()[0]
+        options = gameN.get_valid_activations() + gameN.get_valid_castables()
+    # result should be Caryatid and two Roots in play
+    assert len(gameN.hand) == 2
+    assert len(gameN.field) == 3
+    assert gameN.pool == ManaHandler.ManaPool("G")
+
+    # check if the history tracker worked
+    historyN = gameN.get_all_history()
+    # print(historyN)
+    assert historyN.count("*** Activate Roots add G ***") == 2
+    assert historyN.count("*** Activate Caryatid add Au ***") == 1
+    assert historyN.count("*** Cast Roots ***") == 1
+    assert game_orig.get_all_history() == ""
+
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+
+    # -----------------------------------------------------------------------
+
+    # build a PlayTree
+    tree1 = PlayTree([carygame1], 5)
+    # try untap and upkeep
+    try:
+        tree1.beginning_phase_for_all_active_states()
+        assert False  # SHOULD throw error, because drawing from empty library
+    except Verbs.LoseTheGameError:
+        assert True
+
+
+
+
+
+
+
+
+
+
+
     # # basic game-loop
     # def BasicLoop(gamestate):
     #     gameN = gamestate
     #     options = gameN.get_valid_activations() + gameN.get_valid_castables()
     #     while len(options) > 0:
-    #         if gameN.verbose:
+    #         if gameN.is_tracking_history:
     #             print("\n")
     #             print(gameN)
-    #         if len(options) > 1 and gameN.verbose:
+    #         if len(options) > 1 and gameN.is_tracking_history:
     #             print("\nSplit! options are:", options)
     #             print("Taking last option in list")
     #         if isinstance(options[-1], Abilities.StackEffect):
     #             universes = options[-1].PutOnStack(gameN)
-    #         elif isinstance(options[-1], Cardboard.Cardboard):
+    #         elif isinstance(options[-1], Cardboard):
     #             universes = gameN.CastSpell(
     #                 options[-1])  # puts it on the stack
     #         else:
     #             raise ValueError("incorrect type of object on stack!")
     #         # universes is a list of GameStates
-    #         if len(universes) > 1 and gameN.verbose:
+    #         if len(universes) > 1 and gameN.is_tracking_history:
     #             print("\nSplit! universes are:")
     #             for u in universes:
     #                 print("     ---\n", u, "\n     ---")
@@ -206,7 +242,7 @@ if __name__ == "__main__":
     #         gameN = universes[-1]
     #         while len(gameN.stack) > 0:
     #             universes = gameN.resolve_top_of_stack()
-    #             if len(universes) > 1 and gameN.verbose:
+    #             if len(universes) > 1 and gameN.is_tracking_history:
     #                 print("Split! universes are:")
     #                 for u, _ in universes:
     #                     print("     ---\n", u, "\n     ---")
@@ -222,15 +258,15 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = False
+    # game.is_tracking_history = False
     # # field
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.FIELD)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.FIELD)
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.FIELD)
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Roots), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
     #
     # gameN = BasicLoop(game)
     # assert (len(gameN.hand) == 1)
@@ -245,11 +281,11 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = False
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
+    # game.is_tracking_history = False
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.FIELD)
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.BreedingPool), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.BreedingPool), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
     #
     # # run all the way through, with the settings I've chosen, should end with
     # # shocking in the Breeding Pool and using it to cast the Caryatid
@@ -279,14 +315,14 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = False
+    # game.is_tracking_history = False
     # # field
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.FIELD)
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.FIELD)
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.HallowedFountain), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.HallowedFountain), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Roots), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
     #
     # # try to copy, make sure equality holds
     # cp = game.copy()
@@ -294,7 +330,7 @@ if __name__ == "__main__":
     # assert (cp is not game)
     #
     # # add this forest to one but not the other
-    # forest = Cardboard.Cardboard(Decklist2.Forest)
+    # forest = Cardboard(Decklist2.Forest)
     # game.MoveZone(forest, ZONE.FIELD)
     # assert (game != cp)
     # # add a copy of the forst to the other
@@ -322,9 +358,9 @@ if __name__ == "__main__":
     #
     # # two lands. put into play in opposite order. Should be equivalent.
     # game1 = GameState()
-    # game1.verbose = False
-    # game1.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game1.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.HAND)
+    # game1.is_tracking_history = False
+    # game1.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game1.MoveZone(Cardboard(Decklist2.Plains), ZONE.HAND)
     # game2 = game1.copy()
     # # game 1: [0] into play, then the other
     # game1.MoveZone(game1.hand[0], ZONE.FIELD)
@@ -339,9 +375,9 @@ if __name__ == "__main__":
     # # two creatures. put into play in opposite order. Should be NOT
     # # equivalent, because of summoning sickness
     # game1 = GameState()
-    # game1.verbose = False
-    # game1.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
-    # game1.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
+    # game1.is_tracking_history = False
+    # game1.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # game1.MoveZone(Cardboard(Decklist2.Roots), ZONE.HAND)
     # game2 = game1.copy()
     # # game 1: [0] into play, then the other
     # game1.MoveZone(game1.hand[0], ZONE.FIELD)
@@ -360,15 +396,15 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = False
+    # game.is_tracking_history = False
     # # field
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.FIELD)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.FIELD)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.FIELD)
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.FIELD)
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.HallowedFountain), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist.Caryatid), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.HallowedFountain), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Roots), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist.Caryatid), ZONE.HAND)
     #
     # tracker = PlayTree.TurnTracker.InitFromGameState(game)
     # tracker.PlayTurn()
@@ -384,10 +420,10 @@ if __name__ == "__main__":
     #
     # # fixing TurnTracker history duplication: second minor test
     # game2 = GameState()
-    # game2.verbose = True
-    # game2.MoveZone(Cardboard.Cardboard(Decklist2.HallowedFountain),
+    # game2.is_tracking_history = True
+    # game2.MoveZone(Cardboard(Decklist2.HallowedFountain),
     #                  ZONE.HAND)
-    # game2.MoveZone(Cardboard.Cardboard(Decklist.Forest), ZONE.HAND)
+    # game2.MoveZone(Cardboard(Decklist.Forest), ZONE.HAND)
     #
     # tracker2 = PlayTree.TurnTracker.InitFromGameState(game2)
     # tracker2.PlayTurn()
@@ -408,14 +444,14 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = False
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # game.is_tracking_history = False
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Roots), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
     # for x in range(10):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
     #
     # tree = PlayTree.PlayTree(game, 5)
     # # tree.PrintLatest()
@@ -444,16 +480,16 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = False
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
+    # game.is_tracking_history = False
+    # game.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.HAND)
     # game.MoveZone(game.hand[0], ZONE.FIELD)
     # assert (len(game.super_stack) == 0)  # nothing triggers off of this move
     #
     # assert (game.field[0].summon_sick)
     # assert (len(game.get_valid_activations()) == 0)
     # # what if I give the caretaker something to tap?
-    # caryatid = Cardboard.Cardboard(Decklist2.Caryatid)
+    # caryatid = Cardboard(Decklist2.Caryatid)
     # game.MoveZone(caryatid, ZONE.FIELD)
     # no, caretaker still summon_sick. good.
     # assert len(game.get_valid_activations()) == 0
@@ -505,8 +541,8 @@ if __name__ == "__main__":
     #          len(univ5.get_valid_activations())} == {0, 1})
     #
     # # may as well use this setup to test Axebane and Battlement as well
-    # axe = Cardboard.Cardboard(Decklist2.Axebane)
-    # battle = Cardboard.Cardboard(Decklist2.Battlement)
+    # axe = Cardboard(Decklist2.Axebane)
+    # battle = Cardboard(Decklist2.Battlement)
     # game6 = univ2.copy()
     # game6.MoveZone(axe, ZONE.FIELD)
     # game6.MoveZone(battle, ZONE.FIELD)
@@ -524,16 +560,16 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = True
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Battlement), ZONE.HAND)
+    # game.is_tracking_history = True
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Roots), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Battlement), ZONE.HAND)
     # # deck
     # for x in range(10):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
     #
     # tree = PlayTree.PlayTree(game, 5)
     # assert (len(tree.trackerlist[-1].finalnodes) == 1)
@@ -563,16 +599,16 @@ if __name__ == "__main__":
     # start_clock = time.perf_counter()
     #
     # game = GameState()
-    # game.verbose = True
+    # game.is_tracking_history = True
     # # field
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.FIELD)
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.FIELD)
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
     # # deck
     # for x in range(10):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
     #
     # tree = PlayTree.PlayTree(game, 5)
     #
@@ -601,7 +637,7 @@ if __name__ == "__main__":
     # assert (any([c.rules_text == Decklist2.Island for c in final.field]))
     #
     # # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
-    # final.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # final.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
     # final.untap_step()
     # tree2 = PlayTree.PlayTree(final, 5)
     # tree2.PlayNextTurn()
@@ -615,11 +651,11 @@ if __name__ == "__main__":
     # gameA = GameState()
     # # deck
     # for x in range(10):
-    #     gameA.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
-    # gameA.MoveZone(Cardboard.Cardboard(Decklist2.Arcades), ZONE.FIELD)
+    #     gameA.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
+    # gameA.MoveZone(Cardboard(Decklist2.Arcades), ZONE.FIELD)
     # assert (len(gameA.super_stack) == 0)  # Arcades doesn't trigger itself
     # # add Blossoms to field and hopefully draw 2
-    # gameA.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.FIELD)
+    # gameA.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.FIELD)
     # assert (len(gameA.super_stack) == 2)
     # assert (len(gameA.stack) == 0)
     # assert (len(gameA.hand) == 0)  # haven't draw or put triggers on stack
@@ -641,7 +677,7 @@ if __name__ == "__main__":
     # assert (len(gameA.hand) == 2)
     # assert (len(gameA.deck) == 8)
     # # now let's try to add a Caryatid to field and hopefully draw 1
-    # gameA.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.FIELD)
+    # gameA.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.FIELD)
     # assert (len(gameA.super_stack) == 1)
     # assert (len(gameA.hand) == 2)  # haven't draw or put triggers on stack
     # assert (len(gameA.deck) == 8)  # haven't draw or put triggers on stack
@@ -658,19 +694,19 @@ if __name__ == "__main__":
     # # cast Arcades on turn 3 and then draw a lot of cards
     #
     # game = GameState()
-    # game.verbose = False
+    # game.is_tracking_history = False
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caryatid), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Arcades), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Island), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Caryatid), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.Arcades), ZONE.HAND)
     # # deck
     # for x in range(4):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Roots), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Roots), ZONE.DECK)
     # for x in range(4):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
     #
     # tree = PlayTree.PlayTree(game, 5)
     # tree.PlayNextTurn()  # turn 2
@@ -697,17 +733,17 @@ if __name__ == "__main__":
     #
     # # make a game with some fetchable lands in deck and fetchlands in hand
     # game = GameState()
-    # game.verbose = False
+    # game.is_tracking_history = False
     # # deck
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Plains), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Plains), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
     # # hand
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.WindsweptHeath), ZONE.HAND)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.WindsweptHeath), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.WindsweptHeath), ZONE.HAND)
+    # game.MoveZone(Cardboard(Decklist2.WindsweptHeath), ZONE.HAND)
     #
     # # pre-shuffle check
     # assert (game.deck[0].rules_text == Decklist2.Plains)
@@ -733,8 +769,8 @@ if __name__ == "__main__":
     #
     # # add two shocks to the deck.  should both be fetchable. I expect four
     # # fetchable targets and six total gamestates (due to shocked vs tapped)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.HallowedFountain), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.TempleGarden), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.HallowedFountain), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.TempleGarden), ZONE.DECK)
     #
     # # play the fetch
     # universes = game.CastSpell(game.hand[0])
@@ -759,9 +795,9 @@ if __name__ == "__main__":
     # gameE = GameState()
     # # deck
     # for i in range(10):
-    #     gameE.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
+    #     gameE.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
     # # hand
-    # gameE.MoveZone(Cardboard.Cardboard(Decklist2.WindsweptHeath), ZONE.HAND)
+    # gameE.MoveZone(Cardboard(Decklist2.WindsweptHeath), ZONE.HAND)
     # universes = gameE.CastSpell(gameE.hand[0])
     # assert (len(universes) == 1)
     # assert (len(universes[0].deck) == 10)
@@ -776,14 +812,14 @@ if __name__ == "__main__":
     #
     # game = GameState()
     # # deck of 6 cards
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Axebane), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Battlement), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Axebane), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Battlement), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
     # # put Collected Company directly onto the stack
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
+    # game.MoveZone(Cardboard(Decklist2.Company), ZONE.STACK)
     # assert (len(game.super_stack) == 0)
     #
     # # resolve Collected Company
@@ -804,12 +840,12 @@ if __name__ == "__main__":
     # # deck of 6 forests on top, then 10 islands
     # gameF = GameState()
     # for _ in range(6):
-    #     gameF.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
+    #     gameF.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
     # for _ in range(10):
-    #     gameF.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
+    #     gameF.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
     # # should be forests on top
     # assert (all([c.rules_text == Decklist2.Forest for c in gameF.deck[:6]]))
-    # gameF.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
+    # gameF.MoveZone(Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = gameF.resolve_top_of_stack()
     # assert (len(universes) == 1)
     # u = universes[0]
@@ -822,12 +858,12 @@ if __name__ == "__main__":
     # # deck of 5 forests on top, one Caretaker, then 10 islands
     # game1 = GameState()
     # for _ in range(5):
-    #     game1.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
-    # game1.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
+    #     game1.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
+    # game1.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.DECK)
     # for _ in range(10):
-    #     game1.MoveZone(Cardboard.Cardboard(Decklist2.Island), ZONE.DECK)
+    #     game1.MoveZone(Cardboard(Decklist2.Island), ZONE.DECK)
     # assert (len(game1.deck) == 16)
-    # game1.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
+    # game1.MoveZone(Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = game1.resolve_top_of_stack()
     # assert (len(universes) == 1)
     # u = universes[0]
@@ -841,10 +877,10 @@ if __name__ == "__main__":
     # # deck of only 4 cards total, all Caretakers
     # game4 = GameState()
     # for _ in range(4):
-    #     game4.MoveZone(Cardboard.Cardboard(Decklist2.Caretaker), ZONE.DECK)
+    #     game4.MoveZone(Cardboard(Decklist2.Caretaker), ZONE.DECK)
     # # should be forests on top
     # assert (len(game4.deck) == 4)
-    # game4.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
+    # game4.MoveZone(Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = game4.resolve_top_of_stack()
     # assert (len(universes) == 1)
     # u = universes[0]
@@ -854,12 +890,12 @@ if __name__ == "__main__":
     #
     # # Does Blossoms trigger correctly? start with 12 cards in deck
     # game = GameState()
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Omens), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Omens), ZONE.DECK)
     # for _ in range(10):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
     # # put Collected Company directly onto the stack
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
+    # game.MoveZone(Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = game.resolve_top_of_stack()
     # assert len(universes) == 2  # two draws could be on stack in either order
     # u0, u1 = universes
@@ -875,12 +911,12 @@ if __name__ == "__main__":
     # # will get two GameStates even though they are identical! And that's ok.
     # # it's not worth the effort to optimize this out, right now.
     # game = GameState()
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.DECK)
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Blossoms), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.DECK)
+    # game.MoveZone(Cardboard(Decklist2.Blossoms), ZONE.DECK)
     # for _ in range(10):
-    #     game.MoveZone(Cardboard.Cardboard(Decklist2.Forest), ZONE.DECK)
+    #     game.MoveZone(Cardboard(Decklist2.Forest), ZONE.DECK)
     # # put Collected Company directly onto the stack
-    # game.MoveZone(Cardboard.Cardboard(Decklist2.Company), ZONE.STACK)
+    # game.MoveZone(Cardboard(Decklist2.Company), ZONE.STACK)
     # universes = game.resolve_top_of_stack()
     # assert len(universes) == 2  # two draws could be on stack in either order
     # u0, u1 = universes

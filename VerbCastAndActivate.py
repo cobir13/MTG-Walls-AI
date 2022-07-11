@@ -7,7 +7,6 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
     from GameState import GameState
 
-
 import ZONE
 from StackCardboard import StackCardboard
 from Stack import StackAbility
@@ -94,6 +93,17 @@ class ActivateAbility(VerbAtomic):
     def num_inputs(self):
         return self.ability.cost.num_inputs + self.ability.effect.num_inputs
 
+    def __str__(self):
+        return "Activate " + str(self.ability)
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            record = "\n*** Activate %s ***" % self.ability.name
+            # if len(choices) > 0:
+            #     record += " {%s}" % ", ".join([str(c) for c in choices])
+            state.events_since_previous += record
+
 
 class CastCard(VerbOnSubjectCard):
     def __init__(self):
@@ -132,6 +142,7 @@ class CastCard(VerbOnSubjectCard):
         # The casting will chew through all the payment choices, leaving only
         # the target choices in the resulting tuples. Then those tuples are
         # returned as a list of (GameState, Cardboard, choices) tuples.
+        # Make the do_it "silent" by temporarily wiping the recorder function
         list_of_tuples = subject.cost.do_it(copy_of_game, copy_of_spell,
                                             copy_of_choices)
         # Build a StackCardboard and add it to the stack
@@ -174,6 +185,14 @@ class CastCard(VerbOnSubjectCard):
 
     def mutates(self):
         return False
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            record = "\n*** Cast %s ***" % subject.name
+            # if len(choices) > 0:
+            #     record += " {%s}" % ", ".join([str(c) for c in choices])
+            state.events_since_previous += record
 
 
 # ----------

@@ -48,6 +48,9 @@ class StackObject:
         new_state = state.copy()
         # remove StackObject from the stack
         stack_obj = new_state.stack.pop(-1)
+        # if new_state.is_tracking_history:
+        #     text = "\n*** Resolve %s ***" % str(stack_obj)
+        #     new_state.events_since_previous += text
         tuple_list = [(new_state, stack_obj.card, [])]
         # perform the effect (resolve ability, move card to zone, etc)
         if stack_obj.effect is not None:

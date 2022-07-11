@@ -59,8 +59,13 @@ class GameState:
         # self.num_lands_played
         # self.num_lands_permitted
         # self.opponent_list = [] ???
-        self.verbose: bool = False
-        self.history: List[str] = []
+        # If we are tracking history, then we write down the previous distinct
+        # GameState and a string describing how we got from there to here.
+        # Things that mutate will add to the string, and things that copy
+        # will write down the original state and clear the string.
+        self.is_tracking_history: bool = False
+        self.previous_state: GameState | None = None
+        self.events_since_previous: str = ""
 
     def __str__(self):
         txt = "HAND:    " + ",".join([str(card) for card in self.hand])
@@ -88,6 +93,7 @@ class GameState:
                 and self.life == other.life
                 and self.opponent_life == other.opponent_life
                 and self.has_played_land == other.has_played_land
+                and self.num_spells_cast == other.num_spells_cast
                 and self.pool == other.pool):
             return False
         # also need to compare hands, fields, etc. We know they are sorted
@@ -142,8 +148,9 @@ class GameState:
         state.opponent_life = self.opponent_life
         state.has_played_land = self.has_played_land
         state.num_spells_cast = self.num_spells_cast
-        state.verbose = self.verbose
-        state.history = self.history.copy()
+        state.is_tracking_history = self.is_tracking_history
+        state.previous_state = self if state.is_tracking_history else None
+        state.events_since_previous = ""
         # need to track any pointers in StackObjects
         stack_index = len(track_list)  # index for where stack portion begins
         for obj in self.stack + self.super_stack:
@@ -231,8 +238,6 @@ class GameState:
     def copy(self) -> GameState:
         return self.copy_and_track([])[0]
 
-    # -----MUTATING FUNCTIONS. They all return a list of StackEffects
-
     def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
         if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
             zone = self.deck
@@ -247,6 +252,16 @@ class GameState:
         else:
             raise IndexError
         return zone
+
+    def get_all_history(self):
+        text = ""
+        if self.previous_state is not None:
+            text += self.previous_state.get_all_history()
+            text += "\n-----"
+        text += self.events_since_previous
+        return text
+
+    # -----MUTATING FUNCTIONS
 
     def re_sort(self, zone_name):
         """sort the specified zone, if it is a zone that is supposed
@@ -267,7 +282,9 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        MoveToZone(destination).do_it(self, cardboard, [])
+        mover = MoveToZone(destination)
+        mover.add_self_to_state_history = lambda g, c, ch: None  # silent
+        mover.do_it(self, cardboard, [])
 
     # -------------------------------------------------------------------------
 
@@ -288,20 +305,29 @@ class GameState:
 
     def step_untap(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
+        was_tracking = self.is_tracking_history
+        if self.is_tracking_history:
+            turn = self.turn_count
+            self.events_since_previous += "\nUntap step: now turn %i" % turn
         self.pool = ManaPool("")
         self.stack = []
         self.turn_count += 1
         self.has_played_land = False
         self.num_spells_cast = 0  # reset this counter
+        # temporarily turn off tracking for these Untaps
+        self.is_tracking_history = False
         for card in self.field:
             UntapSelf().do_it(self, card, [])
             card.summon_sick = False
             # erase the invisible counters
             card.counters = [c for c in card.counters if
                              c[0] not in ("@", "$")]
+        self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def step_upkeep(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
+        if self.is_tracking_history:
+            self.events_since_previous += "\nUpkeep step"
         for cardboard in self.hand + self.field + self.grave:
             for ability in cardboard.rules_text.trig_upkeep:
                 new_effect = StackAbility(ability, cardboard, [])
@@ -310,7 +336,13 @@ class GameState:
     def step_draw(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
            Draws from index 0 of deck."""
+        was_tracking = self.is_tracking_history
+        if self.is_tracking_history:
+            self.events_since_previous += "\nDraw step"
+        # temporarily turn off tracking for this Draw
+        self.is_tracking_history = False
         DrawCard().do_it(self, None, [])
+        self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
         """
@@ -359,17 +391,19 @@ class GameState:
         return final_results
 
     def step_cleanup(self):
+        if self.is_tracking_history:
+            self.events_since_previous += "\nCleanup"
         # discard down to 7 cards
         if len(self.hand) > 7:
             discard_list = Choices.choose_exactly_n(self.hand,
                                                     len(self.hand) - 7,
                                                     "discard to hand size")
-            if self.verbose:
+            if self.is_tracking_history:
                 print("discard:", [str(c) for c in discard_list])
             for card in discard_list:
                 MoveToZone(ZONE.GRAVE).do_it(self, card, [])
         # clear any floating mana
-        if self.verbose and self.pool.cmc() > 0:
+        if self.is_tracking_history and self.pool.cmc() > 0:
             print("end with %s" % (str(self.pool)))
         for color in self.pool.data.keys():
             self.pool.data[color] = 0
@@ -380,6 +414,8 @@ class GameState:
         self.is_my_turn = not self.is_my_turn
 
     def step_attack(self):
+        if self.is_tracking_history:
+            self.events_since_previous += "\nGo to combat"
         print("not yet implemented")
         return
 

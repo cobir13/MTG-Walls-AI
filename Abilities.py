@@ -108,10 +108,9 @@ class GenericAbility:
 
     def __str__(self):
         txt_cost = "" if self.cost is None else str(self.cost)
-        txt_trig = "" if self.trigger is None else str(self.trigger)
-
+        txt_trig = "" if self.trigger is None else " "+str(self.trigger)
         txt_efct = str(self.effect)
-        return "Ability(%s,%s->%s)" % (txt_cost, txt_trig, txt_efct)
+        return "Ability(%s,%s -> %s)" % (txt_cost, txt_trig, txt_efct)
 
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)

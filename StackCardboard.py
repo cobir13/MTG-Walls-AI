@@ -30,7 +30,7 @@ class StackCardboard(StackObject):
             return mover
 
     def __str__(self):
-        return "Spell:" + self.card.name
+        return "Spell: " + self.card.name
 
     def __repr__(self):
         return "Spell: " + self.card.name

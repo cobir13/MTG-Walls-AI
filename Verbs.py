@@ -47,6 +47,15 @@ class PayMana(VerbAtomic):
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
 
+    def __str__(self):
+        return "PayMana{%s}" % str(self.mana_cost)
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            text = "\nPay %s" % str(self.mana_cost)
+            state.events_since_previous += text
+
 
 # ----------
 
@@ -65,6 +74,15 @@ class AddMana(VerbAtomic):
         state.pool.add_mana(self.mana_pool_to_add)
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
+
+    def __str__(self):
+        return "AddMana{%s}" % str(self.mana_pool_to_add)
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            text = "\nAdd %s" % str(self.mana_pool_to_add)
+            state.events_since_previous += text
 
 
 # =============================================================================
@@ -86,6 +104,12 @@ class LoseOwnLife(VerbAtomic):
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
 
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            text = "\nLose %i life" % self.getter_list[0].get(state, subject)
+            state.events_since_previous += text
+
 
 # ----------
 
@@ -105,6 +129,12 @@ class DealDamageToOpponent(VerbAtomic):
         state.opponent_life -= damage
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            text = "\nDeal %i damage" % self.getter_list[0].get(state, subject)
+            state.events_since_previous += text
 
 
 # ----------
@@ -169,6 +199,12 @@ class AddCounterToSelf(VerbOnSubjectCard):
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
 
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            text = "\nPut %s counter on %s" % (self.counter_text, subject.name)
+            state.events_since_previous += text
+
 
 # ----------
 
@@ -190,6 +226,10 @@ class ActivateOncePerTurn(VerbOnSubjectCard):
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
 
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        return  # doesn't mark itself as having done anything
+
 
 # ----------
 
@@ -206,6 +246,10 @@ class ActivateOnlyAsSorcery(VerbAtomic):
     def do_it(self, state, subject, choices):
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        return  # doesn't mark itself as having done anything
 
 
 # ----------
@@ -227,6 +271,11 @@ class Shuffle(VerbAtomic):
     @property
     def mutates(self):
         return True
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        if state.is_tracking_history:
+            state.events_since_previous += "\nShuffle"
 
 
 # ----------
@@ -275,11 +324,28 @@ class MoveToZone(VerbOnSubjectCard):
         elif self.destination == ZONE.DECK:
             state.deck.insert(0, subject)  # add to top (index 0) of deck
         elif self.destination == ZONE.DECK_BOTTOM:
-            state.deck.append(subject)   # add to bottom (index -1) of deck
+            state.deck.append(subject)  # add to bottom (index -1) of deck
         # any time you change zones, reset the cardboard parameters
         subject.reset_to_default_cardboard()
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
+
+    def __str__(self):
+        if self.destination == ZONE.DECK:
+            text = "Deck"
+        elif self.destination == ZONE.DECK_BOTTOM:
+            text = "BottomOfDeck"
+        elif self.destination == ZONE.HAND:
+            text = "Hand"
+        elif self.destination == ZONE.FIELD:
+            text = "Field"
+        elif self.destination == ZONE.GRAVE:
+            text = "Grave"
+        elif self.destination == ZONE.STACK:
+            text = "Stack"
+        else:
+            raise IndexError
+        return "MoveTo" + text
 
 
 # ----------
@@ -302,6 +368,10 @@ class NullVerb(Verb):
     @property
     def mutates(self):
         return False
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        return
 
 
 # ----------
@@ -344,3 +414,7 @@ class PlayLandForTurn(VerbAtomic):
         state.has_played_land = True
         # add triggers to super_stack, reduce length of choices list
         return super().do_it(state, subject, choices)
+
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        return

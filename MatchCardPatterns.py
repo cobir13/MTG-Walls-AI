@@ -32,7 +32,7 @@ class CardType(CardPattern):
         self.type_to_match: type = card_type
 
     def match(self, card, gamestate, source):
-        return isinstance(card, self.type_to_match)
+        return card.has_type(self.type_to_match)
 
     def __str__(self):
         return super().__str__() + "(" + self.type_to_match.__name__ + ")"

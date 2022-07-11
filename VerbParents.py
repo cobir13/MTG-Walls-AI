@@ -58,9 +58,7 @@ class Verb:
         #       of choices returned (for later use) is appropriately shortened.
         # add a note to the GameState's history that this Verb has occurred,
         # assuming that the GameState is tracking such things.
-        # TODO: move to PlayTree or ActivateAbility & CastAbility?
-        if state.verbose:
-            state.history.append(str(self))
+        self.add_self_to_state_history(state, subject, choices)
         # `trigger_source` is source of the trigger. Not to be confused
         # with `source`, which is the source of the Verb which is
         # potentially CAUSING the trigger.
@@ -141,6 +139,18 @@ class Verb:
             verbs_that_match += v.get_sub_verbs(verb_type)
         return verbs_that_match
 
+    def add_self_to_state_history(self, state: GameState,
+                                  subject: Cardboard, choices: list):
+        """If the GameState is tracking history, adds a note
+        to that history describing this Verb. Mutates state,
+        technically, in that note is added rather than added
+        to a copy."""
+        if state.is_tracking_history:
+            record = "\n%s %s" % (str(self), subject.name)
+            # if len(choices) > 0:
+            #     record += " {%s}" % ", ".join([str(c) for c in choices])
+            state.events_since_previous += record
+
 
 # ----------
 class VerbAtomic(Verb):
@@ -185,7 +195,7 @@ class ManyVerbs(Verb):
         self.getter_list = []
 
     def __str__(self):
-        return "&".join([v.__str__() for v in self.sub_verbs])
+        return " & ".join([v.__str__() for v in self.sub_verbs])
 
     def do_it(self, state: GameState, subject: Cardboard,
               choices: list) -> List[Tuple[GameState, Cardboard, list]]:

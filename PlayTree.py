@@ -79,7 +79,7 @@ class PlayTree:
                     self.active_states.add(new_state)
                     self.all_intermediate.add(new_state)
 
-    def begin_phase_for_all_active_states(self):
+    def beginning_phase_for_all_active_states(self):
         """Apply untap, upkeep, draw to all currently-active
         states, updating the active and intermediate state
         sets as appropriate. This should end with active
