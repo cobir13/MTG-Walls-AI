@@ -8,13 +8,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 # if TYPE_CHECKING:
 #     from Abilities import ActivatedAbility
-
+import Verbs
 from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
 import ZONE
 from ManaHandler import ManaPool
-from Stack import StackAbility, StackObject
-from StackCardboard import StackCardboard
+from Stack import StackAbility, StackObject, StackCardboard
 from Verbs import MoveToZone, DrawCard, UntapSelf
 import Choices
 from Abilities import AsEnterEffect, ActivatedAbility
@@ -359,7 +358,24 @@ class GameState:
         if len(self.stack) == 0:
             return []
         assert (isinstance(self.stack[-1], StackObject))
-        return self.stack[-1].resolve(self)
+        new_state = self.copy()
+        # remove StackObject from the stack
+        stack_obj = new_state.stack.pop(-1)
+        tuple_list = [(new_state, stack_obj.card, [])]
+        # perform the effect (resolve ability, perform spell, etc)
+        if stack_obj.effect is not None:
+            tuple_list = stack_obj.effect.do_it(new_state, stack_obj.card,
+                                                stack_obj.choices)
+        # if card is on stack (not just a pointer), move it to destination zone
+        if stack_obj.card.zone == ZONE.STACK:
+            mover = MoveToZone(stack_obj.card.rules_text.cast_destination)
+            for g, s, ch in tuple_list:
+                mover.do_it(g, s, ch)  # mutates in-place
+        # clear the superstack and return!
+        results = []
+        for state2, _, _ in tuple_list:
+            results += state2.clear_super_stack()
+        return results
 
     def clear_super_stack(self):
         """Returns a list of GameStates where the objects on the super_stack
@@ -426,7 +442,7 @@ class GameState:
         """
         Return a list of all abilities that can be put on the
         stack right now. The form of the return is a tuple of
-        the inputs that Verb.ActivateAbility needs in order
+        the inputs that Verb.PlayAbility needs in order
         to put a newly activated ability onto the stack.
         """
         effects = []

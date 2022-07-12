@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, List, Set
 if TYPE_CHECKING:
     import GameState
 
-from VerbCastAndActivate import ActivateAbility, CastCard
+from Verbs import PlayAbility, PlayCardboard
 
 
 class PlayTree:
@@ -57,14 +57,14 @@ class PlayTree:
             # if there ARE valid actions, make new nodes by taking them
             new_nodes = []
             for ability, source, choice_list in activables:
-                activator = ActivateAbility(ability)
+                activator = PlayAbility(ability)
                 game_tuple_list = activator.do_it(state, source, choice_list)
                 # list of (GameState, source Cardboard, list) tuples.
                 for g, _, _ in game_tuple_list:
                     new_nodes += g.clear_super_stack()
             for card in castables:
                 choice_list = card.cost.choose_choices(state, card)
-                game_tuple_list = CastCard().do_it(state, card, choice_list)
+                game_tuple_list = PlayCardboard().do_it(state, card, choice_list)
                 for g, _, _ in game_tuple_list:
                     new_nodes += g.clear_super_stack()
             if len(state.stack) > 0:

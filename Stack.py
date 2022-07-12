@@ -6,10 +6,11 @@ if TYPE_CHECKING:
     from Abilities import GenericAbility
     from Cardboard import Cardboard
     from GameState import GameState
-    from VerbParents import Verb
+    from Verbs import Verb, ManyVerbs
 
 
 class StackObject:
+
     def __init__(self):
         # The Ability that is being activated, if any
         self.ability: GenericAbility | None = None
@@ -36,31 +37,6 @@ class StackObject:
             return self.card.effect
         else:
             return None
-
-    def resolve(self, state: GameState) -> List[GameState]:
-        """Returns list of GameStates resulting from performing
-        this spell's effect. That might consist of carrying out
-        the Verbs of an instant or sorcery, or might consist of
-        moving a permanent from the stack to the battlefield and
-        putting all resulting triggers onto the stack.
-        Does not mutate the original GameState"""
-        assert (self is state.stack[-1])  # last item on the stack
-        new_state = state.copy()
-        # remove StackObject from the stack
-        stack_obj = new_state.stack.pop(-1)
-        # if new_state.is_tracking_history:
-        #     text = "\n*** Resolve %s ***" % str(stack_obj)
-        #     new_state.events_since_previous += text
-        tuple_list = [(new_state, stack_obj.card, [])]
-        # perform the effect (resolve ability, move card to zone, etc)
-        if stack_obj.effect is not None:
-            tuple_list = stack_obj.effect.do_it(new_state, stack_obj.card,
-                                                stack_obj.choices)
-        # clear the superstack and return!
-        results = []
-        for state2, _, _ in tuple_list:
-            results += state2.clear_super_stack()
-        return results
 
     def get_id(self):
         text = "Ob("
@@ -100,6 +76,29 @@ class StackAbility(StackObject):
     @property
     def name(self):
         return self.ability.name
+
+    # def build_tk_display(self, parentframe, ):
+    #     return tk.Button(parentframe,
+    #                      text="Effect: %s" % self.name,
+    #                      anchor="w",
+    #                      height=7, width=10, wraplength=80,
+    #                      padx=3, pady=3,
+    #                      relief="solid", bg="lightblue")
+
+
+class StackCardboard(StackObject):
+
+    def __init__(self, card: Cardboard, choices: list):
+        super().__init__()
+        self.ability: GenericAbility | None = None
+        self.card: Cardboard = card
+        self.choices: list = choices
+
+    def __str__(self):
+        return "Spell: " + self.card.name
+
+    def __repr__(self):
+        return "Spell: " + self.card.name
 
     # def build_tk_display(self, parentframe, ):
     #     return tk.Button(parentframe,

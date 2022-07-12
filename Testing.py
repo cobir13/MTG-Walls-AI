@@ -17,7 +17,7 @@ from GameState import GameState
 import ManaHandler
 import Decklist
 from Cardboard import Cardboard, CardNull
-from VerbCastAndActivate import ActivateAbility, CastCard
+from Verbs import PlayAbility, PlayCardboard
 from PlayTree import PlayTree
 import time
 
@@ -28,11 +28,11 @@ if __name__ == "__main__":
                    ) -> List[GameState]:
         if isinstance(th, tuple):
             ability, source, choice_list = th
-            g_list = ActivateAbility(ability).do_it(state, source, choice_list)
+            g_list = PlayAbility(ability).do_it(state, source, choice_list)
         else:
             card = th
             choice_list = card.cost.choose_choices(state, card)
-            g_list = CastCard().do_it(state, card, choice_list)
+            g_list = PlayCardboard().do_it(state, card, choice_list)
         return [g for g, _, _ in g_list]
 
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     roots_abil = roots.get_activated()[0]
     choices = roots_abil.get_choice_options(game_orig, roots)
     assert choices == [[]]  # list of empty list
-    assert not ActivateAbility(roots_abil).can_be_done(game_orig, roots, [])
+    assert not PlayAbility(roots_abil).can_be_done(game_orig, roots, [])
 
     # move a Wall of Roots to field and try again
     game_orig.MoveZone(game_orig.hand[0], ZONE.FIELD)
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     roots_abil = roots.get_activated()[0]
     choices = roots_abil.get_choice_options(game_orig, roots)
     assert choices == [[]]  # list of empty list
-    assert ActivateAbility(roots_abil).can_be_done(game_orig, roots, [])
+    assert PlayAbility(roots_abil).can_be_done(game_orig, roots, [])
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()

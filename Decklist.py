@@ -4,12 +4,11 @@ Created on Tue Dec 29 11:50:12 2020
 
 @author: Cobi
 """
-from RulesText import Creature, Land, Instant  # , Sorcery
+from RulesText import Creature, Land, Instant, TapSymbol  # , Sorcery
 import ZONE
 import MatchCardPatterns as Match
 import Verbs
-from VerbCastAndActivate import TapSymbol
-from VerbParents import VerbManyTimes, ManyVerbs, ChooseAVerb, VerbOnSplitList
+from Verbs import ManyVerbs, ChooseAVerb, VerbManyTimes, VerbOnSplitList
 from Abilities import TriggerOnMove, AsEnterEffect
 
 import Getters as Get
