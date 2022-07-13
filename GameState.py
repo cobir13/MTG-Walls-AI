@@ -377,7 +377,7 @@ class GameState:
             results += state2.clear_super_stack()
         return results
 
-    def clear_super_stack(self):
+    def clear_super_stack(self) -> List[GameState]:
         """Returns a list of GameStates where the objects on the super_stack
         have been placed onto the stack in all possible orders or otherwise
         dealt with. If super_stack is empty, returns [self].
@@ -445,38 +445,40 @@ class GameState:
         the inputs that Verb.PlayAbility needs in order
         to put a newly activated ability onto the stack.
         """
-        effects = []
+        activatables = []
         active_objects = []  # objects I've already checked through
         for source in self.hand + self.field + self.grave:
             if any([source.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                # check whether price can be paid
-                for choices in ability.get_choice_options(self, source):
-                    if ability.can_afford(self, source, choices):
+                # find available choice options, see if any let me activate
+                for choices in ability.get_cast_options(self, source):
+                    if ability.can_be_cast(self, source, choices):
                         # this ability with this set of choices is castable!
-                        effects.append((ability, source, choices))
+                        activatables.append((ability, source, choices))
                         add_object = True
             if add_object:  # track any object whose ability we looked at
                 active_objects.append(source)
-        return effects
+        return activatables
 
-    def get_valid_castables(self) -> List[Cardboard]:
+    def get_valid_castables(self) -> List[Tuple[Cardboard, list]]:
         """Return a list of all cast-able cards that can be put
         on the stack right now, as a list of Cardboard's which
         have not yet been paid for or moved from their current
         zones. Think of these like pointers."""
-        cards = []
+        castables = []
         # look for all cards that can be cast
         active_objects = []
         for card in self.hand:
             if any([card.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
-            if (len(self.stack) > 0
-                    and "instant" not in card.rules_text.keywords):  # TODO
-                continue  # if stack is full, can only cast instants
-            if card.rules_text.can_afford(self, card):
-                cards.append(card)
+            add_object = False
+            # find available choice options, see if any let me cast the card
+            for choices in card.get_cast_options(self):
+                if card.can_be_cast(self, choices):
+                    castables.append((card, choices))
+                    add_object = True
+            if add_object:  # track any card that can be cast at least one way
                 active_objects.append(card)
-        return cards
+        return castables

@@ -31,8 +31,12 @@ class Trigger:
                 and all([p.match(trigger_card, state, source) for p in
                          self.patterns]))
 
+    def __str__(self):
+        return "Trigger(%s,%s)" % (self.verb_type.__name__,
+                                   str(self.patterns))
 
 # ----------
+
 
 class TriggerOnMove(Trigger):
 
@@ -52,6 +56,18 @@ class TriggerOnMove(Trigger):
                 )
 
 
+class NullTrigger(Trigger):
+    def __init__(self):
+        super().__init__(Verbs.NullVerb, [])
+
+    def is_triggered(self, verb: Verbs.Verb, state: GameState,
+                     source: Cardboard, trigger_card: Cardboard):
+        return False
+
+    def __str__(self):
+        return ""
+
+
 # ----------
 class AsEnterEffect(TriggerOnMove):
     """A specific subcategory of TriggerOnMove.  This is an
@@ -66,36 +82,28 @@ class AsEnterEffect(TriggerOnMove):
 
 class GenericAbility:
 
-    caster_verb: Verbs.PlayVerb = Verbs.PlayAbility
-
     def __init__(self, name, effect: Verbs.Verb):
         self.name: str = name
-        self.cost: Verbs.Verb | None = None
-        self.trigger: Trigger | None = None
+        self.cost: Verbs.Verb = Verbs.NullVerb()
+        self.trigger: Trigger = NullTrigger()
         self.effect: Verbs.Verb = effect
         if effect.is_type(Verbs.AddMana):
-            self.caster_verb = Verbs.PlayManaAbility
-
-    def can_afford(self, state: GameState, source: Cardboard, choices: list):
-        """Returns boolean: can this gamestate afford the cost?
-        DOES NOT MUTATE."""
-        if self.cost is None:
-            return False
+            self.caster_verb: Verbs.PlayVerb = Verbs.PlayManaAbility(self)
         else:
-            return self.cost.can_be_done(state, source, choices)
+            self.caster_verb: Verbs.PlayVerb = Verbs.PlayAbility(self)
 
-    def pay(self, state: GameState, source: Cardboard, choices):
-        """
-        Returns a list of (GameState,Cardboard) pairs in which the
-        cost has been paid. The list is length 1 if there is exactly
-        one way to pay the cost, and the list is length 0 if the cost
-        cannot be paid.
-        The original GameState and Source are NOT mutated.
-        """
-        if not self.can_afford(state, source, choices):
-            return []
-        else:
-            return self.cost.do_it(state, source, choices)
+    def get_cast_options(self, state: GameState, source: Cardboard):
+        return self.caster_verb.choose_choices(state, source)
+
+    def can_be_cast(self, state: GameState, source: Cardboard, choices: list):
+        return self.caster_verb.can_be_done(state, source, choices)
+
+    def activate(self, state: GameState, source: Cardboard, choices: list
+                 ) -> List[GameState]:
+        """Returns a list of GameStates where this spell has
+        been cast (put onto the stack) and all costs paid."""
+        return [g for g, _, _ in self.caster_verb.do_it(state, source,
+                                                        choices)]
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):
@@ -105,14 +113,11 @@ class GenericAbility:
         `source` is assumed to be the source of this triggered
         ability.
         """
-        if self.trigger is None:
-            return False
-        else:
-            return self.trigger.is_triggered(verb, state, source, trigger_card)
+        return self.trigger.is_triggered(verb, state, source, trigger_card)
 
     def __str__(self):
-        txt_cost = "" if self.cost is None else str(self.cost)
-        txt_trig = "" if self.trigger is None else " "+str(self.trigger)
+        txt_cost = str(self.cost)
+        txt_trig = str(self.trigger)
         txt_efct = str(self.effect)
         return "Ability(%s,%s -> %s)" % (txt_cost, txt_trig, txt_efct)
 
@@ -120,7 +125,7 @@ class GenericAbility:
         return self.effect.is_type(verb_type)
 
     def get_choice_options(self, state: GameState, source: Cardboard):
-        if self.cost is not None:
+        if self.cost is not Verbs.NullVerb:
             overall_verb = Verbs.ManyVerbs([self.cost, self.effect])
             return overall_verb.choose_choices(state, source)
         else:
@@ -130,13 +135,13 @@ class GenericAbility:
 class ActivatedAbility(GenericAbility):
     def __init__(self, name, cost: Verbs.Verb, effect: Verbs.Verb):
         super().__init__(name, effect)
-        self.cost: Verbs.Verb | None = cost
+        self.cost: Verbs.Verb = cost
 
 
 class TriggeredAbility(GenericAbility):
     def __init__(self, name, trigger: Trigger, effect: Verbs.Verb):
         super().__init__(name, effect)
-        self.trigger: Trigger | None = trigger
+        self.trigger: Trigger = trigger
 
 
 class TimedAbility(GenericAbility):

@@ -17,23 +17,21 @@ from GameState import GameState
 import ManaHandler
 import Decklist
 from Cardboard import Cardboard, CardNull
-from Verbs import PlayAbility, PlayCardboard
 from PlayTree import PlayTree
 import time
 
 if __name__ == "__main__":
 
     def cast_thing(state,
-                   th: Tuple[ActivatedAbility, Cardboard, list] | Cardboard
+                   tup: Tuple[ActivatedAbility, Cardboard, list] |
+                   Tuple[Cardboard, list]
                    ) -> List[GameState]:
-        if isinstance(th, tuple):
-            ability, source, choice_list = th
-            g_list = PlayAbility(ability).do_it(state, source, choice_list)
-        else:
-            card = th
-            choice_list = card.cost.choose_choices(state, card)
-            g_list = PlayCardboard().do_it(state, card, choice_list)
-        return [g for g, _, _ in g_list]
+        if len(tup) == 3:
+            ability, source, choice_list = tup
+            return ability.activate(state, source, choice_list)
+        elif len(tup) == 2:
+            card, choice_list = tup
+            return card.cast(state, choice_list)
 
 
     # -----------------------------------------------------------------------
@@ -68,7 +66,7 @@ if __name__ == "__main__":
     roots_abil = roots.get_activated()[0]
     choices = roots_abil.get_choice_options(game_orig, roots)
     assert choices == [[]]  # list of empty list
-    assert not PlayAbility(roots_abil).can_be_done(game_orig, roots, [])
+    assert not roots_abil.can_be_cast(game_orig, roots, [])
 
     # move a Wall of Roots to field and try again
     game_orig.MoveZone(game_orig.hand[0], ZONE.FIELD)
@@ -80,7 +78,7 @@ if __name__ == "__main__":
     roots_abil = roots.get_activated()[0]
     choices = roots_abil.get_choice_options(game_orig, roots)
     assert choices == [[]]  # list of empty list
-    assert PlayAbility(roots_abil).can_be_done(game_orig, roots, [])
+    assert roots_abil.can_be_cast(game_orig, roots, [])
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
@@ -122,9 +120,10 @@ if __name__ == "__main__":
     # all 3 roots in hand only generate 1 option--to cast Roots
     assert (len(copygame.get_valid_castables()) == 1)
     # cast the newly castable spell
-    cardboard = copygame.get_valid_castables()[0]
+    castable = copygame.get_valid_castables()[0]
+    cardboard = castable[0]
     assert [o is cardboard for o in copygame.hand] == [True, False, False]
-    [copygame3] = cast_thing(copygame, cardboard)  # puts it on the stack
+    [copygame3] = cast_thing(copygame, castable)  # puts it on the stack
     assert (copygame3.pool == ManaHandler.ManaPool(""))  # no mana anymore
     assert (len(copygame3.stack) == 1)  # one spell on the stack
     assert (len(copygame3.hand) == 2)  # two cards in hand
@@ -171,7 +170,8 @@ if __name__ == "__main__":
     carygame1.step_upkeep()
     assert len(carygame1.get_valid_castables()) == 0  # no castable cards
     gameN = carygame1
-    options = gameN.get_valid_activations() + gameN.get_valid_castables()
+    options: List[tuple] = (gameN.get_valid_activations()
+                            + gameN.get_valid_castables())
     assert len(options) == 2
     # as long as there are things to do, do them! auto-choose 1st option
     while len(options) > 0:
@@ -196,6 +196,9 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
+    print("Testing PlayTree basic functionality...")
+    start_clock = time.perf_counter()
+
     # build a PlayTree
     tree1 = PlayTree([carygame1], 5)
     # try untap and upkeep
@@ -204,16 +207,6 @@ if __name__ == "__main__":
         assert False  # SHOULD throw error, because drawing from empty library
     except Verbs.LoseTheGameError:
         assert True
-
-
-
-
-
-
-
-
-
-
 
     # # basic game-loop
     # def BasicLoop(gamestate):

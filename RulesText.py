@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
 
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger
-from Verbs import PlayLandForTurn, PayMana, NullVerb, TapSelf, Verb, PlayVerb, \
-    PlayLand, PlaySpell, PlayPermanent
+from Verbs import PlayLandForTurn, PayMana, NullVerb, TapSelf, Verb, \
+    PlayVerb, PlayLand, PlaySpellWithEffect, PlayPermanent
 import ZONE
 
 
@@ -90,7 +90,7 @@ class RulesText:
 
 
 class Permanent(RulesText):
-    caster_verb: PlayVerb = PlayPermanent
+    caster_verb: PlayVerb = PlayPermanent()
 
     def __init__(self):
         super().__init__()
@@ -120,7 +120,7 @@ class Creature(Permanent):
 
 
 class Land(Permanent):
-    caster_verb: PlayVerb = PlayLand
+    caster_verb: PlayVerb = PlayLand()
 
     def __init__(self):
         super().__init__()
@@ -130,7 +130,7 @@ class Land(Permanent):
 # -----------------------------------------------------------------------------
 
 class Spell(RulesText):
-    caster_verb: PlayVerb = PlaySpell
+    caster_verb: PlayVerb = PlaySpellWithEffect()
 
     def __init__(self):
         """

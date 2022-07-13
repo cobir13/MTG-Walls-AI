@@ -122,19 +122,17 @@ class Cardboard:
         self.counters = [c for c in self.counters if
                          c[0] == "$"]  # sticky counters stay
 
-    def get_cast_choices_and_targets(self, state: GameState):
-        caster = self.rules_text.caster_verb()
-        return caster.choose_choices(state, self)
+    def get_cast_options(self, state: GameState):
+        return self.rules_text.caster_verb.choose_choices(state, self)
 
     def can_be_cast(self, state: GameState, choices: list):
-        caster = self.rules_text.caster_verb()
-        return caster.can_be_done(state, self, choices)
+        return self.rules_text.caster_verb.can_be_done(state, self, choices)
 
-    def cast_spell(self, state: GameState, choices: list):
+    def cast(self, state: GameState, choices: list) -> List[GameState]:
         """Returns a list of GameStates where this spell has
         been cast (put onto the stack) and all costs paid."""
-        caster = self.rules_text.caster_verb()
-        return [g for g,_,_ in caster.do_it(state, self, choices)]
+        caster = self.rules_text.caster_verb
+        return [g for g, _, _ in caster.do_it(state, self, choices)]
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.

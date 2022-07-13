@@ -12,7 +12,7 @@ import random
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
-    from Abilities import ActivatedAbility
+    from Abilities import GenericAbility
 
 import ZONE
 import MatchCardPatterns as Match
@@ -387,6 +387,9 @@ class NullVerb(Verb):
     def add_self_to_state_history(self, state: GameState,
                                   subject: Cardboard, choices: list):
         return
+
+    def __str__(self):
+        return ""
 
 
 class PayMana(VerbAtomic):
@@ -783,7 +786,7 @@ class PlayVerb(VerbAtomic):
 
 # ----------
 class PlayAbility(PlayVerb):
-    def __init__(self, ability: ActivatedAbility):
+    def __init__(self, ability: GenericAbility):
         super().__init__()
         self.ability = ability
 
@@ -822,16 +825,24 @@ class PlayAbility(PlayVerb):
         list_of_tuples = self.ability.cost.do_it(copy_of_game, copy_of_spell,
                                                  copy_of_choices)
         # Build a StackAbility and add it to the stack
+        new_tuple_list = []
         for g1, s1, targets in list_of_tuples:
-            g1.stack.append(Stack.StackAbility(self.ability, s1, targets))
+            new_tuple_list += self._add_to_stack(g1, s1, targets)
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already
         # been added to the superstack during ability.cost.pay. Now add
         # any trigger that trigger off of this activation itself.
         final_results = []
-        for g2, s2, targets2 in list_of_tuples:
+        for g2, s2, targets2 in new_tuple_list:
             final_results += super().do_it(g2, s2, targets2)
         return final_results
+
+    def _add_to_stack(self, game: GameState, source: Cardboard, targets: list
+                      ) -> List[Tuple[GameState, Cardboard, list]]:
+        """Mutates the given gamestate by creating a StackAbility
+        and adding it to the stack."""
+        game.stack.append(Stack.StackAbility(self.ability, source, targets))
+        return [(game, source, targets)]
 
     def choose_choices(self, state: GameState, subject: Cardboard):
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
@@ -866,42 +877,16 @@ class PlayAbility(PlayVerb):
 
 # ----------
 class PlayManaAbility(PlayAbility):
-    def do_it(self, state: GameState, subject: Cardboard, choices: list):
-        """Activate the ability. The source of the ability is
-        assumed to be the `subject` Cardboard. `choices` describe
-        the choices for paying for the ability, followed by choices
-        for using the ability. Note that super_stack is NOT
-        guaranteed to be clear!
-        """
-        # Near-copy of PlayCardboard.do_it. For Cobi's sanity, many of
-        # the comments there have been deleted here.
-        if not self.can_be_done(state, subject, choices):
-            return []
-        # 601.2h: pay costs
-        copy_of_game, things = state.copy_and_track([subject] + choices)
-        copy_of_spell = things[0]
-        copy_of_choices = things[1:]
-        # The casting will chew through all the payment choices
-        list_of_tuples = self.ability.cost.do_it(copy_of_game, copy_of_spell,
-                                                 copy_of_choices)
-        # Mana Abilities which don't use the stack
-        new_tuple_list = []
-        for g1, s1, targets in list_of_tuples:
-            new_tuple_list += self.ability.effect.do_it(g1, s1, targets)
-        # 601.2i: add any trigger that trigger off of this activation itself.
-        final_results = []
-        for g2, s2, targets2 in new_tuple_list:
-            final_results += super().do_it(g2, s2, targets2)
-        return final_results
+    def _add_to_stack(self, game: GameState, source: Cardboard, targets: list
+                      ) -> List[Tuple[GameState, Cardboard, list]]:
+        """Mana abilities don't use the stack. So, instead of
+        creating a StackAbility and adding it to the stack,
+        simply mutate the gamestate to add the mana directly."""
+        return self.ability.effect.do_it(game, source, targets)
 
 
 # ----------
 class PlayTriggeredAbility(PlayAbility):
-    pass
-
-
-# ----------
-class PlayActivatedAbility(PlayAbility):
     pass
 
 
@@ -942,13 +927,12 @@ class PlayCardboard(PlayVerb):
         list_of_tuples = subject.cost.do_it(copy_of_game, copy_of_spell,
                                             copy_of_choices)
         # Build a StackCardboard and add it to the stack
+        new_tuple_list = []
         for g1, s1, targets in list_of_tuples:
             # MoveToZone doesn't actually PUT the Cardboard anywhere. It
             # knows the stack is for StackObjects only. Just removes from
             # hand and marks it's zone as being the stack. Mutates in-place.
-            MoveToZone(ZONE.STACK).do_it(g1, s1, targets)
-            g1.stack.append(Stack.StackCardboard(s1, targets))
-            g1.num_spells_cast += 1
+            new_tuple_list += self._add_to_stack(g1, s1, targets)
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already
         # been added to the superstack during ability.cost.pay. Now add
@@ -957,6 +941,16 @@ class PlayCardboard(PlayVerb):
         for g2, s2, targets2 in list_of_tuples:
             final_results += super().do_it(g2, s2, targets2)
         return final_results
+
+    @staticmethod
+    def _add_to_stack(game: GameState, source: Cardboard, targets: list
+                      ) -> List[Tuple[GameState, Cardboard, list]]:
+        """Mutates the given gamestate by moving the card to
+        the stack and creating a StackCardboard for it there."""
+        MoveToZone(ZONE.STACK).do_it(game, source, targets)
+        game.stack.append(Stack.StackCardboard(source, targets))
+        game.num_spells_cast += 1
+        return [(game, source, targets)]
 
     def choose_choices(self, state: GameState, subject: Cardboard):
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
@@ -977,35 +971,17 @@ class PlayCardboard(PlayVerb):
 
 # ----------
 class PlayLand(PlayCardboard):
-    def do_it(self, state, subject, choices):
-        """Puts the `source` card on the stack, including making any
-        choices necessary to do that. Returns (GameState,Cardboard)
-        copies but does not mutate. Note that super_stack is NOT
-        guaranteed to be clear!"""
-        # Near-copy of PlayCardboard.do_it. For Cobi's sanity, many of
-        # the comments there have been deleted here.
-        # check to make sure the execution is legal
-        if not self.can_be_done(state, subject, choices):
-            return []
-        # 601.2h: pay costs
-        copy_of_game, things = state.copy_and_track([subject] + choices)
-        copy_of_spell = things[0]
-        copy_of_choices = things[1:]
-        # The casting will chew through all the payment choices
-        list_of_tuples = subject.cost.do_it(copy_of_game, copy_of_spell,
-                                            copy_of_choices)
-        for g1, s1, targets in list_of_tuples:
-            # Lands go directly to play
-            MoveToZone(ZONE.FIELD).do_it(g1, s1, targets)
-        # 601.2i: add any trigger that trigger off of this casting itself.
-        final_results = []
-        for g2, s2, targets2 in list_of_tuples:
-            final_results += super().do_it(g2, s2, targets2)
-        return final_results
+    @staticmethod
+    def _add_to_stack(game: GameState, source: Cardboard, targets: list
+                      ) -> List[Tuple[GameState, Cardboard, list]]:
+        """Lands skip the stack. So simply move the card directly
+         into play"""
+        MoveToZone(ZONE.FIELD).do_it(game, source, targets)
+        return [(game, source, targets)]
 
 
 # ----------
-class PlaySpell(PlayCardboard):
+class PlaySpellWithEffect(PlayCardboard):
 
     def can_be_done(self, state: GameState, subject: Cardboard,
                     choices: list) -> bool:
@@ -1035,7 +1011,7 @@ class PlaySpell(PlayCardboard):
 
 
 # ----------
-class PlayInstant(PlayCardboard):
+class PlayInstant(PlaySpellWithEffect):
     pass
 
 
