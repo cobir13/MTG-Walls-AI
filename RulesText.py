@@ -8,19 +8,22 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
 import ManaHandler
+import MatchCardPatterns as Match
 
 if TYPE_CHECKING:
-    from VerbParents import Verb
     from GameState import GameState
     from Cardboard import Cardboard
+
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger
-from Verbs import PlayLandForTurn, PayMana, NullVerb
+from Verbs import PlayLandForTurn, PayMana, NullVerb, TapSelf, Verb, \
+    PlayVerb, PlayLand, PlaySpellWithEffect, PlayPermanent
 import ZONE
 
 
 # ------------------------------------------------------------------------------
 
 class RulesText:
+    caster_verb: PlayVerb = PlayVerb
 
     def __init__(self):
         """
@@ -74,10 +77,13 @@ class RulesText:
 
     def add_triggered(self, name: str, trigger: Trigger, effect: Verb):
         self.trig_verb.append(TriggeredAbility(name, trigger, effect))
+
+
 # ----------------------------------------------------------------------------
 
 
 class Permanent(RulesText):
+    caster_verb: PlayVerb = PlayPermanent()
 
     def __init__(self):
         super().__init__()
@@ -107,6 +113,7 @@ class Creature(Permanent):
 
 
 class Land(Permanent):
+    caster_verb: PlayVerb = PlayLand()
 
     def __init__(self):
         super().__init__()
@@ -116,6 +123,7 @@ class Land(Permanent):
 # -----------------------------------------------------------------------------
 
 class Spell(RulesText):
+    caster_verb: PlayVerb = PlaySpellWithEffect()
 
     def __init__(self):
         """
@@ -140,3 +148,17 @@ class Instant(Spell):
 
 class Sorcery(Spell):
     pass
+
+
+class TapSymbol(TapSelf):
+    """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
+
+    def can_be_done(self, state: GameState, subject: Cardboard,
+                    choices: list) -> bool:
+        return (super().can_be_done(state, subject, choices)
+                and not (Match.CardType(Creature).match(subject, state,
+                                                        subject)
+                         and subject.summon_sick))
+
+    def __str__(self):
+        return "{T}"

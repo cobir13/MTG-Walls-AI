@@ -9,11 +9,11 @@ from __future__ import annotations
 import ZONE
 import tkinter as tk
 from typing import List, TYPE_CHECKING
+
 if TYPE_CHECKING:
-    import GameState
+    from GameState import GameState
 
 from RulesText import RulesText
-from VerbParents import ManyVerbs
 
 
 # -----------------------------------------------------------------------------
@@ -122,13 +122,17 @@ class Cardboard:
         self.counters = [c for c in self.counters if
                          c[0] == "$"]  # sticky counters stay
 
-    def get_choice_options(self, state: GameState):
-        if self.effect is not None:
-            # bundle cost and effect together and get all those options
-            overall_verb = ManyVerbs([self.cost, self.effect])
-            return overall_verb.choose_choices(state, self)
-        else:
-            return self.cost.choose_choices(state, self)
+    def get_cast_options(self, state: GameState):
+        return self.rules_text.caster_verb.choose_choices(state, self)
+
+    def can_be_cast(self, state: GameState, choices: list):
+        return self.rules_text.caster_verb.can_be_done(state, self, choices)
+
+    def cast(self, state: GameState, choices: list) -> List[GameState]:
+        """Returns a list of GameStates where this spell has
+        been cast (put onto the stack) and all costs paid."""
+        caster = self.rules_text.caster_verb
+        return [g for g, _, _ in caster.do_it(state, self, choices)]
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.

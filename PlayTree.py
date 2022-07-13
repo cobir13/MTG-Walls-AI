@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, List, Set
 
 if TYPE_CHECKING:
     import GameState
-    from Stack import StackObject
+
+from Verbs import PlayAbility, PlayCardboard
 
 
 class PlayTree:
@@ -40,13 +41,13 @@ class PlayTree:
     def get_turn_n(self):
         return []
 
-    def do_main_phase_for_active(self):
+    def main_phase_for_all_active_states(self):
         while len(self.active_states) > 0:
             # remove a random GameState from the active list and explore it
             state = self.active_states.pop()
             # options are: cast spell, activate ability, let stack resolve
-            activables: List[StackObject] = state.get_valid_activations()
-            castables: List[StackObject] = state.get_valid_castables()
+            activables = state.state.get_valid_activations()
+            castables = state.state.get_valid_castables()
             # if no valid actions, this is a final state
             if len(activables) + len(castables) + len(state.stack) == 0:
                 self.final_states.add(state)
@@ -55,12 +56,12 @@ class PlayTree:
                 continue
             # if there ARE valid actions, make new nodes by taking them
             new_nodes = []
-            for stack_obj in activables + castables:
-                game_tuple_list = stack_obj.play_onto_stack(state)
-                # list of (GameState, source Cardboard, list) tuples.
-                for g, _, _ in game_tuple_list:
-                    new_nodes += g.clear_super_stack()
-            # if there are things on stack, can let them resolve
+            for ability, source, choice_list in activables:
+                for game in ability.activate(state, source, choice_list):
+                    new_nodes += game.clear_super_stack()
+            for card, choice_list in castables:
+                for game in card.cast(state, choice_list):
+                    new_nodes += game.clear_super_stack()
             if len(state.stack) > 0:
                 # list of GameStates with the top effect on the stack resolved
                 for g in state.resolve_top_of_stack():
@@ -73,7 +74,7 @@ class PlayTree:
                     self.active_states.add(new_state)
                     self.all_intermediate.add(new_state)
 
-    def do_beginning_phase_for_active(self):
+    def beginning_phase_for_all_active_states(self):
         """Apply untap, upkeep, draw to all currently-active
         states, updating the active and intermediate state
         sets as appropriate. This should end with active
