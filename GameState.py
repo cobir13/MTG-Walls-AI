@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List, Tuple
 # if TYPE_CHECKING:
 #     from Abilities import ActivatedAbility
-import Verbs
+
 from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
 import ZONE
@@ -260,6 +260,14 @@ class GameState:
         text += self.events_since_previous
         return text
 
+    @property
+    def has_options(self) -> bool:
+        """Either has items on the stack to resolve, or has
+        activated abilities that can be activated (including
+        mana abilities), or has cards that can be cast."""
+        return (len(self.stack) + len(self.get_valid_activations())
+                + len(self.get_valid_castables())) > 0
+
     # -----MUTATING FUNCTIONS
 
     def re_sort(self, zone_name):
@@ -385,7 +393,7 @@ class GameState:
         # base case: no items on super_stack
         if len(self.super_stack) == 0:
             return [self]
-        results = []
+        results: List[GameState] = []
         # pick a super_stack effect to move to the stack
         for item in Choices.choose_exactly_one(
                 list(enumerate(self.super_stack)),
@@ -396,7 +404,10 @@ class GameState:
             if isinstance(stack_ability.ability.trigger, AsEnterEffect):
                 # if the ability contains an AsEntersEffect, then enact
                 # it immediately rather than putting it on the stack.
-                results += stack_ability.resolve(self)
+                tuple_list = stack_ability.effect.do_it(new_state,
+                                                        stack_ability.card,
+                                                        stack_ability.choices)
+                results += [g for g, _, _, in tuple_list]
             else:
                 new_state.stack.append(stack_ability)
                 results.append(new_state)

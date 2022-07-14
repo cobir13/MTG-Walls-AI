@@ -6,11 +6,8 @@ Created on Mon Dec 28 21:13:59 2020
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Set
-
 if TYPE_CHECKING:
     import GameState
-
-from Verbs import PlayAbility, PlayCardboard
 
 
 class PlayTree:
@@ -24,7 +21,7 @@ class PlayTree:
         # GameStates from the same turn of the game (so identical turnclocks).
         # There are four lists:
         #       intermediate_states: every state reached during the turn
-        #       active_states: states which still have valid moves to explore
+        #       active_states: states which have options (moves to explore)
         #       loss_states: states where the game has ended in a loss
         #       win_states: states where the game has ended in a win
         # The i-th index within the list gives the set of states for the i-th
@@ -52,7 +49,8 @@ class PlayTree:
         # only add if NEW state we haven't seen this turn yet
         if (len(self.intermediate_states) <= state.turn_count
                 or state not in self.intermediate_states[state.turn_count]):
-            self._add_state_to_tracker(self.active_states, state)
+            if state.has_options:
+                self._add_state_to_tracker(self.active_states, state)
             # also add to intermediate, which tracks ALL states
             self._add_state_to_tracker(self.intermediate_states, state)
         self.traverse_counter += 1  # counter doesn't care if repeats
@@ -75,8 +73,7 @@ class PlayTree:
             self._add_state_to_tracker(self.intermediate_states, state)
         self.traverse_counter += 1  # counter doesn't care if repeats
 
-    def main_phase_for_all_active_states(self):
-        turn = len(self.active_states) - 1
+    def main_phase_for_all_active_states(self, turn=-1):
         while len(self.get_active(turn)) > 0:
             # remove a random GameState from the active list and explore it
             state = self.get_active(turn).pop()
@@ -100,22 +97,14 @@ class PlayTree:
             for new_state in new_nodes:
                 self._add_state_to_active(new_state)  # only adds if truly new
 
-    def beginning_phase_for_all_active_states(self):
-        """Apply untap, upkeep, draw to
-        TODO: WHICH STATES?  Active, or final, or...
-
-        all currently-active
-        states, updating the active and intermediate state
-        sets as appropriate. This should end with active
-        states having empty superstacks but possibly still
-        having triggers on the stack. Who knows, maybe the
-        player wants a chance to respond to those
-        triggers!
-        This function does not mutate any existing state,
-        though it does update the active_states set.
-        """
+    def beginning_phase_for_all_valid_states(self, turn=-1):
+        """Apply untap, upkeep, draw to all intermediate states
+        which are legal stopping points -- have empty stacks.
+        This will result in new states being added to the active
+        states list for the next turn, since untap step
+        increments the turn counter."""
         new_nodes = []
-        for state in self.get_active():
+        for state in self.get_states_no_stack(turn):
             state2 = state.copy()
             state2.step_untap()
             state2.step_upkeep()
@@ -127,14 +116,12 @@ class PlayTree:
             self._add_state_to_active(new_state)  # only adds if truly new
 
     def get_states_no_stack(self, turn: int = -1):
-        return set([gs for gs in self.self.get_intermediate(turn)
+        return set([gs for gs in self.get_intermediate(turn)
                     if len(gs.stack) == 0])
 
     def get_states_no_options(self, turn: int = -1):
-        def no_opts(state: GameState) -> bool:
-            return (len(state.stack) + len(state.get_valid_activations())
-                                     + len(state.get_valid_castables())) == 0
-        return set([gs for gs in self.get_intermediate(turn) if no_opts(gs)])
+        return set([gs for gs in self.get_intermediate(turn)
+                    if not gs.has_options])
 
     def get_intermediate(self, turn: int = -1):
         """Returns the set of intermediate states for the

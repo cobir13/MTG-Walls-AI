@@ -1,12 +1,9 @@
 from __future__ import annotations
-
-from typing import List, TYPE_CHECKING
-
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from Abilities import GenericAbility
     from Cardboard import Cardboard
-    from GameState import GameState
-    from Verbs import Verb, ManyVerbs
+    from Verbs import Verb
 
 
 class StackObject:

@@ -211,7 +211,7 @@ if __name__ == "__main__":
     assert len(tree1.get_intermediate()) == 1
     # try untap and upkeep
     try:
-        tree1.beginning_phase_for_all_active_states()
+        tree1.beginning_phase_for_all_valid_states()
         assert False  # SHOULD throw error, because drawing from empty library
     except Verbs.LoseTheGameError:
         assert True
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     assert all([len(gs.deck) == 5 for gs in tree2.get_active()])
     assert all([len(gs.hand) == 3 for gs in tree2.get_active()])
 
-    tree2.beginning_phase_for_all_active_states()
+    tree2.beginning_phase_for_all_valid_states()
     assert len(tree2.active_states) == 3  # turns 0, 1, 2
     assert len(tree2.get_active()) == 1
     assert len(tree2.get_active(1)) == 1
@@ -251,52 +251,28 @@ if __name__ == "__main__":
     assert len(tree2.get_active()) == 0
     assert len(tree2.get_active(1)) == 1
     # 9 intermediate. They are: after draw. add G 1st. OR add Au 1st. float GA.
-    # cast caryatid. resolve caryatid. OR cast roots. resolve roots. float G.
+    # caryatid on stack. resolve caryatid.
+    # OR roots on stack. resolve roots. float G.
     assert len(tree2.get_intermediate()) == 9
     assert len(tree2.get_intermediate(1)) == 1
     assert tree2.traverse_counter == 11  # 9 + 2, no overlaps
     assert(len(tree2.get_states_no_options()) == 2)  # cast roots or caryatid
 
+    # do one more turn
+    tree2.beginning_phase_for_all_valid_states()
+    # 5 distinct states. 9, minus 2 that had card on stack. Then Cary{T}+G
+    # and unused Caryatid are indistinguishable, and same with Roots[-0/-1]+G
+    # and Roots[-0/-1]+Cary{T}+GA.  So 9-2-2=5
+    assert len(tree2.get_active()) == 5
+    tree2.main_phase_for_all_active_states()
+    # I never finished turn 1 properly so there are still actives there. sure.
+    assert all([len(tree2.get_active(t)) == 0 for t in [0, 2, 3]])
+    assert len(tree2.get_states_no_options()) == 31
+    assert len(tree2.get_intermediate(3)) == 145
+    assert tree2.traverse_counter == 189
 
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
-    # # basic game-loop
-    # def BasicLoop(gamestate):
-    #     gameN = gamestate
-    #     options = gameN.get_valid_activations() + gameN.get_valid_castables()
-    #     while len(options) > 0:
-    #         if gameN.is_tracking_history:
-    #             print("\n")
-    #             print(gameN)
-    #         if len(options) > 1 and gameN.is_tracking_history:
-    #             print("\nSplit! options are:", options)
-    #             print("Taking last option in list")
-    #         if isinstance(options[-1], Abilities.StackEffect):
-    #             universes = options[-1].PutOnStack(gameN)
-    #         elif isinstance(options[-1], Cardboard):
-    #             universes = gameN.CastSpell(
-    #                 options[-1])  # puts it on the stack
-    #         else:
-    #             raise ValueError("incorrect type of object on stack!")
-    #         # universes is a list of GameStates
-    #         if len(universes) > 1 and gameN.is_tracking_history:
-    #             print("\nSplit! universes are:")
-    #             for u in universes:
-    #                 print("     ---\n", u, "\n     ---")
-    #             print("Taking last option in list")
-    #         gameN = universes[-1]
-    #         while len(gameN.stack) > 0:
-    #             universes = gameN.resolve_top_of_stack()
-    #             if len(universes) > 1 and gameN.is_tracking_history:
-    #                 print("Split! universes are:")
-    #                 for u, _ in universes:
-    #                     print("     ---\n", u, "\n     ---")
-    #                 print("Taking last option in list")
-    #             gameN = universes[-1]
-    #         options = gameN.get_valid_activations() +
-    #                                      gameN.get_valid_castables()
-    #     return gameN
-    #
-    #
     # ###--------------------------------------------------------------------
     # print("Testing basic lands and BasicLoop...")
     # start_clock = time.perf_counter()
