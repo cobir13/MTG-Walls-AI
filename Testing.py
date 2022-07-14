@@ -199,14 +199,65 @@ if __name__ == "__main__":
     print("Testing PlayTree basic functionality...")
     start_clock = time.perf_counter()
 
-    # build a PlayTree
+    # build a PlayTree for a game with no deck
     tree1 = PlayTree([carygame1], 5)
+    assert carygame1.turn_count == 3
+    for t in range(3):
+        assert len(tree1.get_active(t)) == 0
+        assert len(tree1.get_intermediate(t)) == 0
+    assert len(tree1.get_active(3)) == 1
+    assert len(tree1.get_active()) == 1
+    assert len(tree1.get_intermediate(3)) == 1
+    assert len(tree1.get_intermediate()) == 1
     # try untap and upkeep
     try:
         tree1.beginning_phase_for_all_active_states()
         assert False  # SHOULD throw error, because drawing from empty library
     except Verbs.LoseTheGameError:
         assert True
+
+    tree_game = carygame1.copy()
+    tree_game.turn_count = 1  # pretend it's an earlier turn, for simplicity
+    # HAND: Roots, Roots, Roots
+    # FIELD: Caryatid, Roots
+    # Life: 20 vs 20, Deck: 0, Mana: ()
+    tree_game.is_tracking_history = True
+    for x in range(5):
+        tree_game.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.DECK)
+    tree2 = PlayTree([tree_game], 5)
+    assert len(tree2.get_active()) == 1
+    assert len(tree2.get_intermediate()) == 1
+    # assert len(tree2.final_states) == 0
+    assert tree2.traverse_counter == 1
+    assert all([len(gs.deck) == 5 for gs in tree2.get_active()])
+    assert all([len(gs.hand) == 3 for gs in tree2.get_active()])
+
+    tree2.beginning_phase_for_all_active_states()
+    assert len(tree2.active_states) == 3  # turns 0, 1, 2
+    assert len(tree2.get_active()) == 1
+    assert len(tree2.get_active(1)) == 1
+    assert len(tree2.get_intermediate()) == 1
+    assert len(tree2.get_intermediate(1)) == 1
+    # assert len(tree2.final_states) == 0
+    assert tree2.traverse_counter == 2
+    assert all([len(gs.deck) == 4 for gs in tree2.get_active()])
+    assert all([len(gs.hand) == 4 for gs in tree2.get_active()])
+    assert all([len(gs.stack) == 0 for gs in tree2.get_active()])
+
+    # HAND: Roots, Roots, Roots, Caryatid
+    # FIELD: Caryatid, Roots
+    # Life: 20 vs 20, Deck: [Caryatid]x4, Mana: ()
+    tree2.main_phase_for_all_active_states()
+    assert len(tree2.get_active()) == 0
+    assert len(tree2.get_active(1)) == 1
+    # 9 intermediate. They are: after draw. add G 1st. OR add Au 1st. float GA.
+    # cast caryatid. resolve caryatid. OR cast roots. resolve roots. float G.
+    assert len(tree2.get_intermediate()) == 9
+    assert len(tree2.get_intermediate(1)) == 1
+    assert tree2.traverse_counter == 11  # 9 + 2, no overlaps
+    assert(len(tree2.get_states_no_options()) == 2)  # cast roots or caryatid
+
+
 
     # # basic game-loop
     # def BasicLoop(gamestate):
