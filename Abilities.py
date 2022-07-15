@@ -80,22 +80,20 @@ class AsEnterEffect(TriggerOnMove):
 
 # ----------
 
-class GenericAbility:
-
-    def __init__(self, name, effect: Verbs.Verb):
+class ActivatedAbility:
+    def __init__(self, name, cost: Verbs.Verb, effect: Verbs.Verb):
         self.name: str = name
-        self.cost: Verbs.Verb = Verbs.NullVerb()
-        self.trigger: Trigger = NullTrigger()
+        self.cost: Verbs.Verb = cost
         self.effect: Verbs.Verb = effect
+        self.caster_verb: Verbs.PlayAbility = Verbs.PlayAbility(self)
         if effect.is_type(Verbs.AddMana):
-            self.caster_verb: Verbs.PlayVerb = Verbs.PlayManaAbility(self)
-        else:
-            self.caster_verb: Verbs.PlayVerb = Verbs.PlayAbility(self)
+            self.caster_verb = Verbs.PlayManaAbility(self)
 
-    def get_cast_options(self, state: GameState, source: Cardboard):
-        return self.caster_verb.choose_choices(state, source)
+    def get_activation_options(self, state: GameState, source: Cardboard
+                               ) -> List[list]:
+        return self.caster_verb.choose_choices(state, source, source)
 
-    def can_be_cast(self, state: GameState, source: Cardboard, choices: list):
+    def can_be_activated(self, state: GameState, source: Cardboard, choices: list):
         return self.caster_verb.can_be_done(state, source, choices)
 
     def activate(self, state: GameState, source: Cardboard, choices: list
@@ -103,12 +101,26 @@ class GenericAbility:
         """Returns a list of GameStates where this spell has
         been cast (put onto the stack) and all costs paid.
         GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
-        # if self.caster_verb.mutates:
-        new_state, things = state.copy_and_track([source]+choices)
-        new_source = things[0]
-        new_choices = things[1:]
-        return [g for g, _, _ in self.caster_verb.do_it(new_state, new_source,
-                                                        new_choices)]
+        # PlayAbility.do_it does not mutate
+        return [g for g, _, _ in self.caster_verb.do_it(state, source,
+                                                        choices)]
+
+    def __str__(self):
+        return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))
+
+    def is_type(self, verb_type):
+        return self.effect.is_type(verb_type)
+
+
+class TriggeredAbility:
+    def __init__(self, name, trigger: Trigger, effect: Verbs.Verb):
+        self.name: str = name
+        self.trigger: Trigger = trigger
+        self.effect: Verbs.Verb = effect
+        add_triggered_ability = Verbs.AddTriggeredAbility(self)
+        self.caster_verb: Verbs.AddTriggeredAbility = add_triggered_ability
+        if isinstance(self.trigger, AsEnterEffect):
+            self.caster_verb = Verbs.AddAsEntersAbility(self)
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):
@@ -120,34 +132,27 @@ class GenericAbility:
         """
         return self.trigger.is_triggered(verb, state, source, trigger_card)
 
+    def get_target_options(self, state: GameState, source: Cardboard,
+                           cause: Cardboard) -> List[list]:
+        return self.caster_verb.choose_choices(state, source, cause)
+
+    def can_be_added(self, state: GameState, source: Cardboard, choices: list):
+        """First element of `choices` must be the thing which
+        caused this ability to trigger."""
+        return self.caster_verb.can_be_done(state, source, choices)
+
+    def add_to_stack(self, state: GameState, source: Cardboard, choices: list
+                     ) -> List[GameState]:
+        """Returns a list of GameStates where a StackObject
+        for this ability has been added to the stack.
+        First element of `choices` must be the thing which
+        caused this ability to trigger.
+        Returns a list of new GameStates, DOES NOT MUTATE."""
+        return [g for g, _, _ in self.caster_verb.do_it(state, source,
+                                                        choices)]
+
     def __str__(self):
-        txt_cost = str(self.cost)
-        txt_trig = str(self.trigger)
-        txt_efct = str(self.effect)
-        return "Ability(%s,%s -> %s)" % (txt_cost, txt_trig, txt_efct)
+        return "Ability(%s -> %s)" % (str(self.trigger), str(self.effect))
 
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)
-
-    def get_choice_options(self, state: GameState, source: Cardboard):
-        if self.cost is not Verbs.NullVerb:
-            overall_verb = Verbs.ManyVerbs([self.cost, self.effect])
-            return overall_verb.choose_choices(state, source)
-        else:
-            return self.effect.choose_choices(state, source)
-
-
-class ActivatedAbility(GenericAbility):
-    def __init__(self, name, cost: Verbs.Verb, effect: Verbs.Verb):
-        super().__init__(name, effect)
-        self.cost: Verbs.Verb = cost
-
-
-class TriggeredAbility(GenericAbility):
-    def __init__(self, name, trigger: Trigger, effect: Verbs.Verb):
-        super().__init__(name, effect)
-        self.trigger: Trigger = trigger
-
-
-class TimedAbility(GenericAbility):
-    pass

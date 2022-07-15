@@ -16,23 +16,16 @@ if TYPE_CHECKING:
 
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger
 from Verbs import PlayLandForTurn, PayMana, NullVerb, TapSelf, Verb, \
-    PlayVerb, PlayLand, PlaySpellWithEffect, PlayPermanent
+    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent
 import ZONE
 
 
 # ------------------------------------------------------------------------------
 
 class RulesText:
-    caster_verb: PlayVerb = PlayVerb
+    caster_verb: PlayCardboard = PlayCardboard()
 
     def __init__(self):
-        """
-        name (str)  : name of this card.
-        cost (Cost) : mana and additional cost to cast this card.
-        keywords (list(str)):
-                      List of lowercase tags describing this card. Includes
-                      MtG types as well as relevant keywords.
-        """
         self.name: str = ""
         self.cost: Verb = NullVerb()
         self.keywords: List[str] = []
@@ -46,13 +39,7 @@ class RulesText:
         # I don't actually USE these, but in theory I could in the future
         # self.static = []     #static effects
         self.cast_destination = ZONE.UNKNOWN
-
-    # def can_afford(self, state: GameState, source: Cardboard):
-    #     """Returns boolean: can this gamestate afford the cost?
-    #     DOES NOT MUTATE."""
-    #     choice_list = self.cost.choose_choices(state, source)
-    #     return any([self.cost.can_be_done(state, source, ch)
-    #                 for ch in choice_list])
+        self.effect: Verb = NullVerb()
 
     @property
     def mana_value(self):
@@ -83,7 +70,7 @@ class RulesText:
 
 
 class Permanent(RulesText):
-    caster_verb: PlayVerb = PlayPermanent()
+    caster_verb: PlayCardboard = PlayPermanent()
 
     def __init__(self):
         super().__init__()
@@ -113,17 +100,17 @@ class Creature(Permanent):
 
 
 class Land(Permanent):
-    caster_verb: PlayVerb = PlayLand()
+    caster_verb: PlayCardboard = PlayLand()
 
     def __init__(self):
         super().__init__()
-        self.cost = PlayLandForTurn
+        self.cost = PlayLandForTurn()
 
 
 # -----------------------------------------------------------------------------
 
 class Spell(RulesText):
-    caster_verb: PlayVerb = PlaySpellWithEffect()
+    caster_verb: PlayCardboard = PlaySpellWithEffect()
 
     def __init__(self):
         """

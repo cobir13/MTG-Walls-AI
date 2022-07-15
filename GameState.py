@@ -9,14 +9,14 @@ from typing import TYPE_CHECKING, List, Tuple
 # if TYPE_CHECKING:
 #     from Abilities import ActivatedAbility
 
-from Cardboard import Cardboard  # actually needs
+from Cardboard import Cardboard, CardNull  # actually needs
 import Getters as Get  # actually needs
 import ZONE
 from ManaHandler import ManaPool
-from Stack import StackAbility, StackObject, StackCardboard
+from Stack import StackAbility, StackObject, StackTrigger
 from Verbs import MoveToZone, DrawCard, UntapSelf
 import Choices
-from Abilities import AsEnterEffect, ActivatedAbility
+from Abilities import ActivatedAbility
 
 
 class GameState:
@@ -156,10 +156,10 @@ class GameState:
     #                   for s in parts[7].split(",") if s != ""]
     #     return game
 
-    def copy_and_track(self, track_list) -> Tuple[GameState, List[Cardboard]]:
+    def copy_and_track(self, track_list) -> Tuple[GameState, list]:
         """Returns a disconnected copy of the gamestate and also
-        a list of Cardboard's in the new gamestate corresponding
-        to the list of Cardboard's we were asked to track. This
+        a list of Cardboards in the new gamestate corresponding
+        to the list of Cardboards we were asked to track. This
         allows tracking "between split universes."
         If track_list has non-Cardboard objects, they're also
         returned"""
@@ -259,10 +259,8 @@ class GameState:
                 new_iterable = GameState.copy_arbitrary_list(state_orig,
                                                              state_new, item)
                 new_list.append(new_iterable)  # recurse!
-            elif isinstance(item, int) or isinstance(item, str):
-                new_list.append(item)  # immutable and passed by value
             else:
-                raise ValueError("unknown type in choices list!")
+                new_list.append(item)  # immutable and passed by value, I hope
         return list_to_copy.__class__(new_list)
 
     def copy(self) -> GameState:
@@ -379,7 +377,7 @@ class GameState:
             self.events_since_previous += "\nDraw step"
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
-        DrawCard().do_it(self, None, [])
+        DrawCard().do_it(self, CardNull(), [])
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
@@ -425,23 +423,21 @@ class GameState:
         if len(self.super_stack) == 0:
             return [self]
         results: List[GameState] = []
-        # pick a super_stack effect to move to the stack
+        # pick a super_stack StackTrigger to move to the stack
         for item in Choices.choose_exactly_one(
                 list(enumerate(self.super_stack)),
                 "Add to stack"):
             ii = item[0]  # index first, then object second
             new_state = self.copy()
-            stack_ability = new_state.super_stack.pop(ii)
-            if isinstance(stack_ability.ability.trigger, AsEnterEffect):
-                # if the ability contains an AsEntersEffect, then enact
-                # it immediately rather than putting it on the stack.
-                tuple_list = stack_ability.effect.do_it(new_state,
-                                                        stack_ability.card,
-                                                        stack_ability.choices)
-                results += [g for g, _, _, in tuple_list]
-            else:
-                new_state.stack.append(stack_ability)
-                results.append(new_state)
+            trigger = new_state.super_stack.pop(ii)
+            ability = trigger.ability
+            card = trigger.card
+            cause = trigger.choices[0]
+            # get_target_options adds `cause` to `choices` for creating the
+            # new StackTrigger
+            for choices in ability.get_target_options(new_state, card, cause):
+                if ability.can_be_added(new_state, card, choices):
+                    results += ability.add_to_stack(new_state, card, choices)
         # recurse
         final_results = []
         for state in results:
@@ -479,8 +475,8 @@ class GameState:
 
     # -------------------------------------------------------------------------
 
-    def get_valid_activations(self) -> List[
-        Tuple[ActivatedAbility, Cardboard, list]]:
+    def get_valid_activations(self) -> List[Tuple[
+                                       ActivatedAbility, Cardboard, list]]:
         """
         Return a list of all abilities that can be put on the
         stack right now. The form of the return is a tuple of
@@ -495,8 +491,8 @@ class GameState:
             add_object = False
             for ability in source.get_activated():
                 # find available choice options, see if any let me activate
-                for choices in ability.get_cast_options(self, source):
-                    if ability.can_be_cast(self, source, choices):
+                for choices in ability.get_activation_options(self, source):
+                    if ability.can_be_activated(self, source, choices):
                         # this ability with this set of choices is castable!
                         activatables.append((ability, source, choices))
                         add_object = True

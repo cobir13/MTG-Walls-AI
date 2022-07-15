@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     def cast_thing(state,
                    tup: Tuple[ActivatedAbility, Cardboard, list] |
-                        Tuple[Cardboard, list]
+                   Tuple[Cardboard, list]
                    ) -> List[GameState]:
         if len(tup) == 3:
             ability, source, choice_list = tup
@@ -62,9 +62,9 @@ if __name__ == "__main__":
     roots = game_orig.hand[0]
     assert len(roots.get_activated()) == 1
     roots_abil = roots.get_activated()[0]
-    choices = roots_abil.get_choice_options(game_orig, roots)
+    choices = roots_abil.get_activation_options(game_orig, roots)
     assert choices == [[]]  # list of empty list
-    assert not roots_abil.can_be_cast(game_orig, roots, [])
+    assert not roots_abil.can_be_activated(game_orig, roots, [])
 
     # move a Wall of Roots to field and try again
     game_orig.MoveZone(game_orig.hand[0], ZONE.FIELD)
@@ -74,9 +74,9 @@ if __name__ == "__main__":
     assert len(roots.get_activated()) == 1
     assert len(roots.counters) == 0  # no counters on it yet
     roots_abil = roots.get_activated()[0]
-    choices = roots_abil.get_choice_options(game_orig, roots)
+    choices = roots_abil.get_activation_options(game_orig, roots)
     assert choices == [[]]  # list of empty list
-    assert roots_abil.can_be_cast(game_orig, roots, [])
+    assert roots_abil.can_be_activated(game_orig, roots, [])
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
@@ -166,8 +166,8 @@ if __name__ == "__main__":
     test_game.field.append(caryatid_in_play)
     roots_on_stack = Cardboard(Decklist.Roots())
     roots_on_stack.zone = ZONE.STACK
-    stack_cardboard = Stack.StackCardboard(card=roots_on_stack,
-                                           choices=[1, "a", caryatid_in_play])
+    stack_cardboard = Stack.StackCardboard(None, roots_on_stack,
+                                           [1, "a", caryatid_in_play])
     test_game.stack.append(stack_cardboard)
     fake_ability = ActivatedAbility("fake", Verbs.NullVerb(), Verbs.NullVerb())
     stack_ability = Stack.StackAbility(fake_ability, caryatid_in_play,
@@ -209,6 +209,7 @@ if __name__ == "__main__":
     carygame1.step_upkeep()
     assert len(carygame1.get_valid_castables()) == 0  # no castable cards
     gameN = carygame1
+    # noinspection PyTypeChecker
     options: List[tuple] = (gameN.get_valid_activations()
                             + gameN.get_valid_castables())
     assert len(options) == 2
@@ -217,6 +218,7 @@ if __name__ == "__main__":
         gameN = cast_thing(gameN, options[0])[0]
         while len(gameN.stack) > 0:
             gameN = gameN.resolve_top_of_stack()[0]
+        # noinspection PyTypeChecker
         options = gameN.get_valid_activations() + gameN.get_valid_castables()
     # result should be Caryatid and two Roots in play
     assert len(gameN.hand) == 2
@@ -316,34 +318,47 @@ if __name__ == "__main__":
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
-    # # -----------------------------------------------------------------------
-    #
-    # print("Testing basic lands, shock-lands, fetch-lands...")
-    # start_clock = time.perf_counter()
-    #
-    # game = GameState()
-    # # field
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.FIELD)
-    # game.MoveZone(Cardboard(Decklist.Plains()), ZONE.FIELD)
-    # # hand
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    # game.MoveZone(Cardboard(Decklist.Roots()), ZONE.HAND)
-    # game.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.HAND)
-    #
-    # assert len(game.get_valid_activations()) == 2
-    # tree = PlayTree([game], 2)
-    # tree.main_phase_for_all_active_states()
-    # results = tree.get_states_no_options()
-    # assert len(results) == 2
-    # for g in results:
-    #     print(g.get_all_history())
-    #     print(g)
-    # assert any([len(g.hand) == 1 and len(g.field) == 5 and str(g.pool) == ""
-    #             for g in results])
-    # assert (len(game.field) == 2)  # state_orig game is untouched
-    #
-    # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+    # -----------------------------------------------------------------------
+
+    print("Testing basic lands, shock-lands...")
+    start_clock = time.perf_counter()
+
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.MoveZone(Cardboard(Decklist.Plains()), ZONE.HAND)
+    game.MoveZone(Cardboard(Decklist.Island()), ZONE.HAND)
+    game.MoveZone(Cardboard(Decklist.Swamp()), ZONE.HAND)
+    game.MoveZone(Cardboard(Decklist.Mountain()), ZONE.HAND)
+    assert len(game.get_valid_activations()) == 0
+    assert len(game.get_valid_castables()) == 5
+    tree = PlayTree([game], 2)
+    tree.main_phase_for_all_active_states()
+    assert len(tree.get_states_no_options()) == 5
+    collector = set()
+    for g in tree.get_states_no_options():
+        collector.add((g.field[0].name, str(g.pool)))
+        assert len(g.field) == 1
+        assert len(g.hand) == 4
+    assert collector == {("Forest", "G"), ("Plains", "W"), ("Island", "U"),
+                         ("Swamp", "B"), ("Mountain", "R")}
+
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.MoveZone(Cardboard(Decklist.HallowedFountain()), ZONE.HAND)
+    assert len(game.get_valid_activations()) == 0
+    assert len(game.get_valid_castables()) == 2
+    tree = PlayTree([game], 2)
+    tree.main_phase_for_all_active_states()
+    assert len(tree.get_states_no_options()) == 4
+    collector = set()
+    for g in tree.get_states_no_options():
+        collector.add((g.life, str(g.pool)))
+        assert len(g.field) == 1
+        assert len(g.hand) == 1
+        assert g.field[0].tapped
+    assert collector == {(20, "G"), (20, ""), (18, "U"), (18, "W")}
+
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
 

@@ -1,17 +1,19 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
+
 if TYPE_CHECKING:
-    from Abilities import GenericAbility
+    from Abilities import ActivatedAbility, TriggeredAbility
     from Cardboard import Cardboard
     from Verbs import Verb
+    from GameState import GameState
 
 
 class StackObject:
 
-    def __init__(self, ability: GenericAbility | None, card: Cardboard,
-                 choices: list):
+    def __init__(self, ability: ActivatedAbility | TriggeredAbility | None,
+                 card: Cardboard, choices: list):
         # The Ability that is being activated, if any
-        self.ability: GenericAbility | None = ability
+        self.ability: ActivatedAbility | TriggeredAbility | None = ability
         # The Cardboard being cast, or the source of the ability, if any
         self.card: Cardboard = card
         # list of any modes or targets or other choices made during casting
@@ -42,7 +44,7 @@ class StackObject:
         text += "" if self.card is None else self.card.get_id()
         choices = ",".join([c.get_id() if hasattr(c, "get_id") else str(c)
                             for c in self.choices])
-        text += "|"+choices if len(choices) > 0 else ""
+        text += "|" + choices if len(choices) > 0 else ""
         text += ")"
         return text
 
@@ -55,10 +57,6 @@ class StackObject:
 
 
 class StackAbility(StackObject):
-
-    def __init__(self, ability: GenericAbility, card: Cardboard,
-                 choices: list):
-        super().__init__(ability, card, choices)
 
     def __str__(self):
         return self.ability.name
@@ -79,9 +77,25 @@ class StackAbility(StackObject):
     #                      relief="solid", bg="lightblue")
 
 
+class StackTrigger(StackAbility):
+
+    def __init__(self, ability: TriggeredAbility, card: Cardboard,
+                 choices: list):
+        """First entry in `choices` should be the Cardboard that
+        caused the ability to trigger."""
+        super().__init__(ability, card, choices)
+        assert len(choices) >= 1
+
+    @property
+    def cause(self):
+        return self.choices[0]
+
+
 class StackCardboard(StackObject):
 
-    def __init__(self, card: Cardboard, choices: list, *args, **kwargs):
+    def __init__(self, ability: ActivatedAbility | TriggeredAbility | None,
+                 card: Cardboard, choices: list):
+        assert ability is None
         super().__init__(None, card, choices)
 
     def __str__(self):

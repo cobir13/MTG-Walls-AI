@@ -6,12 +6,14 @@ Created on Mon Dec 28 21:13:28 2020
 """
 
 from __future__ import annotations
+
 import ZONE
 import tkinter as tk
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from GameState import GameState
+    from Verbs import Verb
 
 from RulesText import RulesText
 
@@ -62,19 +64,16 @@ class Cardboard:
         self.counters = sorted(self.counters + [addition])
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self.rules_text.name
 
     @property
-    def cost(self):
+    def cost(self) -> Verb:
         return self.rules_text.cost
 
     @property
-    def effect(self):
-        if hasattr(self.rules_text, "effect"):
-            return self.rules_text.effect
-        else:
-            return None
+    def effect(self) -> Verb:
+        return self.rules_text.effect
 
     def get_activated(self):
         return self.rules_text.activated
@@ -123,7 +122,7 @@ class Cardboard:
                          c[0] == "$"]  # sticky counters stay
 
     def get_cast_options(self, state: GameState):
-        return self.rules_text.caster_verb.choose_choices(state, self)
+        return self.rules_text.caster_verb.choose_choices(state, self, None)
 
     def can_be_cast(self, state: GameState, choices: list):
         return self.rules_text.caster_verb.can_be_done(state, self, choices)

@@ -10,7 +10,6 @@ import MatchCardPatterns as Match
 import Verbs
 from Verbs import ManyVerbs, ChooseAVerb, VerbManyTimes, VerbOnSplitList
 from Abilities import TriggerOnMove, AsEnterEffect
-
 import Getters as Get
 
 
@@ -192,6 +191,22 @@ class Island(Land):
         super().__init__()
         self.name = "Island"
         self.add_activated("Island add U", TapSymbol(), Verbs.AddMana("U"))
+
+
+class Swamp(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Swamp"
+        self.add_activated("Swamp add B", TapSymbol(), Verbs.AddMana("B"))
+
+
+class Mountain(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "Mountain"
+        self.add_activated("Mountain add R", TapSymbol(), Verbs.AddMana("R"))
 
 
 # -----shock lands
