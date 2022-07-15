@@ -101,9 +101,14 @@ class GenericAbility:
     def activate(self, state: GameState, source: Cardboard, choices: list
                  ) -> List[GameState]:
         """Returns a list of GameStates where this spell has
-        been cast (put onto the stack) and all costs paid."""
-        return [g for g, _, _ in self.caster_verb.do_it(state, source,
-                                                        choices)]
+        been cast (put onto the stack) and all costs paid.
+        GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
+        # if self.caster_verb.mutates:
+        new_state, things = state.copy_and_track([source]+choices)
+        new_source = things[0]
+        new_choices = things[1:]
+        return [g for g, _, _ in self.caster_verb.do_it(new_state, new_source,
+                                                        new_choices)]
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):

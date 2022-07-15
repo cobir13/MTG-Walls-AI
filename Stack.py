@@ -8,14 +8,15 @@ if TYPE_CHECKING:
 
 class StackObject:
 
-    def __init__(self):
+    def __init__(self, ability: GenericAbility, card: Cardboard,
+                 choices: list):
         # The Ability that is being activated, if any
-        self.ability: GenericAbility | None = None
+        self.ability: GenericAbility | None = ability
         # The Cardboard being cast, or the source of the ability, if any
-        self.card: Cardboard | None = None
+        self.card: Cardboard = card
         # list of any modes or targets or other choices made during casting
         # or activation.  If targets are Cardboards, they are pointers.
-        self.choices: list = []
+        self.choices: list = choices
 
     @property
     def cost(self) -> Verb | None:
@@ -52,17 +53,12 @@ class StackObject:
     def name(self):
         return self.get_id()
 
-    # def copy(self):
-
 
 class StackAbility(StackObject):
 
     def __init__(self, ability: GenericAbility, source: Cardboard,
                  choices: list):
-        super().__init__()
-        self.ability: GenericAbility | None = ability
-        self.card: Cardboard = source
-        self.choices: list = choices
+        super().__init__(ability, source, choices)
 
     def __str__(self):
         return self.ability.name
@@ -85,11 +81,8 @@ class StackAbility(StackObject):
 
 class StackCardboard(StackObject):
 
-    def __init__(self, card: Cardboard, choices: list):
-        super().__init__()
-        self.ability: GenericAbility | None = None
-        self.card: Cardboard = card
-        self.choices: list = choices
+    def __init__(self, card: Cardboard, choices: list, *args, **kwargs):
+        super().__init__(None, card, choices)
 
     def __str__(self):
         return "Spell: " + self.card.name

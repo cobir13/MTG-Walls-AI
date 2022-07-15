@@ -39,8 +39,6 @@ class PlayTree:
 
     def _add_state_to_tracker(self, tracker: List[Set[GameState]],
                               state: GameState):
-        if state.turn_count > self.turn_limit:
-            return
         while len(tracker) <= state.turn_count:
             tracker.append(set())
         tracker[state.turn_count].add(state)
@@ -74,9 +72,10 @@ class PlayTree:
         self.traverse_counter += 1  # counter doesn't care if repeats
 
     def main_phase_for_all_active_states(self, turn=-1):
+        """DOES NOT MUTATE"""
         while len(self.get_active(turn)) > 0:
             # remove a random GameState from the active list and explore it
-            state = self.get_active(turn).pop()
+            state: GameState = self.get_active(turn).pop()
             # options are: cast spell, activate ability, let stack resolve
             activables = state.get_valid_activations()
             castables = state.get_valid_castables()
@@ -91,8 +90,8 @@ class PlayTree:
                     new_nodes += game.clear_super_stack()
             if len(state.stack) > 0:
                 # list of GameStates with the top effect on the stack resolved
-                for g in state.resolve_top_of_stack():
-                    new_nodes += g.clear_super_stack()
+                for game in state.resolve_top_of_stack():
+                    new_nodes += game.clear_super_stack()
             # add these new nodes to the trackers
             for new_state in new_nodes:
                 self._add_state_to_active(new_state)  # only adds if truly new
@@ -102,7 +101,8 @@ class PlayTree:
         which are legal stopping points -- have empty stacks.
         This will result in new states being added to the active
         states list for the next turn, since untap step
-        increments the turn counter."""
+        increments the turn counter.
+        DOES NOT MUTATE EXISTING STATES"""
         new_nodes = []
         for state in self.get_states_no_stack(turn):
             state2 = state.copy()
@@ -115,21 +115,19 @@ class PlayTree:
         for new_state in new_nodes:
             self._add_state_to_active(new_state)  # only adds if truly new
 
-    def get_states_no_stack(self, turn: int = -1):
-        return set([gs for gs in self.get_intermediate(turn)
-                    if len(gs.stack) == 0])
+    def get_states_no_stack(self, turn: int = -1) -> List[GameState]:
+        return [gs for gs in self.get_intermediate(turn) if len(gs.stack) == 0]
 
-    def get_states_no_options(self, turn: int = -1):
-        return set([gs for gs in self.get_intermediate(turn)
-                    if not gs.has_options])
+    def get_states_no_options(self, turn: int = -1) -> List[GameState]:
+        return [gs for gs in self.get_intermediate(turn) if not gs.has_options]
 
-    def get_intermediate(self, turn: int = -1):
+    def get_intermediate(self, turn: int = -1) -> Set[GameState]:
         """Returns the set of intermediate states for the
         specified turn. If turn is -1, gets the states from
         the latest turn instead."""
         return self.intermediate_states[turn]
 
-    def get_active(self, turn: int = -1):
+    def get_active(self, turn: int = -1) -> Set[GameState]:
         """Returns the set of active states for the
         specified turn. If turn is -1, gets the states from
         the latest turn instead."""

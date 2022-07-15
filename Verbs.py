@@ -948,7 +948,7 @@ class PlayCardboard(PlayVerb):
         """Mutates the given gamestate by moving the card to
         the stack and creating a StackCardboard for it there."""
         MoveToZone(ZONE.STACK).do_it(game, source, targets)
-        game.stack.append(Stack.StackCardboard(source, targets))
+        game.stack.append(Stack.StackCardboard(card=source, choices=targets))
         game.num_spells_cast += 1
         return [(game, source, targets)]
 

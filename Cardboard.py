@@ -82,7 +82,7 @@ class Cardboard:
     def get_id(self):
         s = type(
             self.rules_text).__name__  # MtG card type (creature, land, etc)
-        s += self.rules_text.name + "_"
+        # s += self.rules_text.name + "_"
         if self.tapped:
             s += "T"
         if self.summon_sick:
@@ -130,9 +130,16 @@ class Cardboard:
 
     def cast(self, state: GameState, choices: list) -> List[GameState]:
         """Returns a list of GameStates where this spell has
-        been cast (put onto the stack) and all costs paid."""
-        caster = self.rules_text.caster_verb
-        return [g for g, _, _ in caster.do_it(state, self, choices)]
+        been cast (put onto the stack) and all costs paid.
+        GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
+        # if not self.rules_text.caster_verb.mutates:
+        #     return [g for g, _, _ in caster.do_it(state, self, choices)]
+        new_state, things = state.copy_and_track([self]+choices)
+        new_source = things[0]
+        new_choices = things[1:]
+        caster = new_source.rules_text.caster_verb
+        return [g for g, _, _ in caster.do_it(new_state, new_source,
+                                              new_choices)]
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.

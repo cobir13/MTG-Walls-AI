@@ -79,57 +79,84 @@ class GameState:
         txt += "    Mana: (%s)" % str(self.pool)
         return txt
 
-    def __eq__(self, other):
-        # easy disqualifications first
-        if not (len(self.deck) == len(other.deck)
-                and len(self.hand) == len(other.hand)
-                and len(self.field) == len(other.field)
-                and len(self.grave) == len(other.grave)
-                and len(self.stack) == len(other.stack)
-                and len(self.super_stack) == len(other.super_stack)
-                and self.turn_count == other.turn_count
-                and self.is_my_turn == other.is_my_turn
-                and self.life == other.life
-                and self.opponent_life == other.opponent_life
-                and self.has_played_land == other.has_played_land
-                and self.num_spells_cast == other.num_spells_cast
-                and self.pool == other.pool):
-            return False
-        # also need to compare hands, fields, etc. We know they are sorted
-        # and have the same length, so just step through them
-        for ii in range(len(self.hand)):
-            if not self.hand[ii].is_equiv_to(other.hand[ii]):
-                return False
-        for ii in range(len(self.grave)):
-            if not self.grave[ii].is_equiv_to(other.grave[ii]):
-                return False
-        for ii in range(len(self.field)):
-            if not self.field[ii].is_equiv_to(other.field[ii]):
-                return False
-        # stack isn't SORTED but it's ORDERED so can treat it the same
-        for ii in range(len(self.stack)):
-            if not self.stack[ii].is_equiv_to(other.stack[ii]):
-                return False
-        # if got to here, we're good!
-        return True
-
-    def get_id(self):
-        my_turn = "MY" if self.is_my_turn else "OP"
-        played_land = "_PL" if self.is_my_turn else ""
-        s = "%s%i_%02ivs%02i%s_C%i" % (my_turn, self.turn_count,
-                                       self.life, self.opponent_life,
-                                       played_land, self.num_spells_cast)
-        s += "_" + ",".join([c.get_id() for c in self.hand])
-        s += "_" + ",".join([c.get_id() for c in self.field])
-        s += "_" + ",".join([c.get_id() for c in self.grave])
-        s += "_" + ",".join([c.get_id() for c in self.stack])
-        s += "(%s)" % str(self.pool)
-        return s
-
     def __hash__(self):
+        # self.get_id()
         return self.get_id().__hash__()  # hash the string of the get_id
 
-    def copy_and_track(self, track_list) -> Tuple[GameState, List[Cardboard]]:
+    def __neg__(self, other):
+        return not self.__eq__(other)
+
+    def __eq__(self, other):
+        return isinstance(other, GameState) and self.get_id() == other.get_id()
+        # # easy disqualifications first
+        # if not (len(self.deck) == len(other.deck)
+        #         and len(self.hand) == len(other.hand)
+        #         and len(self.field) == len(other.field)
+        #         and len(self.grave) == len(other.grave)
+        #         and len(self.stack) == len(other.stack)
+        #         and len(self.super_stack) == len(other.super_stack)
+        #         and self.turn_count == other.turn_count
+        #         and self.is_my_turn == other.is_my_turn
+        #         and self.life == other.life
+        #         and self.opponent_life == other.opponent_life
+        #         and self.has_played_land == other.has_played_land
+        #         and self.num_spells_cast == other.num_spells_cast
+        #         and self.pool == other.pool):
+        #     return False
+        # # also need to compare hands, fields, etc. We know they are sorted
+        # # and have the same length, so just step through them
+        # for ii in range(len(self.hand)):
+        #     if not self.hand[ii].is_equiv_to(other.hand[ii]):
+        #         return False
+        # for ii in range(len(self.grave)):
+        #     if not self.grave[ii].is_equiv_to(other.grave[ii]):
+        #         return False
+        # for ii in range(len(self.field)):
+        #     if not self.field[ii].is_equiv_to(other.field[ii]):
+        #         return False
+        # # stack isn't SORTED but it's ORDERED so can treat it the same
+        # for ii in range(len(self.stack)):
+        #     if not self.stack[ii].is_equiv_to(other.stack[ii]):
+        #         return False
+        # # if got to here, we're good!
+        # return True
+
+    def get_id(self):
+        turn = "%s%i" % ("MY" if self.is_my_turn else "OP", self.turn_count)
+        life = "%ivs%i" % (self.life, self.opponent_life)
+        land = "Land1" if self.has_played_land else "Land0"
+        storm = "storm%i" % self.num_spells_cast
+        pool = "(%s)" % str(self.pool)
+        deck = "deck%i" % len(self.deck)
+        hand = ",".join([c.get_id() for c in self.hand])
+        field = ",".join([c.get_id() for c in self.field])
+        grave = ",".join([c.get_id() for c in self.grave])
+        stack = ",".join([c.get_id() for c in self.stack])
+        return "|".join([turn, life, land, storm, pool,
+                         deck, hand, field, grave, stack])
+
+    # @staticmethod
+    # def construct_from_string(id_string: str):
+    #     game = GameState()
+    #     parts = id_string.split("|")
+    #     game.is_my_turn = parts[0][:2] == "MY"  # turn
+    #     game.turn_count = int(parts[0][2:])
+    #     my_life, op_life = parts[1].split("vs")  # life
+    #     game.life = int(my_life)
+    #     game.opponent_life = int(op_life)
+    #     game.has_played_land = parts[2][4:] == "1"  # land
+    #     game.num_spells_cast = int(parts[3][5:])  # storm
+    #     game.hand = [Cardboard.construct_from_string(s)
+    #                  for s in parts[4].split(",") if s != ""]
+    #     game.field = [Cardboard.construct_from_string(s)
+    #                   for s in parts[5].split(",") if s != ""]
+    #     game.grave = [Cardboard.construct_from_string(s)
+    #                   for s in parts[6].split(",") if s != ""]
+    #     game.stack = [StackObject.construct_from_string(s)
+    #                   for s in parts[7].split(",") if s != ""]
+    #     return game
+
+    def copy_and_track2(self, track_list) -> Tuple[GameState, List[Cardboard]]:
         """Returns a disconnected copy of the gamestate and also
         a list of Cardboard's in the new gamestate corresponding
         to the list of Cardboard's we were asked to track. This
@@ -233,6 +260,105 @@ class GameState:
             self.super_stack)
         # return
         return state, new_track_list
+
+    def copy_and_track(self, track_list) -> Tuple[GameState, List[Cardboard]]:
+        """Returns a disconnected copy of the gamestate and also
+        a list of Cardboard's in the new gamestate corresponding
+        to the list of Cardboard's we were asked to track. This
+        allows tracking "between split universes."
+        If track_list has non-Cardboard objects, they're also
+        returned"""
+        # make new Gamestate and start copying attributes by value
+        state = GameState()
+        # copy mana pool
+        state.pool = self.pool.copy()
+        # these are all ints or bools, so safe to copy directly
+        state.turn_count = self.turn_count
+        state.is_my_turn = self.is_my_turn
+        state.life = self.life
+        state.opponent_life = self.opponent_life
+        state.has_played_land = self.has_played_land
+        state.num_spells_cast = self.num_spells_cast
+        state.is_tracking_history = self.is_tracking_history
+        state.previous_state = self if state.is_tracking_history else None
+        state.events_since_previous = ""
+        # for the lists of Cardboards (hand, deck, field, grave), spin
+        # through making copies as I go. The ordering will be maintained
+        state.hand = [c.copy() for c in self.hand]
+        state.deck = [c.copy() for c in self.deck]
+        state.field = [c.copy() for c in self.field]
+        state.grave = [c.copy() for c in self.grave]
+        # now copy the stack and superstack, which are made of StackObjects
+        state.stack = [GameState.copy_stack_object(self, state, s)
+                       for s in self.stack]
+        state.super_stack = [GameState.copy_stack_object(self, state, s)
+                             for s in self.super_stack]
+        # finally, copy the track_list, which can contain any types
+        new_track_list = GameState.copy_arbitrary_list(self, state, track_list)
+        # return!
+        return state, new_track_list
+
+    @staticmethod
+    def copy_stack_object(state_orig: GameState, state_new: GameState,
+                          obj: StackObject) -> StackObject:
+        """This function assumes that everything except the
+        stack and superstack have already been copied
+        correctly. In other words, all Cardboards have
+        already been copied. It is only StackObjects which
+        remain to be copied."""
+        # If card is ACTUALLY on the stack, then just make new copy of it. But
+        # if it's in a non-stack zone, this is a pointer, and we need to find
+        # the copied version of whatever it's pointing to.
+        if obj.card.zone == ZONE.STACK:
+            new_card = obj.card.copy()
+        else:
+            zone_orig = state_orig.get_zone(obj.card.zone)
+            zone_new = state_new.get_zone(obj.card.zone)
+            # look for true equality (not just equivalence) in old cards
+            jj = [ii for ii, c in enumerate(zone_orig) if c is obj.card][0]
+            new_card = zone_new[jj]
+        # the StackObject's list of choices is copied by another function
+        new_choices = GameState.copy_arbitrary_list(state_orig, state_new,
+                                                    obj.choices)
+        return obj.__class__(ability=obj.ability, card=new_card,
+                             choices=new_choices)
+
+    @staticmethod
+    def copy_arbitrary_list(state_orig: GameState, state_new: GameState,
+                            list_to_copy: list | tuple) -> list:
+        """This function assumes that everything except the
+        stack and superstack have already been copied
+        correctly. In other words, all Cardboards have
+        already been copied. This function returns a copy of
+        the given list, with all Cardboards and StackObjects
+        replaced by their appropriate copies. List is allowed
+        to contain other types of objects too."""
+        # objects in this list can be several types: Cardboard, StackObject,
+        # lists / tuples / iterables, and immutable types
+        new_list = list_to_copy.__class__()
+        for item in list_to_copy:
+            if isinstance(item, Cardboard):
+                if item.zone == ZONE.STACK:
+                    new_card = item.copy()  # truly on stack, so isn't ref
+                else:
+                    zone_orig = state_orig.get_zone(item.zone)
+                    zone_new = state_new.get_zone(item.zone)
+                    jj = [ii for ii, c in enumerate(zone_orig) if c is item][0]
+                    new_card = zone_new[jj]
+                new_list.append(new_card)
+            elif isinstance(item, StackObject):
+                new_obj = GameState.copy_stack_object(state_orig, state_new,
+                                                      item)
+                new_list.append(new_obj)
+            elif isinstance(item, list) or isinstance(item, tuple):
+                new_iterable = GameState.copy_arbitrary_list(state_orig,
+                                                             state_new, item)
+                new_list.append(new_iterable)  # recurse!
+            elif isinstance(item, int) or isinstance(item, str):
+                new_list.append(item)  # immutable and passed by value
+            else:
+                raise ValueError("unknown type in choices list!")
+        return new_list
 
     def copy(self) -> GameState:
         return self.copy_and_track([])[0]
@@ -417,28 +543,28 @@ class GameState:
             final_results += state.clear_super_stack()
         return final_results
 
-    def step_cleanup(self):
-        if self.is_tracking_history:
-            self.events_since_previous += "\nCleanup"
-        # discard down to 7 cards
-        if len(self.hand) > 7:
-            discard_list = Choices.choose_exactly_n(self.hand,
-                                                    len(self.hand) - 7,
-                                                    "discard to hand size")
-            if self.is_tracking_history:
-                print("discard:", [str(c) for c in discard_list])
-            for card in discard_list:
-                MoveToZone(ZONE.GRAVE).do_it(self, card, [])
-        # clear any floating mana
-        if self.is_tracking_history and self.pool.cmc() > 0:
-            print("end with %s" % (str(self.pool)))
-        for color in self.pool.data.keys():
-            self.pool.data[color] = 0
-        # pass the turn
-        if not self.is_my_turn:
-            self.turn_count += 1
-            self.has_played_land = False
-        self.is_my_turn = not self.is_my_turn
+    # def step_cleanup(self):
+    #     if self.is_tracking_history:
+    #         self.events_since_previous += "\nCleanup"
+    #     # discard down to 7 cards
+    #     if len(self.hand) > 7:
+    #         discard_list = Choices.choose_exactly_n(self.hand,
+    #                                                 len(self.hand) - 7,
+    #                                                 "discard to hand size")
+    #         if self.is_tracking_history:
+    #             print("discard:", [str(c) for c in discard_list])
+    #         for card in discard_list:
+    #             MoveToZone(ZONE.GRAVE).do_it(self, card, [])
+    #     # clear any floating mana
+    #     if self.is_tracking_history and self.pool.cmc() > 0:
+    #         print("end with %s" % (str(self.pool)))
+    #     for color in self.pool.data.keys():
+    #         self.pool.data[color] = 0
+    #     # pass the turn
+    #     if not self.is_my_turn:
+    #         self.turn_count += 1
+    #         self.has_played_land = False
+    #     self.is_my_turn = not self.is_my_turn
 
     def step_attack(self):
         if self.is_tracking_history:
