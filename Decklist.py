@@ -8,7 +8,8 @@ from RulesText import Creature, Land, Instant, TapSymbol  # , Sorcery
 import ZONE
 import MatchCardPatterns as Match
 import Verbs
-from Verbs import ManyVerbs, ChooseAVerb, VerbManyTimes, VerbOnSplitList
+from Verbs import ManyVerbs, ChooseAVerb, VerbManyTimes, VerbOnSplitList, \
+    VerbOnTarget
 from Abilities import TriggerOnMove, AsEnterEffect
 import Getters as Get
 
@@ -245,51 +246,77 @@ class HallowedFountain(Plains, Island):
                            AsEnterEffect([Match.IsSelf()], None, ZONE.FIELD),
                            ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
                            )
-#
-# 
-# ###---fetch lands
-# 
-# def FetchLandType(gamestate, source, keywords):
-#     targets = []
-#     for card in gamestate.deck:
-#         if "land" in card.rules_text.keywords:
-#             # if it's the right type of land...
-#             if any([t in keywords for t in card.rules_text.keywords]):
-#                 # and if we don't have it already...
-#                 if not any([card.is_equiv_to(ob) for ob in targets]):
-#                     targets.append(card)
-#     if len(targets) == 0:  # fail to find. fetch still sacrificed
-#         newstate, [fetch] = gamestate.copy_and_track([source])
-#         newstate.LoseLife(1)
-#         newstate.MoveZone(fetch, ZONE.GRAVE)
-#         newstate.shuffle_deck()
-#         return newstate.ClearSuperStack()
-#     universes = []
-#     for landcard in targets:
-#         newstate, [newland, fetch] = gamestate.copy_and_track([landcard,
-#                                                                   source])
-#         newstate.LoseLife(1)
-#         newstate.MoveZone(fetch, ZONE.GRAVE)
-#         newstate.MoveZone(newland, ZONE.FIELD)
-#         newstate.shuffle_deck()
-#         universes += newstate.ClearSuperStack()
-#     return universes
-# 
-# 
-# WindsweptHeath = Land("WindsweptHeath", [])
-# WindsweptHeath.trig_move.append(
-#     AsEnterEffect("Fetch G/W",
-#                   lambda g, s: FetchLandType(g, s, ["forest", "plains"])))
-# 
-# FloodedStrand = Land("FloodedStrand", [])
-# FloodedStrand.trig_move.append(
-#     AsEnterEffect("Fetch G/W",
-#                   lambda g, s: FetchLandType(g, s, ["island", "plains"])))
-# 
-# MistyRainforest = Land("MistyRainforest", [])
-# MistyRainforest.trig_move.append(
-#     AsEnterEffect("Fetch G/W",
-#                   lambda g, s: FetchLandType(g, s, ["forest", "island"])))
+
+
+# -----fetch lands (simplified, etb trigger instead of tap ability)
+
+def fetch_verb(type1: type, type2: type):
+    v = VerbOnTarget(
+        Get.Chooser(
+            Get.ListFromZone([Match.AnyOf([Match.CardType(type1),
+                                           Match.CardType(type2)])],
+                             ZONE.DECK),
+            1, True),
+        Verbs.MoveToZone(ZONE.FIELD))
+    return v
+
+
+class WindsweptHeath(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "WindsweptHeath"
+        # activating for two colors comes from the two inheritances
+        self.add_triggered("GW fetch etb",
+                           TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
+                           ManyVerbs([Verbs.LoseOwnLife(1),
+                                      Verbs.Sacrifice(),
+                                      Verbs.Tutor(ZONE.HAND, 1,
+                                                  [Match.AnyOf([
+                                                      Match.CardType(Forest),
+                                                      Match.CardType(Plains)])
+                                                  ])
+                                      ])
+                           )
+
+
+class MistyRainforest(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "WindsweptHeath"
+        # activating for two colors comes from the two inheritances
+        self.add_triggered("GW fetch etb",
+                           TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
+                           ManyVerbs([Verbs.LoseOwnLife(1),
+                                      Verbs.Sacrifice(),
+                                      Verbs.Tutor(ZONE.HAND, 1,
+                                                  [Match.AnyOf([
+                                                      Match.CardType(Island),
+                                                      Match.CardType(Forest)])
+                                                  ])
+                                      ])
+                           )
+
+
+class FloodedStrand(Land):
+
+    def __init__(self):
+        super().__init__()
+        self.name = "WindsweptHeath"
+        # activating for two colors comes from the two inheritances
+        self.add_triggered("GW fetch etb",
+                           TriggerOnMove([Match.IsSelf()], None, ZONE.FIELD),
+                           ManyVerbs([Verbs.LoseOwnLife(1),
+                                      Verbs.Sacrifice(),
+                                      Verbs.Tutor(ZONE.HAND, 1,
+                                                  [Match.AnyOf([
+                                                      Match.CardType(Island),
+                                                      Match.CardType(Plains)])
+                                                  ])
+                                      ])
+                           )
+
 # =============================================================================
 
 

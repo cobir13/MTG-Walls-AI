@@ -548,6 +548,15 @@ class DealDamageToOpponent(Verb):
             state.events_since_previous += text
 
 
+class Tutor(VerbOnTarget):
+    def __init__(self, zone_to_move_to, num_to_find: int,
+                 pattern_list: List[Match.CardPattern]):
+        getter = Get.Chooser(Get.ListFromZone(pattern_list, zone_to_move_to),
+                             num_to_find, can_be_fewer=True)
+        verb = ManyVerbs(MoveToZone(zone_to_move_to), Shuffle())
+        super().__init__(getter, verb)
+
+
 # ----------
 
 class TapSelf(VerbOnSubjectCard):

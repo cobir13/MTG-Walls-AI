@@ -84,7 +84,7 @@ class String(Getter):
 
 
 class NumberInZone(Integer):
-    """Get the number of Cardboard's which match the wildcard patterns"""
+    """Get the number of Cardboards which match all given patterns"""
 
     def __init__(self, patterns: List[Match.CardPattern], zone):
         super().__init__()
@@ -104,6 +104,7 @@ class NumberInZone(Integer):
 
 
 class ListFromZone(CardList):
+    """Get all cards from `zone` which match all given patterns"""
     def __init__(self, patterns: List[Match.CardPattern], zone):
         super().__init__()
         self.patterns = patterns
@@ -119,6 +120,7 @@ class ListFromZone(CardList):
 
 
 class ListTopOfDeck(CardList):
+    """Get all cards from top of deck which match all given patterns"""
     def __init__(self, patterns: List[Match.CardPattern],
                  get_depth: Integer | int):
         super().__init__()
@@ -218,6 +220,7 @@ class Chooser(Getter):
                 return [(c,) for c in Choices.choose_exactly_one(options)]
             else:
                 return Choices.choose_exactly_n(options, num)
+        # TODO: add equivalence screening?
 
     @property
     def single_output(self):

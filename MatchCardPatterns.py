@@ -6,7 +6,7 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from Cardboard import Cardboard
@@ -21,10 +21,25 @@ import Getters as Get
 
 class CardPattern:
     def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        """Returns whether the card matches the pattern during
+        the given GameState and source (thing asking about match)."""
         raise Exception
 
     def __str__(self):
         return type(self).__name__
+
+
+class AnyOf(CardPattern):
+    """A pattern which returns true if the card matches ANY
+     (rather than all) of the given patterns."""
+    def __init__(self, patterns: List[CardPattern]):
+        self.patterns = patterns
+
+    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        return any([p.match(card, gamestate, source) for p in self.patterns])
+
+    def __str__(self):
+        return " or ".join([str(p) for p in self.patterns])
 
 
 class CardType(CardPattern):

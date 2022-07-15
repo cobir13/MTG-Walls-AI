@@ -362,56 +362,6 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
-    # print("Testing shock-lands...")
-    # start_clock = time.perf_counter()
-    #
-    # game = GameState()
-    # game.is_tracking_history = False
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.FIELD)
-    # # hand
-    # game.MoveZone(Cardboard(Decklist.BreedingPool), ZONE.HAND)
-    # game.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.HAND)
-    #
-    # # run all the way through, with the settings I've chosen, should end with
-    # # shocking in the Breeding Pool and using it to cast the Caryatid
-    # gameN = BasicLoop(game)
-    # assert (len(gameN.hand) == 0)
-    # assert (len(gameN.field) == 3)
-    # assert (gameN.pool == ManaHandler.ManaPool(""))
-    # assert (gameN.life == 18)
-    #
-    # # make sure we have shock and tapped options available
-    # options = game.get_valid_castables()
-    # assert (len(options) == 1)
-    # assert (options[0] is game.hand[1])  # only castable is shockland
-    # universes = game.CastSpell(
-    #     options[-1])  # puts it into play, b/c lands not on stack
-    # assert (len(universes) == 2)  # shock or tapped
-    #
-    # # shock-universe
-    # assert (not [u for u in universes if u.life == 18][0].field[0].tapped)
-    # # tapped-universe
-    # assert ([u for u in universes if u.life == 20][0].field[0].tapped)
-    #
-    # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
-
-    # print("Testing fetchlands")
-    # start_clock = time.perf_counter()
-    #
-    # # make a game with some fetchable lands in deck and fetchlands in hand
-    # game = GameState()
-    # game.is_tracking_history = False
-    # # deck
-    # game.MoveZone(Cardboard(Decklist.Plains()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
-    # # hand
-    # game.MoveZone(Cardboard(Decklist.WindsweptHeath), ZONE.HAND)
-    # game.MoveZone(Cardboard(Decklist.WindsweptHeath), ZONE.HAND)
-    #
     # # pre-shuffle check
     # assert (game.deck[0].rules_text == Decklist.Plains())
     # assert (game.deck[-1].rules_text == Decklist.Island())
