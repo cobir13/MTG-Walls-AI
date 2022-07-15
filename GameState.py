@@ -156,111 +156,6 @@ class GameState:
     #                   for s in parts[7].split(",") if s != ""]
     #     return game
 
-    def copy_and_track2(self, track_list) -> Tuple[GameState, List[Cardboard]]:
-        """Returns a disconnected copy of the gamestate and also
-        a list of Cardboard's in the new gamestate corresponding
-        to the list of Cardboard's we were asked to track. This
-        allows tracking "between split universes."
-        If track_list has non-Cardboard objects, they're also
-        returned"""
-        # make new Gamestate and start copying attributes by value
-        state = GameState()
-        # copy mana pool
-        state.pool = self.pool.copy()
-        # these are all ints or bools, so safe to copy directly
-        state.turn_count = self.turn_count
-        state.is_my_turn = self.is_my_turn
-        state.life = self.life
-        state.opponent_life = self.opponent_life
-        state.has_played_land = self.has_played_land
-        state.num_spells_cast = self.num_spells_cast
-        state.is_tracking_history = self.is_tracking_history
-        state.previous_state = self if state.is_tracking_history else None
-        state.events_since_previous = ""
-        # need to track any pointers in StackObjects
-        stack_index = len(track_list)  # index for where stack portion begins
-        for obj in self.stack + self.super_stack:
-            track_list += [obj.card] + obj.choices
-        # blank list to fill with corresponding copies of cards in track_list
-        new_track_list = track_list[:]  # a copy of track_list
-
-        def copy_list_and_update_pointers_to_it(original_list):
-            """Goes through a list and returns a list of
-            copies of each element in the original list. Also
-            checks against track_list to make sure that any pointers
-            to the original elements now points at the new copies of
-            the elements. Maintains order so that the new list
-            does not need to be re-sorted."""
-            new_list = []
-            for obj2 in original_list:
-                if isinstance(obj2, list) or isinstance(obj2, tuple):
-                    # recurse. I THINK this never happens but just in case
-                    new_object = copy_list_and_update_pointers_to_it(obj2)
-                elif hasattr(obj2, "copy"):
-                    new_object = obj2.copy()
-                else:
-                    # not copiable, probably int or similar
-                    new_object = obj2
-                new_list.append(new_object)
-                # now spin through track_list. if we just copied a
-                # Cardboard that we are tracking, replace the old
-                # pointer in newtracklist with a pointer to the new
-                # copy.
-                # (For things like ints, we don't care if it's
-                # technically the old object or a new copy.)
-                if isinstance(new_object, Cardboard):
-                    for index, tracked_object in enumerate(track_list):
-                        # try to iterate through tracked_object just in case
-                        try:
-                            new_track_list[index] = [
-                                new_object if obj2 is c else c
-                                for c in tracked_object]
-                        except TypeError:
-                            if obj2 is tracked_object:
-                                new_track_list[index] = new_object
-            return new_list
-
-        state.deck = copy_list_and_update_pointers_to_it(self.deck)
-        state.hand = copy_list_and_update_pointers_to_it(self.hand)
-        state.field = copy_list_and_update_pointers_to_it(self.field)
-        state.grave = copy_list_and_update_pointers_to_it(self.grave)
-
-        def copy_stack_objects(original_list):
-            """Goes through a list of StackObjects and rebuilds
-            copies of them. StackObjects contain pointers to
-            Cardboard's, so we get the new pointers to the newly
-            copied Cardboard's by looking in the new_track_list.
-            This assumes that the StackObjects are checked in the
-            same order that they were placed into new_track_list.
-            Returns a list of new StackObjects and the new version
-            of new_track_list."""
-            new_list = []
-            i_end = stack_index
-            for stack_obj in original_list:
-                new_card = new_track_list[stack_index]
-                i_end = stack_index + 1 + len(stack_obj.choices)
-                new_choices = new_track_list[stack_index + 1:i_end]
-                # build the new StackObject
-                if isinstance(stack_obj, StackCardboard):
-                    new_stack_obj = StackCardboard(new_card, new_choices)
-                elif isinstance(stack_obj, StackAbility):
-                    ability = stack_obj.ability  # does this need a copy?
-                    new_stack_obj = StackAbility(ability, new_card,
-                                                 new_choices)
-                else:
-                    raise TypeError("Unknown type of StackObject!")
-                new_list.append(new_stack_obj)
-            # get rid of the references I just used. done with them now.
-            result = new_track_list[:stack_index] + new_track_list[i_end:]
-            return new_list, result
-
-        # copy stack and superstack, replacing pointers in StackObjects as I go
-        state.stack, new_track_list = copy_stack_objects(self.stack)
-        state.super_stack, new_track_list = copy_stack_objects(
-            self.super_stack)
-        # return
-        return state, new_track_list
-
     def copy_and_track(self, track_list) -> Tuple[GameState, List[Cardboard]]:
         """Returns a disconnected copy of the gamestate and also
         a list of Cardboard's in the new gamestate corresponding
@@ -288,11 +183,14 @@ class GameState:
         state.deck = [c.copy() for c in self.deck]
         state.field = [c.copy() for c in self.field]
         state.grave = [c.copy() for c in self.grave]
-        # now copy the stack and superstack, which are made of StackObjects
-        state.stack = [GameState.copy_stack_object(self, state, s)
-                       for s in self.stack]
-        state.super_stack = [GameState.copy_stack_object(self, state, s)
-                             for s in self.super_stack]
+        # now copy the stack and superstack, which are made of StackObjects.
+        # Need to append as I go, in case of pointers to StackObjects, so
+        # I can't use list comprehensions. Must use a loop. I tried. --Cobi.
+        for s in self.stack:
+            state.stack.append(GameState.copy_stack_object(self, state, s))
+        for s in self.super_stack:
+            state.super_stack.append(GameState.copy_stack_object(self,
+                                                                 state, s))
         # finally, copy the track_list, which can contain any types
         new_track_list = GameState.copy_arbitrary_list(self, state, track_list)
         # return!
@@ -306,6 +204,13 @@ class GameState:
         correctly. In other words, all Cardboards have
         already been copied. It is only StackObjects which
         remain to be copied."""
+        # if this StackObject is a pointer to a DIFFERENT StackObject on the
+        # stack which already has a copy, then just return a pointer to that
+        # copy. (Relevant for e.g. counterspell, which targets a StackObject)
+        if isinstance(obj, StackObject) and obj in state_orig.stack:
+            index = state_orig.stack.index(obj)
+            if len(state_new.stack) > index:
+                return state_new.stack[index]
         # If card is ACTUALLY on the stack, then just make new copy of it. But
         # if it's in a non-stack zone, this is a pointer, and we need to find
         # the copied version of whatever it's pointing to.
@@ -335,7 +240,7 @@ class GameState:
         to contain other types of objects too."""
         # objects in this list can be several types: Cardboard, StackObject,
         # lists / tuples / iterables, and immutable types
-        new_list = list_to_copy.__class__()
+        new_list = []
         for item in list_to_copy:
             if isinstance(item, Cardboard):
                 if item.zone == ZONE.STACK:
@@ -358,7 +263,7 @@ class GameState:
                 new_list.append(item)  # immutable and passed by value
             else:
                 raise ValueError("unknown type in choices list!")
-        return new_list
+        return list_to_copy.__class__(new_list)
 
     def copy(self) -> GameState:
         return self.copy_and_track([])[0]

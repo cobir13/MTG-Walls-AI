@@ -5,19 +5,17 @@ Created on Tue Dec 29 22:15:57 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, Tuple, List
+from typing import Tuple, List
 
-import Verbs
-
-if TYPE_CHECKING:
-    from Abilities import ActivatedAbility
-
+from Abilities import ActivatedAbility
 import ZONE
 from GameState import GameState
 import ManaHandler
 import Decklist
 from Cardboard import Cardboard, CardNull
 from PlayTree import PlayTree
+import Verbs
+import Stack
 import time
 
 if __name__ == "__main__":
@@ -160,6 +158,36 @@ if __name__ == "__main__":
     assert not activ_game.is_tracking_history
     assert activ_game.previous_state is None
     assert activ_game.events_since_previous == ""
+
+    # let's do a full copy test, since copying is rather critical
+    test_game = GameState()
+    caryatid_in_play = Cardboard(Decklist.Caryatid())
+    caryatid_in_play.zone = ZONE.FIELD
+    test_game.field.append(caryatid_in_play)
+    roots_on_stack = Cardboard(Decklist.Roots())
+    roots_on_stack.zone = ZONE.STACK
+    stack_cardboard = Stack.StackCardboard(card=roots_on_stack,
+                                           choices=[1, "a", caryatid_in_play])
+    test_game.stack.append(stack_cardboard)
+    fake_ability = ActivatedAbility("fake", Verbs.NullVerb(), Verbs.NullVerb())
+    stack_ability = Stack.StackAbility(fake_ability, caryatid_in_play,
+                                       [(stack_cardboard, caryatid_in_play)])
+    test_game.stack.append(stack_ability)
+    # test game has: caryatid in play, roots on stack pointing at random stuff,
+    # and an ability on stack pointing at roots and also random stuff.
+    test_copy = test_game.copy()
+    assert test_copy == test_game
+    assert test_game.stack[0].card.is_equiv_to(test_copy.stack[0].card)
+    assert test_game.stack[0].card is not test_copy.stack[0].card
+    assert test_game.stack[1].card.is_equiv_to(test_copy.stack[1].card)
+    assert test_game.stack[1].card is not test_copy.stack[1].card
+    assert test_game.stack[1].card is test_game.field[0]
+    assert test_copy.stack[1].card is test_copy.field[0]
+    assert test_copy.stack[1].choices[0][0] is test_copy.stack[0]
+    assert test_copy.stack[1].choices[0][1] is test_copy.field[0]
+    assert test_copy.stack[1].choices[0][1] is not test_game.field[0]
+    assert test_copy.stack[1].choices[0][1] is test_copy.stack[1].card
+    assert test_copy.stack[0].choices[:2] == [1, "a"]
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 

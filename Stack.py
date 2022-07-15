@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 class StackObject:
 
-    def __init__(self, ability: GenericAbility, card: Cardboard,
+    def __init__(self, ability: GenericAbility | None, card: Cardboard,
                  choices: list):
         # The Ability that is being activated, if any
         self.ability: GenericAbility | None = ability
@@ -56,9 +56,9 @@ class StackObject:
 
 class StackAbility(StackObject):
 
-    def __init__(self, ability: GenericAbility, source: Cardboard,
+    def __init__(self, ability: GenericAbility, card: Cardboard,
                  choices: list):
-        super().__init__(ability, source, choices)
+        super().__init__(ability, card, choices)
 
     def __str__(self):
         return self.ability.name
