@@ -9,6 +9,8 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
 import Verbs
+import Costs
+import ZONE
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -19,30 +21,28 @@ if TYPE_CHECKING:
 class Trigger:
 
     def __init__(self, verb_type: type,
-                 patterns_for_subject: List[Match.CardPattern]):
+                 pattern_for_subject: Match.CardPattern):
         self.verb_type = verb_type
-        self.patterns = patterns_for_subject
+        self.pattern = pattern_for_subject
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):
         """`source` is source of possible trigger. `trigger_card` is the
         thing which caused the trigger to be checked for viability."""
         return (isinstance(verb, self.verb_type)
-                and all([p.match(trigger_card, state, source) for p in
-                         self.patterns]))
+                and self.pattern.match(trigger_card, state, source))
 
     def __str__(self):
-        return "Trigger(%s,%s)" % (self.verb_type.__name__,
-                                   str(self.patterns))
+        return "Trigger(%s,%s)" % (self.verb_type.__name__, str(self.pattern))
 
 # ----------
 
 
 class TriggerOnMove(Trigger):
 
-    def __init__(self, patterns_for_subject: List[Match.CardPattern], origin,
+    def __init__(self, pattern_for_subject: Match.CardPattern, origin,
                  destination):
-        super().__init__(Verbs.MoveToZone, patterns_for_subject)
+        super().__init__(Verbs.MoveToZone, pattern_for_subject)
         self.origin = origin
         self.destination = destination
 
@@ -58,14 +58,15 @@ class TriggerOnMove(Trigger):
 
 class NullTrigger(Trigger):
     def __init__(self):
-        super().__init__(Verbs.NullVerb, [])
-
-    def is_triggered(self, verb: Verbs.Verb, state: GameState,
-                     source: Cardboard, trigger_card: Cardboard):
-        return False
+        super().__init__(Verbs.NullVerb, Match.Nothing())
 
     def __str__(self):
         return ""
+
+
+class TriggerOnSelfEnter(TriggerOnMove):
+    def __init__(self):
+        super().__init__(Match.IsSelf(), None, ZONE.FIELD)
 
 
 # ----------
@@ -81,9 +82,9 @@ class AsEnterEffect(TriggerOnMove):
 # ----------
 
 class ActivatedAbility:
-    def __init__(self, name, cost: Verbs.Verb, effect: Verbs.Verb):
+    def __init__(self, name, cost: Costs.Cost, effect: Verbs.Verb):
         self.name: str = name
-        self.cost: Verbs.Verb = cost
+        self.cost: Costs.Cost = cost
         self.effect: Verbs.Verb = effect
         self.caster_verb: Verbs.PlayAbility = Verbs.PlayAbility(self)
         if effect.is_type(Verbs.AddMana):
@@ -93,7 +94,8 @@ class ActivatedAbility:
                                ) -> List[list]:
         return self.caster_verb.choose_choices(state, source, source)
 
-    def can_be_activated(self, state: GameState, source: Cardboard, choices: list):
+    def can_be_activated(self, state: GameState, source: Cardboard,
+                         choices: list):
         return self.caster_verb.can_be_done(state, source, choices)
 
     def activate(self, state: GameState, source: Cardboard, choices: list

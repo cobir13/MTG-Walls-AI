@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from Verbs import Verb
 
 from RulesText import RulesText
+import Costs
 
 
 # -----------------------------------------------------------------------------
@@ -68,7 +69,7 @@ class Cardboard:
         return self.rules_text.name
 
     @property
-    def cost(self) -> Verb:
+    def cost(self) -> Costs.Cost:
         return self.rules_text.cost
 
     @property
@@ -112,7 +113,7 @@ class Cardboard:
     # def has_keyword(self, keyword:str):
     #     return keyword in self.rules_text.keywords
 
-    def mana_value(self):
+    def mana_value(self) -> int:
         return self.rules_text.mana_value
 
     def reset_to_default_cardboard(self):

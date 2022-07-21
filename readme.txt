@@ -2,10 +2,16 @@
 Notes comparing this program to the real Magic:The Gathering rules:
     - cannot activate mana abilities WHILE casting a spell. (must pre-float
         all mana to pay for the spell)
+    - "Gold" mana that can be used to pay for any colored cost, to simplify
+        choices during goldfish games.
+    - fetchlands are deliberately templated as an enter-the-battlefield
+        effect rather than as an activated ability, to simplify choices
+        during goldfish games.
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack
     - mana abilities don't use the stack
+    - "as-enters" triggers don't use the stack
 
 
 

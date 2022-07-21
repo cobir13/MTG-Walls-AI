@@ -16,6 +16,7 @@ from Cardboard import Cardboard, CardNull
 from PlayTree import PlayTree
 import Verbs
 import Stack
+import Costs
 import time
 
 if __name__ == "__main__":
@@ -81,16 +82,15 @@ if __name__ == "__main__":
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
     cost_roots = cost_game.field[0]
-    assert roots_abil.cost.can_be_done(cost_game, cost_roots, [])
-    tuple_list = roots_abil.cost.do_it(cost_game, cost_roots, [])
+    assert roots_abil.cost.can_afford(cost_game, cost_roots, [])
+    tuple_list = roots_abil.cost.pay_cost(cost_game, cost_roots, [])
     assert len(tuple_list) == 1
-    assert roots_abil.cost.mutates  # this particular cost mutates
     assert cost_game is tuple_list[0][0]  # so output is same as original
     assert len(cost_roots.counters) == 2
     for value in cost_roots.counters:
         assert "-0/-1" == value or "@" in value
     # should no longer be possible to do
-    assert not roots_abil.cost.can_be_done(cost_game, cost_roots, [])
+    assert not roots_abil.cost.can_afford(cost_game, cost_roots, [])
     assert len(cost_game.get_valid_activations()) == 0
 
     # untap to reset things, then try to activate the ability "properly"
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     stack_cardboard = Stack.StackCardboard(None, roots_on_stack,
                                            [1, "a", caryatid_in_play])
     test_game.stack.append(stack_cardboard)
-    fake_ability = ActivatedAbility("fake", Verbs.NullVerb(), Verbs.NullVerb())
+    fake_ability = ActivatedAbility("fake", Costs.Cost(), Verbs.NullVerb())
     stack_ability = Stack.StackAbility(fake_ability, caryatid_in_play,
                                        [(stack_cardboard, caryatid_in_play)])
     test_game.stack.append(stack_ability)

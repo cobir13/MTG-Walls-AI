@@ -84,47 +84,44 @@ class String(Getter):
 
 
 class NumberInZone(Integer):
-    """Get the number of Cardboards which match all given patterns"""
+    """Get the number of Cardboards which match all given pattern"""
 
-    def __init__(self, patterns: List[Match.CardPattern], zone):
+    def __init__(self, pattern: Match.CardPattern, zone):
         super().__init__()
-        self.patterns = patterns
+        self.pattern = pattern
         self.zone = zone
 
     def get(self, state: GameState, source: Cardboard):
         zone = state.get_zone(self.zone)
-        return len([c for c in zone if all([p.match(c, state, source)
-                                            for p in self.patterns])])
+        return len([c for c in zone if self.pattern.match(c, state, source)])
 
     def __str__(self):
-        patterns = ",".join([str(p) for p in self.patterns])
-        return super().__str__() + "(" + patterns + ")"
+        return super().__str__() + "(" + str(self.pattern) + ")"
 
 # ----------
 
 
 class ListFromZone(CardList):
-    """Get all cards from `zone` which match all given patterns"""
-    def __init__(self, patterns: List[Match.CardPattern], zone):
+    """Get all cards from `zone` which match all given pattern"""
+    def __init__(self, pattern: Match.CardPattern, zone):
         super().__init__()
-        self.patterns = patterns
+        self.pattern = pattern
         self.zone = zone
 
     def get(self, state: GameState, source: Cardboard) -> List[Cardboard]:
         zone = state.get_zone(self.zone)
-        return [c for c in zone if all([p.match(c, state, source)
-                                        for p in self.patterns])]
+        return [c for c in zone if self.pattern.match(c, state, source)]
 
 
 # ----------
 
 
 class ListTopOfDeck(CardList):
-    """Get all cards from top of deck which match all given patterns"""
-    def __init__(self, patterns: List[Match.CardPattern],
+    """Get all cards from top of deck which match all given pattern"""
+    def __init__(self, pattern: Match.CardPattern,
                  get_depth: Integer | int):
         super().__init__()
-        self.patterns = patterns
+        self.pattern = pattern
         if isinstance(get_depth, int):
             get_depth = ConstInteger(get_depth)
         self.get_depth = get_depth
@@ -132,12 +129,11 @@ class ListTopOfDeck(CardList):
     def get(self, state: GameState, source: Cardboard) -> List[Cardboard]:
         num_of_cards_deep = self.get_depth.get(state, source)
         top_of_deck = state.deck[:num_of_cards_deep]
-        return [c for c in top_of_deck
-                if all([p.match(c, state, source) for p in self.patterns])]
+        return [c for c in top_of_deck if self.pattern.match(c, state, source)]
 
     def __str__(self):
-        patterns = ",".join([str(p) for p in self.patterns])
-        return super().__str__() + "(%s|%s" % (str(self.get_depth), patterns)
+        return super().__str__() + "(%s|%s" % (str(self.get_depth),
+                                               str(self.pattern))
 
 # ----------
 

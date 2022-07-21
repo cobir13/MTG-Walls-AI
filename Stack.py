@@ -5,6 +5,7 @@ if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility
     from Cardboard import Cardboard
     from Verbs import Verb
+    from Costs import Cost
     from GameState import GameState
 
 
@@ -21,7 +22,7 @@ class StackObject:
         self.choices: list = choices
 
     @property
-    def cost(self) -> Verb | None:
+    def cost(self) -> Cost | None:
         if self.ability is not None:
             return self.ability.cost
         elif self.card is not None:

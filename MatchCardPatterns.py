@@ -28,10 +28,19 @@ class CardPattern:
     def __str__(self):
         return type(self).__name__
 
+    def __and__(self, other):
+        return _AllOf([self, other])
 
-class AnyOf(CardPattern):
+    def __or__(self, other):
+        return _AnyOf([self, other])
+
+    def __invert__(self):
+        return _Negated(self)
+
+
+class _AnyOf(CardPattern):
     """A pattern which returns true if the card matches ANY
-     (rather than all) of the given patterns."""
+        (rather than all) of the given pattern."""
     def __init__(self, patterns: List[CardPattern]):
         self.patterns = patterns
 
@@ -41,6 +50,47 @@ class AnyOf(CardPattern):
     def __str__(self):
         return " or ".join([str(p) for p in self.patterns])
 
+
+class _AllOf(CardPattern):
+    """A pattern which returns true if the card matches ALL
+        the given pattern."""
+    def __init__(self, patterns: List[CardPattern]):
+        self.patterns = patterns
+
+    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        return all([p.match(card, gamestate, source) for p in self.patterns])
+
+    def __str__(self):
+        return " and ".join([str(p) for p in self.patterns])
+
+
+class _Negated(CardPattern):
+    def __init__(self, pattern: CardPattern):
+        self.pattern = pattern
+
+    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        return not self.pattern.match(card, gamestate, source)
+
+    def __str__(self):
+        return "not " + str(self.pattern)
+
+
+class Anything(CardPattern):
+    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        return True
+
+    def __str__(self):
+        return ""
+
+
+class Nothing(CardPattern):
+    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        return False
+
+    def __str__(self):
+        return ""
+
+# ----------
 
 class CardType(CardPattern):
     def __init__(self, card_type: type):

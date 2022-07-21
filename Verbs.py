@@ -64,13 +64,12 @@ class Verb:
         """
         # this parent function doesn't DO anything itself. That is for children
         # to overwrite, and then to call this parent function. The parent
-        # function handles two things:
+        # function handles three things:
         #    1) Adding to the super_stack any triggers triggered by the
         #       execution of tthis Verb
         #    2) "Using up" any choices that this Verb needed, so that the list
         #       of choices returned (for later use) is appropriately shortened.
-        # add a note to the GameState's history that this Verb has occurred,
-        # assuming that the GameState is tracking such things.
+        #    3) Adds a note to the gamestate that this verb has occurred
         self.add_self_to_state_history(state, subject, choices)
         # `trigger_source` is source of the trigger. Not to be confused
         # with `source`, which is the source of the Verb which is
@@ -170,6 +169,9 @@ class Verb:
             # if len(choices) > 0:
             #     record += " {%s}" % ", ".join([str(c) for c in choices])
             state.events_since_previous += record
+
+    def __add__(self, other):
+        return ManyVerbs([self, other])
 
 
 # ----------
@@ -550,10 +552,10 @@ class DealDamageToOpponent(Verb):
 
 class Tutor(VerbOnTarget):
     def __init__(self, zone_to_move_to, num_to_find: int,
-                 pattern_list: List[Match.CardPattern]):
-        getter = Get.Chooser(Get.ListFromZone(pattern_list, zone_to_move_to),
+                 pattern: Match.CardPattern):
+        getter = Get.Chooser(Get.ListFromZone(pattern, zone_to_move_to),
                              num_to_find, can_be_fewer=True)
-        verb = ManyVerbs(MoveToZone(zone_to_move_to), Shuffle())
+        verb = ManyVerbs([MoveToZone(zone_to_move_to), Shuffle()])
         super().__init__(getter, verb)
 
 
@@ -576,8 +578,8 @@ class TapSelf(VerbOnSubjectCard):
 
 class TapAny(VerbOnTarget):
 
-    def __init__(self, patterns: List[Match.CardPattern]):
-        getter = Get.Chooser(Get.ListFromZone(patterns, ZONE.FIELD), 1, False)
+    def __init__(self, pattern: Match.CardPattern):
+        getter = Get.Chooser(Get.ListFromZone(pattern, ZONE.FIELD), 1, False)
         super().__init__(getter, TapSelf())
 
 
@@ -844,7 +846,7 @@ class PlayAbility(Verb):
         """
         pay_choices = choices[:self.ability.cost.num_inputs]
         targets = choices[self.ability.cost.num_inputs:]
-        return (self.ability.cost.can_be_done(state, subject, pay_choices)
+        return (self.ability.cost.can_afford(state, subject, pay_choices)
                 and self.ability.effect.can_be_done(state, subject, targets))
 
     def do_it(self, state: GameState, subject: Cardboard, choices: list):
@@ -870,8 +872,9 @@ class PlayAbility(Verb):
         # The casting will chew through all the payment choices, leaving only
         # the target choices in the resulting tuples. Then those tuples are
         # returned as a list of (GameState, Cardboard, choices) tuples.
-        list_of_tuples = self.ability.cost.do_it(copy_of_game, copy_of_spell,
-                                                 copy_of_choices)
+        list_of_tuples = self.ability.cost.pay_cost(copy_of_game,
+                                                    copy_of_spell,
+                                                    copy_of_choices)
         # Build a StackAbility and add it to the stack
         new_tuple_list = []
         for g1, s1, targets in list_of_tuples:
@@ -895,7 +898,7 @@ class PlayAbility(Verb):
     def choose_choices(self, state: GameState, source: Cardboard | None = None,
                        cause: Cardboard | None = None) -> List[list]:
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-        payments = self.ability.cost.choose_choices(state, source, cause)
+        payments = self.ability.cost.get_options(state, source, cause)
         # 601.2c: choose targets and modes
         targets = self.ability.effect.choose_choices(state, source, cause)
         # combine all combinations of these
@@ -1041,7 +1044,7 @@ class PlayCardboard(VerbOnSubjectCard):
          for the given set of choices?"""
         cost = subject.rules_text.cost
         pay_choices = choices[:cost.num_inputs]
-        return cost.can_be_done(state, subject, pay_choices)
+        return cost.can_afford(state, subject, pay_choices)
 
     def do_it(self, state, subject, choices):
         """Puts the `source` card on the stack, including making any
@@ -1063,8 +1066,8 @@ class PlayCardboard(VerbOnSubjectCard):
         # The casting will chew through all the payment choices, leaving only
         # the target choices in the resulting tuples. Then those tuples are
         # returned as a list of (GameState, Cardboard, choices) tuples.
-        list_of_tuples = subject.cost.do_it(copy_of_game, copy_of_spell,
-                                            copy_of_choices)
+        list_of_tuples = subject.cost.pay_cost(copy_of_game, copy_of_spell,
+                                               copy_of_choices)
         # Build a StackCardboard and add it to the stack
         new_tuple_list = []
         for g1, s1, targets in list_of_tuples:
@@ -1094,7 +1097,7 @@ class PlayCardboard(VerbOnSubjectCard):
     def choose_choices(self, state, source=None, cause=None):
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
         # 601.2c: choose targets and modes. only relevant for effects, I think
-        return source.cost.choose_choices(state, source, cause)
+        return source.cost.get_options(state, source, cause)
 
     def mutates(self):
         return False

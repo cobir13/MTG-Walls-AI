@@ -9,6 +9,7 @@ from typing import List, TYPE_CHECKING
 
 import ManaHandler
 import MatchCardPatterns as Match
+import Costs
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -27,7 +28,7 @@ class RulesText:
 
     def __init__(self):
         self.name: str = ""
-        self.cost: Verb = NullVerb()
+        self.cost: Costs.Cost = Costs.Cost()  # no mana or Verb costs
         self.keywords: List[str] = []
         # activated abilities
         self.activated: List[ActivatedAbility] = []  # includes mana abilities
@@ -43,23 +44,16 @@ class RulesText:
 
     @property
     def mana_value(self):
-        mana_verbs = self.cost.get_sub_verbs(PayMana)
-        if len(mana_verbs) == 0:
-            return 0
-        else:
-            return sum([pay_mana.mana_cost.mana_value()
-                        for pay_mana in mana_verbs])
+        return self.cost.mana_value
 
     @property
     def mana_cost(self):
-        mana_verbs = self.cost.get_sub_verbs(PayMana)
-        cost_str = "".join([str(v.mana_cost) for v in mana_verbs])
-        return ManaHandler.ManaCost(cost_str)
+        return self.cost.mana_cost
 
     def add_keywords(self, words: List[str]):
         self.keywords += [w.lower() for w in words]
 
-    def add_activated(self, name: str, cost: Verb, effect: Verb):
+    def add_activated(self, name: str, cost: Costs.Cost, effect: Verb):
         self.activated.append(ActivatedAbility(name, cost, effect))
 
     def add_triggered(self, name: str, trigger: Trigger, effect: Verb):
@@ -104,7 +98,7 @@ class Land(Permanent):
 
     def __init__(self):
         super().__init__()
-        self.cost = PlayLandForTurn()
+        self.cost = Costs.Cost(PlayLandForTurn())
 
 
 # -----------------------------------------------------------------------------
