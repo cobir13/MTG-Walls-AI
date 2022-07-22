@@ -5,6 +5,7 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 
+from typing import List
 import itertools
 # import tkinter.filedialog
 import tkinter as tk
@@ -16,42 +17,47 @@ class AbortChoiceError(Exception):
     pass
 
 
-def choose_exactly_one(options, source_name: str = "Choose from:"):
+def choose_exactly_one(options, source_name: str = "Choose from:") -> list:
     """
-    Given a list of options, return a list of ways to choose exactly one of
-        those options.
-    Either automated (give all possibilities) or user-controlled (give only
-        one possibility).
-    Either way, returns a list of selections. Each selection is a single one
-        of the given options.
-    NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the last element of
-        the tuple will be shown to the user. This allows the code to pass a
-        tuple of (backend info, user-viewable info).
+    Given a list of options, return a list of ways to choose
+        exactly one of those options. If there are no ways
+        (e.g. the options-list is empty) then return [].
+    Either automated (returns all possibilities) or user
+        controlled (returns only one possibility).
+    Either way, returns a list of selections. Each selection
+        is a single one of the given options.
+    NOTE: if each option is a tuple, the entire tuple will
+        be returned as a selection. However, in user
+        controlled mode, only the last element of  the tuple
+        will be shown to the user. This allows the code to
+        pass a tuple of (backend info, user-viewable info).
     """
-    assert (len(options) > 0)
     if AUTOMATION:
         return options
     else:
-        if len(options) == 1:
+        if len(options) == 1 or len(options) == 0:
             return options
         return run_gui_to_select(options, source_name, 1, False)
 
 
-def choose_exactly_n(options, num_to_choose, source_name="Choose from:"):
+def choose_exactly_n(options: list, num_to_choose: int,
+                     source_name="Choose from:") -> List[tuple]:
     """
-    Given a list of options, return a list of ways to choose exactly N of
-        those options.
-    Either automated (give all possibilities, including the empty list) or
-        user-controlled (give only one possibility).
-    Either way, returns a list of selections, each of which is a tuple
-        containing N options from the list.
-    NOTE: it may not be possible to choose N options. For example, you
-        cannot select 5 elements from a list of 3.  In that case, it will
-        return selections of the maximal possible length.
-    NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the last element of
-        the tuple will be shown to the user. This allows the code to pass a
+    Given a list of options, return a list of ways to choose
+        exactly N of those options. If there are no ways
+        (e.g. the options-list is empty) then return [].
+    Either automated (returns all possibilities) or user
+        controlled (returns only one possibility).
+    Either way, returns a list of selections, each of which
+        is a tuple containing N options from the list.
+    NOTE: it may not be possible to choose N options. For
+        example, you cannot select 5 elements from a list of
+        3.  In that case, it will return selections of the
+        maximal possible length.
+    NOTE: if each option is a tuple, the entire tuple will
+        be returned as a selection. However, in user-controlled
+        mode, only the last element of the tuple will be
+        shown to the user. This allows the code to pass a
         tuple of (backend info, user-viewable info).
     """
     if AUTOMATION:
@@ -70,18 +76,23 @@ def choose_exactly_n(options, num_to_choose, source_name="Choose from:"):
     # I should remove duplicates HERE (rather than where Choice gets used    
 
 
-def choose_n_or_fewer(options, num_to_choose, source_name="Choose from:"):
+def choose_n_or_fewer(options: list, num_to_choose: int,
+                      source_name: str = "Choose from:") -> List[tuple]:
     """
-    Given a list of options, return a list of ways to choose up to N of
-        those options.
-    Either automated (give all possibilities, including the empty list) or
-        user-controlled (give only one possibility).
-    Either way, returns a list of selections, each of which is a tuple
-        containing N or fewer options from the list.
-    NOTE: if each option is a tuple, the entire tuple will be returned as a
-        selection. However, in user-controlled mode, only the last element of
-        the tuple will be shown to the user. This allows the code to pass a
-        tuple of (backend info, user-viewable info).
+    Given a list of options, return a list of ways to choose
+        up to N of those options. If there are no ways (e.g.
+        the options-list is empty) then return [].
+    Either automated (give all possibilities, including the
+        empty list) or user-controlled (give only one
+        possibility).
+    Either way, returns a list of selections, each of which
+        is a tuple containing N or fewer options from the
+        list of options.
+    NOTE: if each option is a tuple, the entire tuple will
+        be returned as a selection. However, in user
+        controlled mode, only the last element of the tuple
+        will be shown to the user. This allows the code to
+        pass a tuple of (backend info, user-viewable info).
     """
     if AUTOMATION:
         # get all tuples with N things. Then also all tuples with N-1.

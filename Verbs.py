@@ -259,9 +259,15 @@ class VerbManyTimes(Verb):
     def do_it(self, state: GameState, subject: Cardboard, choices):
         """mutates!"""
         num_to_repeat = choices[0]
-        # build a ManyVerbs containing this verb repeated a bunch, and do that
-        multi_verb = ManyVerbs([self.sub_verbs[0]] * num_to_repeat)
-        return multi_verb.do_it(state, subject, choices[1:])
+        if num_to_repeat == 0:
+            game2, things = state.copy_and_track([subject] + choices[1:])
+            return [(game2, things[0], things[1:])]
+        elif num_to_repeat == 1:
+            return self.sub_verbs[0].do_it(state, subject, choices[1:])
+        else:
+            # do a ManyVerbs containing this verb repeated a bunch of times
+            multi_verb = ManyVerbs([self.sub_verbs[0]] * num_to_repeat)
+            return multi_verb.do_it(state, subject, choices[1:])
 
     def choose_choices(self, state: GameState, source: Cardboard = None,
                        cause=None):

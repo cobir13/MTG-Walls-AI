@@ -32,7 +32,7 @@ class Cardboard:
     def __init__(self, rules_text: RulesText):
         self.rules_text: RulesText = rules_text
         self.tapped: bool = False
-        self.summon_sick: bool = True
+        self.summon_sick: bool = True  # Has been in play since upkeep? No.
         self.counters: List[
             str] = []  # sorted list of counters. Also other trackers
         self.zone = ZONE.NEW

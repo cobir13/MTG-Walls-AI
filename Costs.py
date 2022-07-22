@@ -67,6 +67,11 @@ class Cost:
         return self._get_multi_verb().choose_choices(state, source, cause)
 
     def __str__(self):
-        return str(self.mana_cost) + "+" + str(self._get_multi_verb())
-
-
+        if self.mana_cost is not None and len(self.additional) > 0:
+            return str(self.mana_cost) + "+" + str(self._get_multi_verb())
+        elif self.mana_cost is not None:
+            return str(self.mana_cost)
+        elif len(self.additional) > 0:
+            return str(self._get_multi_verb())
+        else:  # both are None, essentially
+            return "0"
