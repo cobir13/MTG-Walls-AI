@@ -351,7 +351,11 @@ class VerbOnSplitList(Verb):
 
     def choose_choices(self, state: GameState, source: Cardboard = None,
                        cause=None):
-        return self.chooser.get(state, source)
+        list_of_chosen_tuples = self.chooser.get(state, source)
+        # I need to return a list of lists. Each sublist has one element: a
+        # tuple of the chosen cards. Right now I have a list of tuples, not
+        # a list of lists of tuples.
+        return [[tup] for tup in list_of_chosen_tuples]
 
 
 # ----------

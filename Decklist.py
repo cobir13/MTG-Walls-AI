@@ -4,6 +4,7 @@ Created on Tue Dec 29 11:50:12 2020
 
 @author: Cobi
 """
+import RulesText
 from RulesText import Creature, Land, Instant, TapSymbol  # , Sorcery
 import ZONE
 import MatchCardPatterns as Match
@@ -148,7 +149,7 @@ class Arcades(Creature):
 
 
 class Company(Instant):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
         self.name = "CollectedCompany"
         self.cost = Cost("3G")
@@ -161,8 +162,11 @@ class Company(Instant):
             chooser=Get.Chooser(getter=get_from,
                                 num_to_choose=2,
                                 can_be_fewer=True)
-        )
+            )
 
+
+# coco = Company()
+# assert coco.cost.mana_cost is not None
 
 # =============================================================================
 

@@ -100,7 +100,7 @@ class Land(Permanent):
         self.cost = Costs.Cost(PlayLandForTurn())
 
 
-# -----------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 
 class Spell(RulesText):
     caster_verb: PlayCardboard = PlaySpellWithEffect()
@@ -123,11 +123,16 @@ class Spell(RulesText):
 
 
 class Instant(Spell):
-    pass
+    def __init__(self):
+        super().__init__()
 
 
 class Sorcery(Spell):
-    pass
+    def __init__(self):
+        super().__init__()
+
+
+# ---------------------------------------------------------------------------
 
 
 class TapSymbol(TapSelf):

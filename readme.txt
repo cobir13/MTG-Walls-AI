@@ -1,21 +1,4 @@
 
-Notes comparing this program to the real Magic:The Gathering rules:
-    - cannot activate mana abilities WHILE casting a spell. (must pre-float
-        all mana to pay for the spell)
-    - "Gold" mana that can be used to pay for any colored cost, to simplify
-        choices during goldfish games.
-    - fetchlands are deliberately templated as an enter-the-battlefield
-        effect rather than as an activated ability, to simplify choices
-        during goldfish games.
-    - All targets are chosen at cast-time. Nothing is chosen on resolution.
-    - There is no difference between "choosing" a target and "targeting" one.
-
-Notes on actually-correct things:
-    - "casting" a land doesn't use the stack
-    - mana abilities don't use the stack
-    - "as-enters" triggers don't use the stack
-
-
 
 Cards are represented by two things:
     1)  A Cardboard object, which describes the physical state of the card.
@@ -50,3 +33,39 @@ artifacts in play, finding the power of a creature. This centralizes all
 information-gathering so that other abilities can easily modify the effective
 values without disturbing the text printed on the cards, so to speak.
 
+-------------------------------------------------------------------------------
+
+Notes comparing this program to the real Magic:The Gathering rules:
+    - cannot activate mana abilities WHILE casting a spell. (must pre-float
+        all mana to pay for the spell)
+    - "Gold" mana that can be used to pay for any colored cost, to simplify
+        choices during goldfish games.
+    - fetchlands are deliberately templated as an enter-the-battlefield
+        effect rather than as an activated ability, to simplify choices
+        during goldfish games.
+    - All targets are chosen at cast-time. Nothing is chosen on resolution.
+    - There is no difference between "choosing" a target and "targeting" one.
+
+Notes on actually-correct things:
+    - "casting" a land doesn't use the stack
+    - mana abilities don't use the stack
+    - "as-enters" triggers don't use the stack
+
+-------------------------------------------------------------------------------
+
+Notes for future improvements or speedups:
+    - Maintain list of all currently-triggerable abilities within the
+        GameState and update whenever a card is moved. Saves on checking
+        through all cards every time a Verb is performed.
+    - Make a Player class and distinguish Players from GameStates. A game can
+        have many players but only one stack, etc. I can then write different
+        "brain" modules for different players -- manual user control, choose
+        first option every time, goldfish always passes, try all possible
+        as a giant tree, etc.
+    - Some sort of 'animate' or 'change form' Verb which creates a new
+        RulesText and swaps the Cardboard's pointer to point at the new
+        RulesText. This effectively turns the Cardboard into the new thing.
+        The new thing will have a pointer back to the original so that it can
+        revert at end of turn, and an end-of-turn trigger to revert it. Make
+        sure reversion is recursive in case something is animated twice!
+    - GameState needs a zone to hold delayed triggers?

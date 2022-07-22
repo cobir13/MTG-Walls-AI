@@ -7,6 +7,7 @@ Created on Tue Dec 29 22:15:57 2020
 from __future__ import annotations
 from typing import Tuple, List
 
+import RulesText
 from Abilities import ActivatedAbility
 import ZONE
 from GameState import GameState
@@ -768,129 +769,137 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
-    # print("Testing Collected Company and simultaneous ETBs")
-    # start_clock = time.perf_counter()
-    #
-    # game = GameState()
-    # # deck of 6 cards
-    # game.MoveZone(Cardboard(Decklist.Caretaker), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Caretaker), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Axebane), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Battlement), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # # put Collected Company directly onto the stack
-    # game.MoveZone(Cardboard(Decklist.Company()), ZONE.STACK)
-    # assert (len(game.super_stack) == 0)
-    #
-    # # resolve Collected Company
-    # universes = game.resolve_top_of_stack()
-    # assert (len(universes) == 4)
-    # for u in universes:
-    #     assert (len(u.deck) == 4)
-    #     assert (len(u.field) == 2)
-    #     assert (len(u.grave) == 1)
-    #     if any([c.rules_text == Decklist.Axebane for c in u.field]):
-    #         assert (
-    #             not any([c.rules_text == Decklist.Axebane for c in u.deck]))
-    #     if any([c.rules_text == Decklist.Battlement for c in u.field]):
-    #         assert (not any(
-    #             [c.rules_text == Decklist.Battlement for c in u.deck]))
-    #     assert (not any(["land" in c.rules_text.keywords for c in u.field]))
-    #
-    # # deck of 6 forests on top, then 10 islands
-    # gameF = GameState()
-    # for _ in range(6):
-    #     gameF.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # for _ in range(10):
-    #     gameF.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
-    # # should be forests on top
-    # assert (all([c.rules_text == Decklist.Forest for c in gameF.deck[:6]]))
-    # gameF.MoveZone(Cardboard(Decklist.Company()), ZONE.STACK)
-    # universes = gameF.resolve_top_of_stack()
-    # assert (len(universes) == 1)
-    # u = universes[0]
-    # # now should be islands on top, forests on bottom
-    # assert (all([c.rules_text == Decklist.Island for c in u.deck[:10]]))
-    # assert (all([c.rules_text == Decklist.Forest for c in u.deck[-6:]]))
-    # assert (len(u.field) == 0)
-    # assert (len(u.grave) == 1)
-    #
-    # # deck of 5 forests on top, one Caretaker, then 10 islands
-    # game1 = GameState()
-    # for _ in range(5):
-    #     game1.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game1.MoveZone(Cardboard(Decklist.Caretaker), ZONE.DECK)
-    # for _ in range(10):
-    #     game1.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
-    # assert (len(game1.deck) == 16)
-    # game1.MoveZone(Cardboard(Decklist.Company()), ZONE.STACK)
-    # universes = game1.resolve_top_of_stack()
-    # assert (len(universes) == 1)
-    # u = universes[0]
-    # # now should be islands on top, forests on bottom
-    # assert (all([c.rules_text == Decklist.Island for c in u.deck[:10]]))
-    # assert (all([c.rules_text == Decklist.Forest for c in u.deck[-5:]]))
-    # assert (u.deck[-6].rules_text == Decklist.Island())
-    # assert (len(u.field) == 1)
-    # assert (len(u.grave) == 1)
-    #
-    # # deck of only 4 cards total, all Caretakers
-    # game4 = GameState()
-    # for _ in range(4):
-    #     game4.MoveZone(Cardboard(Decklist.Caretaker), ZONE.DECK)
-    # # should be forests on top
-    # assert (len(game4.deck) == 4)
-    # game4.MoveZone(Cardboard(Decklist.Company()), ZONE.STACK)
-    # universes = game4.resolve_top_of_stack()
-    # assert (len(universes) == 1)
-    # u = universes[0]
-    # assert (len(u.deck) == 2)
-    # assert (len(u.field) == 2)
-    # assert (len(u.grave) == 1)
-    #
-    # # Does Blossoms trigger correctly? start with 12 cards in deck
-    # game = GameState()
-    # game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Omens()), ZONE.DECK)
-    # for _ in range(10):
-    #     game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # # put Collected Company directly onto the stack
-    # game.MoveZone(Cardboard(Decklist.Company()), ZONE.STACK)
-    # universes = game.resolve_top_of_stack()
-    # assert len(universes) == 2  # two draws could be on stack in either order
-    # u0, u1 = universes
-    # assert (u0 != u1)
-    # while len(u0.stack) > 0:
-    #     [u0] = u0.resolve_top_of_stack()
-    # while len(u1.stack) > 0:
-    #     [u1] = u1.resolve_top_of_stack()
-    # assert (u0 == u1)
-    # assert (len(u0.hand) == 2 and len(u0.deck) == 8)
-    #
-    # # Note: if I put two identical Blossoms into play simultaneously, I STILL
-    # # will get two GameStates even though they are identical! And that's ok.
-    # # it's not worth the effort to optimize this out, right now.
-    # game = GameState()
-    # game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # for _ in range(10):
-    #     game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # # put Collected Company directly onto the stack
-    # game.MoveZone(Cardboard(Decklist.Company()), ZONE.STACK)
-    # universes = game.resolve_top_of_stack()
-    # assert len(universes) == 2  # two draws could be on stack in either order
-    # u0, u1 = universes
-    # assert (u0 == u1)
-    # while len(u0.stack) > 0:
-    #     [u0] = u0.resolve_top_of_stack()
-    # while len(u1.stack) > 0:
-    #     [u1] = u1.resolve_top_of_stack()
-    # assert (u0 == u1)
-    # assert (len(u0.hand) == 2 and len(u0.deck) == 8)
-    #
-    # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
-    #
-    # # -----------------------------------------------------------------------
+    print("Testing Collected Company and simultaneous ETBs")
+    start_clock = time.perf_counter()
+
+    def cast_and_resolve_company(state):
+        # cast Collected Company
+        state.pool.add_mana("GGGG")
+        state.MoveZone(Cardboard(Decklist.Company()), ZONE.HAND)
+        castables = state.get_valid_castables()
+        print(castables)
+        assert len(castables) == 1
+        assert castables[0][1] == []  # no choices to be made, yet
+        [on_stack] = castables[0][0].cast(state, castables[0][1])
+        print(castables)
+        print(on_stack)
+        assert len(on_stack.super_stack) == 0
+        return on_stack.resolve_top_of_stack()
+
+    game = GameState()
+    # deck of 6 cards
+    game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Axebane()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Battlement()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game)
+    assert (len(universes) == 4)
+    for u in universes:
+        assert len(u.deck) == 4
+        assert len(u.field) == 2
+        assert len(u.grave) == 1
+        if any([c.has_type(Decklist.Axebane) for c in u.field]):
+            assert (
+                not any([c.has_type(Decklist.Axebane) for c in u.deck]))
+        if any([c.has_type(Decklist.Battlement) for c in u.field]):
+            assert (not any(
+                [c.has_type(Decklist.Battlement) for c in u.deck]))
+        assert (not any([c.has_type(RulesText.Land) for c in u.field]))
+
+    # deck of 6 forests on top, then 10 islands
+    gameF = GameState()
+    for _ in range(6):
+        gameF.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    for _ in range(10):
+        gameF.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+    # should be forests on top
+    assert all([c.has_type(Decklist.Forest) for c in gameF.deck[:6]])
+    # cast Collected Company
+    universes = cast_and_resolve_company(gameF)
+    assert len(universes) == 1
+    u = universes[0]
+    # now should be islands on top, forests on bottom
+    assert all([c.has_type(Decklist.Island) for c in u.deck[:10]])
+    assert all([c.has_type(Decklist.Forest) for c in u.deck[-6:]])
+    assert len(u.field) == 0
+    assert len(u.grave) == 1
+
+    # deck of 5 forests on top, one Caretaker, then 10 islands
+    game1 = GameState()
+    for _ in range(5):
+        game1.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    game1.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    for _ in range(10):
+        game1.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+    assert (len(game1.deck) == 16)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game1)
+    assert (len(universes) == 1)
+    u = universes[0]
+    # now should be islands on top, forests on bottom
+    assert all([c.has_type(Decklist.Island) for c in u.deck[:10]])
+    assert all([c.has_type(Decklist.Forest) for c in u.deck[-5:]])
+    assert u.deck[-6].has_type(Decklist.Island)
+    assert len(u.field) == 1
+    assert len(u.grave) == 1
+
+    # deck of only 4 cards total, all Caretakers
+    game4 = GameState()
+    for _ in range(4):
+        game4.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    # should be forests on top
+    assert (len(game4.deck) == 4)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game4)
+    assert (len(universes) == 1)
+    u = universes[0]
+    assert (len(u.deck) == 2)
+    assert (len(u.field) == 2)
+    assert (len(u.grave) == 1)
+
+    # Does Blossoms trigger correctly? start with 12 cards in deck
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Omens()), ZONE.DECK)
+    for _ in range(10):
+        game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game)
+    assert len(universes) == 2  # two draws could be on stack in either order
+    u0, u1 = universes
+    assert (u0 != u1)
+    while len(u0.stack) > 0:
+        [u0] = u0.resolve_top_of_stack()
+    while len(u1.stack) > 0:
+        [u1] = u1.resolve_top_of_stack()
+    assert u0 == u1
+    assert len(u0.hand) == 2 and len(u0.deck) == 8
+
+    # Note: if I put two identical Blossoms into play simultaneously, I STILL
+    # will get two GameStates even though they are identical! And that's ok.
+    # it's not worth the effort to optimize this out, right now.
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    for _ in range(10):
+        game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game)
+    assert len(universes) == 2  # two draws could be on stack in either order
+    u0, u1 = universes
+    assert (u0 == u1)
+    while len(u0.stack) > 0:
+        [u0] = u0.resolve_top_of_stack()
+    while len(u1.stack) > 0:
+        [u1] = u1.resolve_top_of_stack()
+    assert (u0 == u1)
+    assert (len(u0.hand) == 2 and len(u0.deck) == 8)
+
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+
+    # -----------------------------------------------------------------------
 
     print("\n\npasses all tests!")
