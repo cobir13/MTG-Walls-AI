@@ -399,6 +399,33 @@ if __name__ == "__main__":
     assert collector == {(19, "G"), (19, "U"), (19, ""), (17, "U"), (17, "G"),
                          (17, "W")}
 
+    # what about a fetch with no valid targets
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Roots()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Swamp()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.WindsweptHeath()), ZONE.HAND)
+    tree = PlayTree([game], 2)
+    tree.main_phase_for_all_active_states()
+    assert len(tree.get_states_no_options()) == 1
+    result = tree.get_states_no_options()[0]
+    assert result.life == 19
+    assert len(result.deck) == 3
+    assert len(result.hand) == 0
+    assert len(result.grave) == 1
+
+    # what about no deck at all?
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.WindsweptHeath()), ZONE.HAND)
+    tree = PlayTree([game], 2)
+    tree.main_phase_for_all_active_states()
+    assert len(tree.get_states_no_options()) == 1
+    result = tree.get_states_no_options()[0]
+    assert result.life == 19
+    assert len(result.deck) == 0
+    assert len(result.hand) == 0
+    assert len(result.grave) == 1
+    
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
