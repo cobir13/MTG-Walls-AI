@@ -7,6 +7,8 @@ Notes comparing this program to the real Magic:The Gathering rules:
     - fetchlands are deliberately templated as an enter-the-battlefield
         effect rather than as an activated ability, to simplify choices
         during goldfish games.
+    - All targets are chosen at cast-time. Nothing is chosen on resolution.
+    - There is no difference between "choosing" a target and "targeting" one.
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack

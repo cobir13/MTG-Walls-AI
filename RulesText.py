@@ -7,7 +7,6 @@ Created on Mon Dec 28 21:13:28 2020
 from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
-import ManaHandler
 import MatchCardPatterns as Match
 import Costs
 
@@ -16,7 +15,7 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
 
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger
-from Verbs import PlayLandForTurn, PayMana, NullVerb, TapSelf, Verb, \
+from Verbs import PlayLandForTurn, NullVerb, TapSelf, Verb, \
     PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent
 import ZONE
 

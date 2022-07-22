@@ -43,7 +43,7 @@ class Verb:
         # left to do is to check if all of the sub-verbs can be done.
         # subclasses will implement whether they can be done or not, and
         # then call this to handle the sub-verbs.
-        i_start = self.num_inputs
+        i_start = 0  # self.num_inputs
         for v in self.sub_verbs:
             i_end = i_start + v.num_inputs
             if i_end > len(choices):
@@ -66,7 +66,7 @@ class Verb:
         # to overwrite, and then to call this parent function. The parent
         # function handles three things:
         #    1) Adding to the super_stack any triggers triggered by the
-        #       execution of tthis Verb
+        #       execution of this Verb
         #    2) "Using up" any choices that this Verb needed, so that the list
         #       of choices returned (for later use) is appropriately shortened.
         #    3) Adds a note to the gamestate that this verb has occurred
@@ -190,16 +190,11 @@ class ManyVerbs(Verb):
               choices: list) -> List[Tuple[GameState, Cardboard, list]]:
         tuple_list = [(state, subject, choices)]
         for v in self.sub_verbs:
-            # if verb allowed to mutate, mutate gamestates in place
-            if v.mutates:
-                for g, c, ch in tuple_list:
-                    v.do_it(g, c, ch)
-            # if verb returns new list, use that to overwrite tuple_list
-            else:
-                new_tuple_list = []
-                for g, c, ch in tuple_list:
-                    new_tuple_list += v.do_it(g, c, ch)
-                tuple_list = new_tuple_list
+            # TODO some sort of optimization for mutates vs non-mutates?
+            new_tuple_list = []
+            for g, c, ch in tuple_list:
+                new_tuple_list += v.do_it(g, c, ch)
+            tuple_list = new_tuple_list
         # The do_it functions of each Verb will handle triggers for those
         # sub-verbs. no need to call super().do_it because nothing triggers.
         # Similarly, ManyVerbs itself has no getters, so there is no need to
@@ -373,22 +368,55 @@ class VerbOnTarget(Verb):
     VerbOnSubjectCard to the chosen Cardboard rather than to
     the `subject` cardboard.
     The target is chosen by the usual choose_choices parent
-    function, so that it is the first argument of `choices`
-    passed into the can_be_done and do_it functions.
+    function, so that it is the first element of `choices`
+    passed into the can_be_done and do_it functions. Even
+    more accurately, the first element of `choices` is a
+    tuple of length 1 containing the single target that this
+    verb will be applied to.
     """
 
     def __init__(self, cardboard_getter: Get.Getter, verb: VerbOnSubjectCard):
         super().__init__()
         self.getter_list = [cardboard_getter]
         self.sub_verbs = [verb]
+        self.allowed_to_fail = (hasattr(cardboard_getter, "can_be_less")
+                                and cardboard_getter.can_be_less)
 
     def can_be_done(self, state: GameState, subject: Cardboard,
                     choices: list) -> bool:
-        return (len(choices) >= 1
-                and super().can_be_done(state, choices[0], choices))
+        """Expects the first element of `choices` to be the
+        Cardboard that the Verb should be applied to.
+        Some choosers are permitted to fail to choose. If
+        this chooser is one of those, then the first element
+        of `choices` is also allowed to be empty. The Verb
+        will not be applied to anything, but this is ok."""
+        if len(choices) == 0:  # has no first element
+            return False
+        if len(choices[0]) == 1:  # first element contains target
+            return (self.sub_verbs[0].num_inputs >= len(choices) - 1
+                    and self.sub_verbs[0].can_be_done(state, choices[0][0],
+                                                      choices[1:]))
+        elif len(choices[0]) == 0:
+            return True  # chooser failed to find a targer, which is ok
+        else:
+            raise ValueError("wrong number of targets!")
 
     def do_it(self, state: GameState, subject: Cardboard, choices: list):
-        return self.sub_verbs[0].do_it(state, choices[0], choices[1:])
+        """
+        Some choosers are permitted to fail to choose. If
+        this chooser is one of those, then the first element
+        of `choices` is also allowed to be empty. The Verb
+        will not be applied to anything, but this is ok.
+        """
+        if len(choices[0]) == 1:  # first element contains target
+            return self.sub_verbs[0].do_it(state, choices[0][0], choices[1:])
+        elif len(choices[0]) == 0:
+            # chooser failed to find a targer, which is ok
+            if self.mutates:
+                return [(state, subject, choices[1:])]
+            else:
+                state2, things = state.copy_and_track([subject] + choices[1:])
+                return [(state2, things[0], things[1:])]
 
 
 class VerbOnCause(Verb):
@@ -553,7 +581,7 @@ class DealDamageToOpponent(Verb):
 class Tutor(VerbOnTarget):
     def __init__(self, zone_to_move_to, num_to_find: int,
                  pattern: Match.CardPattern):
-        getter = Get.Chooser(Get.ListFromZone(pattern, zone_to_move_to),
+        getter = Get.Chooser(Get.ListFromZone(pattern, ZONE.DECK),
                              num_to_find, can_be_fewer=True)
         verb = ManyVerbs([MoveToZone(zone_to_move_to), Shuffle()])
         super().__init__(getter, verb)
@@ -977,7 +1005,9 @@ class AddTriggeredAbility(Verb):
         # new copy of the game
         game2, things = state.copy_and_track([subject] + choices)
         spell2 = things[0]
-        choices2 = things[1:]  # [cause: Cardboard] + choices: list
+        # things is [cause: Cardboard] + choices: list. but no longer need
+        # the cause anymore!
+        choices2 = things[2:]
         # Build a StackTrigger and add to stack. Subclasses may execute instead
         tuple_list = self._add_to_stack(game2, spell2, choices2)
         # trigger abilities that trigger off of this trigger itself
@@ -990,10 +1020,11 @@ class AddTriggeredAbility(Verb):
     def _add_to_stack(self, game: GameState, source: Cardboard, choices: list
                       ) -> List[Tuple[GameState, Cardboard, list]]:
         """Mutates the given gamestate by creating a StackAbility
-        and adding it to the stack. First element of choices must
-        be the `cause` that triggered the ability."""
-        assert len(choices) >= 1
-        game.stack.append(Stack.StackTrigger(self.ability, source, choices))
+        and adding it to the stack. First element of choices is
+        NO LONGER the `cause` that triggered the ability, that
+        has already been stripped out. The choices list here
+        should just be the choices needed to execute the effect."""
+        game.stack.append(Stack.StackAbility(self.ability, source, choices))
         return [(game, source, choices)]
 
     def choose_choices(self, state: GameState, source: Cardboard = None,
@@ -1025,10 +1056,11 @@ class AddAsEntersAbility(AddTriggeredAbility):
         """As-enter effects don't use the stack. So, instead of
         creating a StackTrigger and adding it to the stack,
         simply MUTATE the gamestate to carry out the effect.
-        First element of choices must be the `cause` that
-        triggered the ability."""
-        # ignore first element. it is only needed for making StackTrigger
-        return self.ability.effect.do_it(game, source, targets[1:])
+        First element of choices is NO LONGER the `cause` that
+        triggered the ability, that has already been stripped
+        out. The choices list here should just be the choices
+        needed to execute the effect."""
+        return self.ability.effect.do_it(game, source, targets)
 
 
 # ----------

@@ -11,11 +11,13 @@ from typing import List, TYPE_CHECKING
 import Verbs
 import Costs
 import ZONE
+import MatchCardPatterns as Match
 
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
-    import MatchCardPatterns as Match
+
+# ---------------------------------------------------------------------------
 
 
 class Trigger:
@@ -68,8 +70,12 @@ class TriggerOnSelfEnter(TriggerOnMove):
     def __init__(self):
         super().__init__(Match.IsSelf(), None, ZONE.FIELD)
 
+    def __str__(self):
+        return "Self ETB"
+
 
 # ----------
+
 class AsEnterEffect(TriggerOnMove):
     """A specific subcategory of TriggerOnMove.  This is an
     enters-the-battlefield effect except more so: triggered abilities of this

@@ -1,12 +1,11 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility
     from Cardboard import Cardboard
     from Verbs import Verb
     from Costs import Cost
-    from GameState import GameState
 
 
 class StackObject:

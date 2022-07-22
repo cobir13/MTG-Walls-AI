@@ -5,7 +5,7 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Tuple
+from typing import List, Tuple
 # if TYPE_CHECKING:
 #     from Abilities import ActivatedAbility
 
@@ -13,7 +13,7 @@ from Cardboard import Cardboard, CardNull  # actually needs
 import Getters as Get  # actually needs
 import ZONE
 from ManaHandler import ManaPool
-from Stack import StackAbility, StackObject, StackTrigger
+from Stack import StackAbility, StackCardboard, StackTrigger, StackObject
 from Verbs import MoveToZone, DrawCard, UntapSelf
 import Choices
 from Abilities import ActivatedAbility
@@ -43,12 +43,12 @@ class GameState:
         self.hand: List[Cardboard] = []  # list of Cardboard objects
         self.field: List[Cardboard] = []  # list of Cardboard objects
         self.grave: List[Cardboard] = []  # list of Cardboard objects
-        self.stack: List[StackObject] = []
+        self.stack: List[StackCardboard | StackAbility] = []
         self.pool: ManaPool = ManaPool("")
         # super_stack is a list of StackObject waiting to be put onto
         # the real stack. NOTHING CAN BE EXECUTED WHILE STUFF IS ON
         # THE SUPERSTACK (incl state-based)
-        self.super_stack: List[StackObject] = []
+        self.super_stack: List[StackTrigger] = []
         self.turn_count: int = 1
         self.is_my_turn: bool = True
         self.life: int = 20
@@ -198,7 +198,7 @@ class GameState:
 
     @staticmethod
     def copy_stack_object(state_orig: GameState, state_new: GameState,
-                          obj: StackObject) -> StackObject:
+                          obj: StackObject):
         """This function assumes that everything except the
         stack and superstack have already been copied
         correctly. In other words, all Cardboards have
@@ -366,7 +366,7 @@ class GameState:
             self.events_since_previous += "\nUpkeep step"
         for cardboard in self.hand + self.field + self.grave:
             for ability in cardboard.rules_text.trig_upkeep:
-                new_effect = StackAbility(ability, cardboard, [])
+                new_effect = StackTrigger(ability, cardboard, [])
                 self.super_stack.append(new_effect)
 
     def step_draw(self):
@@ -438,6 +438,11 @@ class GameState:
             for choices in ability.get_target_options(new_state, card, cause):
                 if ability.can_be_added(new_state, card, choices):
                     results += ability.add_to_stack(new_state, card, choices)
+                else:
+                    # If can't resolve ability, still remove it from the stack.
+                    # For example, invalid target still removes the trigger
+                    # from the super_stack.
+                    results += [new_state.copy()]
         # recurse
         final_results = []
         for state in results:

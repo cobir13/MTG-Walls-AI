@@ -262,7 +262,7 @@ class WindsweptHeath(Land):
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
                            Verbs.LoseOwnLife(1) + Verbs.Sacrifice()
-                           + Verbs.Tutor(ZONE.HAND, 1,
+                           + Verbs.Tutor(ZONE.FIELD, 1,
                                          Match.CardType(Forest)
                                          | Match.CardType(Plains))
                            )
@@ -277,7 +277,7 @@ class MistyRainforest(Land):
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
                            Verbs.LoseOwnLife(1) + Verbs.Sacrifice()
-                           + Verbs.Tutor(ZONE.HAND, 1,
+                           + Verbs.Tutor(ZONE.FIELD, 1,
                                          Match.CardType(Forest)
                                          | Match.CardType(Island))
                            )
@@ -292,7 +292,7 @@ class FloodedStrand(Land):
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
                            Verbs.LoseOwnLife(1) + Verbs.Sacrifice()
-                           + Verbs.Tutor(ZONE.HAND, 1,
+                           + Verbs.Tutor(ZONE.FIELD, 1,
                                          Match.CardType(Island)
                                          | Match.CardType(Plains))
                            )

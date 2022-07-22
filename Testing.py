@@ -17,6 +17,7 @@ from PlayTree import PlayTree
 import Verbs
 import Stack
 import Costs
+import MatchCardPatterns as Match
 import time
 
 if __name__ == "__main__":
@@ -320,9 +321,10 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
-    print("Testing basic lands, shock-lands...")
+    print("Testing basic lands, shock-lands, fetch-lands...")
     start_clock = time.perf_counter()
 
+    # put some basics in hand, make sure they're playable and produce mana
     game = GameState()
     game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
     game.MoveZone(Cardboard(Decklist.Plains()), ZONE.HAND)
@@ -342,6 +344,7 @@ if __name__ == "__main__":
     assert collector == {("Forest", "G"), ("Plains", "W"), ("Island", "U"),
                          ("Swamp", "B"), ("Mountain", "R")}
 
+    # test a shock land the same way
     game = GameState()
     game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
     game.MoveZone(Cardboard(Decklist.HallowedFountain()), ZONE.HAND)
@@ -357,6 +360,44 @@ if __name__ == "__main__":
         assert len(g.hand) == 1
         assert g.field[0].tapped
     assert collector == {(20, "G"), (20, ""), (18, "U"), (18, "W")}
+
+    # test a fetch land with many valid targets
+    game = GameState()
+    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Plains()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.Swamp()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.HallowedFountain()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.BreedingPool()), ZONE.DECK)
+    game.MoveZone(Cardboard(Decklist.MistyRainforest()), ZONE.HAND)
+    assert len(game.get_valid_activations()) == 0
+    assert len(game.get_valid_castables()) == 1  # only option is play fetch
+    matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
+    assert len([c for c in game.deck if matcher.match(c, game, c)]) == 5
+
+    tree = PlayTree([game], 2)
+    tree.main_phase_for_all_active_states()
+    # 4 distinct fetchables, but each shock give 3 options (2 colors + tapped).
+    # Can also fail to find.
+    assert len(tree.get_states_no_options()) == 9
+    collector = set()
+    ticker = 0
+    for g in tree.get_states_no_options():
+        collector.add((g.life, str(g.pool)))
+        assert len(g.hand) == 0
+        assert g.grave[0].has_type(Decklist.MistyRainforest)
+        assert any([c.name == "Swamp" for c in g.deck])  # never took swamp
+        if len(g.field) == 0:
+            ticker += 1
+            assert len(g.deck) == 7
+        else:
+            assert len(g.deck) == 6
+            assert g.field[0].tapped
+    # 2 ways to have (19,"") and (17,"G")
+    assert ticker == 1
+    assert collector == {(19, "G"), (19, "U"), (19, ""), (17, "U"), (17, "G"),
+                         (17, "W")}
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
