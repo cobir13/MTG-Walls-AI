@@ -58,12 +58,24 @@ class TriggerOnMove(Trigger):
                 )
 
 
-class NullTrigger(Trigger):
+class NeverTrigger(Trigger):
     def __init__(self):
         super().__init__(Verbs.NullVerb, Match.Nothing())
 
     def __str__(self):
         return ""
+
+
+class AlwaysTrigger(Trigger):
+    def __init__(self):
+        super().__init__(Verbs.NullVerb, Match.Nothing())
+
+    def __str__(self):
+        return ""
+
+    def is_triggered(self, verb: Verbs.Verb, state: GameState,
+                     source: Cardboard, trigger_card: Cardboard):
+        return True
 
 
 class TriggerOnSelfEnter(TriggerOnMove):

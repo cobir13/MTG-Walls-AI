@@ -14,9 +14,11 @@ if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
 
-from Abilities import ActivatedAbility, TriggeredAbility, Trigger
+from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
+    AlwaysTrigger
 from Verbs import PlayLandForTurn, NullVerb, TapSelf, Verb, \
-    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent
+    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent, \
+    VerbOnSubjectCard
 import ZONE
 
 
@@ -147,3 +149,60 @@ class TapSymbol(TapSelf):
 
     def __str__(self):
         return "{T}"
+
+
+# ----------
+
+class Revert(VerbOnSubjectCard):
+    def can_be_done(self, state: GameState, subject: Cardboard,
+                    choices: list) -> bool:
+        return True
+
+    def do_it(self, state, subject, choices):
+        while hasattr(subject.rules_text, "former"):
+            subject.rules_text = subject.rules_text.former
+        return [(state, subject, choices)]
+
+    @property
+    def mutates(self):
+        return True
+
+
+class Animate(VerbOnSubjectCard):
+    def __init__(self, creature_type: Creature):
+        super().__init__()
+        self.creature_type = creature_type
+
+    def can_be_done(self, state: GameState, subject: Cardboard,
+                    choices: list) -> bool:
+        return subject.zone == ZONE.FIELD
+
+    def do_it(self, state, subject, choices):
+        # make the new RulesText
+        rules = self.creature_type.__init__()
+        # overwrite the name
+        rules.name = subject.name
+        # add the previous keywords and abilities in addition to the new ones
+        rules.keywords += subject.rules_text.keywords
+        rules.activated += subject.rules_text.activated
+        rules.trig_verb += subject.rules_text.trig_verb
+        rules.trig_upkeep += subject.rules_text.trig_upkeep
+        rules.trig_attack += subject.rules_text.trig_attack
+        rules.trig_endstep += subject.rules_text.trig_endstep
+        # add a "revert at end of turn" ability
+        rules.former = subject.rules_text
+        rules.trig_endstep.append(TriggeredAbility("revert " + subject.name,
+                                                   AlwaysTrigger(), Revert))
+        # overwrite with new RulesText
+        subject.rules_text = rules
+        return [(state, subject, choices)]
+
+    @property
+    def mutates(self):
+        return True
+
+
+
+
+
+
