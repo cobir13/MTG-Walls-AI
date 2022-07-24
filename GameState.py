@@ -14,7 +14,7 @@ import Getters as Get  # actually needs
 import ZONE
 from ManaHandler import ManaPool
 from Stack import StackAbility, StackCardboard, StackTrigger, StackObject
-from Verbs import MoveToZone, DrawCard, UntapSelf
+from Verbs import MoveToZone, DrawCard, Untap
 import Choices
 from Abilities import ActivatedAbility
 
@@ -299,7 +299,7 @@ class GameState:
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
-            UntapSelf().do_it(self, card, [])
+            Untap().do_it(self, card, [])
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
     # from RulesText import RulesText
     from GameState import GameState
+    from Verbs import SOURCE
 import Getters as Get
 
 
@@ -20,7 +21,8 @@ import Getters as Get
 
 
 class CardPattern:
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         """Returns whether the card matches the pattern during
         the given GameState and source (thing asking about match)."""
         raise Exception
@@ -44,7 +46,8 @@ class _AnyOf(CardPattern):
     def __init__(self, patterns: List[CardPattern]):
         self.patterns = patterns
 
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return any([p.match(card, gamestate, source) for p in self.patterns])
 
     def __str__(self):
@@ -57,7 +60,8 @@ class _AllOf(CardPattern):
     def __init__(self, patterns: List[CardPattern]):
         self.patterns = patterns
 
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return all([p.match(card, gamestate, source) for p in self.patterns])
 
     def __str__(self):
@@ -68,7 +72,8 @@ class _Negated(CardPattern):
     def __init__(self, pattern: CardPattern):
         self.pattern = pattern
 
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return not self.pattern.match(card, gamestate, source)
 
     def __str__(self):
@@ -76,7 +81,8 @@ class _Negated(CardPattern):
 
 
 class Anything(CardPattern):
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return True
 
     def __str__(self):
@@ -84,7 +90,8 @@ class Anything(CardPattern):
 
 
 class Nothing(CardPattern):
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return False
 
     def __str__(self):
@@ -94,7 +101,8 @@ class Nothing(CardPattern):
 
 
 class YouControl(CardPattern):
-    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return card.controller_index == source.controller_index
 
 
@@ -102,7 +110,8 @@ class CardType(CardPattern):
     def __init__(self, card_type: type):
         self.type_to_match: type = card_type
 
-    def match(self, card, gamestate, source):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return card.has_type(self.type_to_match)
 
     def __str__(self):
@@ -113,7 +122,8 @@ class Keyword(CardPattern):
     def __init__(self, keyword: str):
         self.keyword_to_match = keyword
 
-    def match(self, card, gamestate, source):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return self.keyword_to_match in Get.Keywords().get(gamestate, card)
 
     def __str__(self):
@@ -124,7 +134,8 @@ class Name(CardPattern):
     def __init__(self, name: str):
         self.name_to_match = name
 
-    def match(self, card, gamestate, source):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return self.name_to_match == Get.Name().get(gamestate, card)
 
     def __str__(self):
@@ -141,7 +152,8 @@ class Counter(CardPattern):
     def __init__(self, counter_to_match: str):
         self.counter_to_match = counter_to_match
 
-    def match(self, card, gamestate, source=None):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return self.counter_to_match in Get.Counters().get(gamestate, card)
 
     def __str__(self):
@@ -149,22 +161,26 @@ class Counter(CardPattern):
 
 
 class Tapped(CardPattern):
-    def match(self, card, gamestate, source=None):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return Get.IsTapped().get(gamestate, card)
 
 
 class Untapped(CardPattern):
-    def match(self, card, gamestate, source=None):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return Get.IsUntapped().get(gamestate, card)
 
 
-class NotSelf(CardPattern):
-    def match(self, card, gamestate, source):
+class Another(CardPattern):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return not (card is source)
 
 
 class IsSelf(CardPattern):
-    def match(self, card, gamestate, source):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         return card is source
 
 
@@ -177,7 +193,8 @@ class NumericPattern(CardPattern):
         self.value = value
         self.getter = getter
 
-    def match(self, card, gamestate, source):
+    def match(self, card: Cardboard, gamestate: GameState, source: SOURCE
+              ) -> bool:
         card_value = self.getter.get(gamestate, card)
         if card_value is None:
             return False

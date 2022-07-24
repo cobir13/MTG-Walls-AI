@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
     AlwaysTrigger
-from Verbs import PlayLandForTurn, NullVerb, TapSelf, Verb, \
+from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent, \
     VerbOnSubjectCard
 import ZONE
@@ -99,7 +99,7 @@ class Land(Permanent):
 
     def __init__(self):
         super().__init__()
-        self.cost = Costs.Cost(PlayLandForTurn())
+        self.cost = Costs.Cost(MarkAsPlayedLand())
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,7 @@ class Sorcery(Spell):
 # ---------------------------------------------------------------------------
 
 
-class TapSymbol(TapSelf):
+class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
     def can_be_done(self, state: GameState, subject: Cardboard,

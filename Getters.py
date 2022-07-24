@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from GameState import GameState, Player
     from Cardboard import Cardboard
     # from ManaHandler import ManaCost
+    from Verbs import SOURCE, SUBJECT, CAUSE
 
 import Choices
 import MatchCardPatterns as Match
@@ -20,7 +21,7 @@ import MatchCardPatterns as Match
 # #------------------------------------------------------------------------------
 
 class Getter:
-    def get(self, state: GameState, source: Cardboard):
+    def get(self, state: GameState, source: SOURCE):
         raise Exception
 
     @property
@@ -35,7 +36,7 @@ class Const(Getter):
     def __init__(self, value):
         self.value = value
 
-    def get(self, state: GameState, source: Cardboard):
+    def get(self, state: GameState, source: SOURCE):
         return self.value
 
     def __str__(self):
@@ -70,6 +71,10 @@ class String(Getter):
     pass
 
 
+class ConstString(Const, String):
+    pass
+
+
 # ----------
 
 # class GetManaCost(Getter):
@@ -93,7 +98,7 @@ class NumberInZone(Integer):
         self.pattern = pattern
         self.zone = zone
 
-    def get(self, state: GameState, source: Cardboard):
+    def get(self, state: GameState, source: SOURCE):
         zone = state.get_zone(self.zone, None)
         return len([c for c in zone if self.pattern.match(c, state, source)])
 

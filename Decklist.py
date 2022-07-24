@@ -60,7 +60,7 @@ class Caretaker(Creature):
         self.set_power_toughness(0, 3)
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
-                                Verbs.TapAny(Match.NotSelf() & Match.Untapped()
+                                Verbs.TapAny(Match.Another() & Match.Untapped()
                                              & Match.CardType(Creature)
                                              & Match.YouControl())),
                            Verbs.AddMana("A"))
@@ -232,7 +232,7 @@ class TempleGarden(Forest, Plains):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
-                           ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
+                           ChooseAVerb([Verbs.Tap(), Verbs.LoseOwnLife(2)])
                            )
 
 
@@ -244,7 +244,7 @@ class BreedingPool(Forest, Island):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
-                           ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
+                           ChooseAVerb([Verbs.Tap(), Verbs.LoseOwnLife(2)])
                            )
 
 
@@ -256,7 +256,7 @@ class HallowedFountain(Plains, Island):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
-                           ChooseAVerb([Verbs.TapSelf(), Verbs.LoseOwnLife(2)])
+                           ChooseAVerb([Verbs.Tap(), Verbs.LoseOwnLife(2)])
                            )
 
 
