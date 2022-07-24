@@ -92,6 +92,12 @@ class Nothing(CardPattern):
 
 # ----------
 
+
+class YouControl(CardPattern):
+    def match(self, card: Cardboard, gamestate: GameState, source) -> bool:
+        return card.controller_index == source.controller_index
+
+
 class CardType(CardPattern):
     def __init__(self, card_type: type):
         self.type_to_match: type = card_type

@@ -250,22 +250,22 @@ if __name__ == "__main__":
 
     Choices.AUTOMATION = False
 
-    game = GameState()
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.FIELD)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Caretaker()), ZONE.FIELD)
+    game = GameState(int)
+    game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.FIELD)
+    game.give_to(Cardboard.Cardboard(Decklist.Caretaker()), ZONE.FIELD)
 
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Roots()), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Battlement()), ZONE.HAND)
-    game.MoveZone(Cardboard.Cardboard(Decklist.Company()), ZONE.HAND)
+    game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard.Cardboard(Decklist.Roots()), ZONE.HAND)
+    game.give_to(Cardboard.Cardboard(Decklist.Battlement()), ZONE.HAND)
+    game.give_to(Cardboard.Cardboard(Decklist.Company()), ZONE.HAND)
 
     for _ in range(5):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Blossoms()), ZONE.DECK)
+        game.give_to(Cardboard.Cardboard(Decklist.Blossoms()), ZONE.DECK)
     for _ in range(5):
-        game.MoveZone(Cardboard.Cardboard(Decklist.Omens()), ZONE.DECK)
-        game.MoveZone(Cardboard.Cardboard(Decklist.Forest()), ZONE.DECK)
-        game.MoveZone(Cardboard.Cardboard(Decklist.Battlement()), ZONE.DECK)
+        game.give_to(Cardboard.Cardboard(Decklist.Omens()), ZONE.DECK)
+        game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.DECK)
+        game.give_to(Cardboard.Cardboard(Decklist.Battlement()), ZONE.DECK)
 
     # window = tk.Tk()
 

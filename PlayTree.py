@@ -25,7 +25,7 @@ class PlayTree:
         #       loss_states: states where the game has ended in a loss
         #       win_states: states where the game has ended in a win
         # The i-th index within the list gives the set of states for the i-th
-        # turn of the game.
+        # total turn of the game (sum of turns that any player has taken).
         # NOTE: for all of these sets of GameStates, the super_stack is
         # guaranteed to be empty. But the normal stack may have things!
         self.turn_limit = turn_limit  # max number of turns this will test
@@ -39,14 +39,14 @@ class PlayTree:
 
     def _add_state_to_tracker(self, tracker: List[Set[GameState]],
                               state: GameState):
-        while len(tracker) <= state.turn_count:
+        while len(tracker) <= state.total_turns:
             tracker.append(set())
-        tracker[state.turn_count].add(state)
+        tracker[state.total_turns].add(state)
 
     def _add_state_to_active(self, state: GameState):
         # only add if NEW state we haven't seen this turn yet
-        if (len(self.intermediate_states) <= state.turn_count
-                or state not in self.intermediate_states[state.turn_count]):
+        if (len(self.intermediate_states) <= state.total_turns
+                or state not in self.intermediate_states[state.total_turns]):
             if state.has_options:
                 self._add_state_to_tracker(self.active_states, state)
             # also add to intermediate, which tracks ALL states
@@ -55,8 +55,8 @@ class PlayTree:
 
     def _add_state_to_win(self, state: GameState):
         # only add if NEW state we haven't seen this turn yet
-        if (len(self.intermediate_states) < state.turn_count
-                or state not in self.intermediate_states[state.turn_count]):
+        if (len(self.intermediate_states) < state.total_turns
+                or state not in self.intermediate_states[state.total_turns]):
             self._add_state_to_tracker(self.win_states, state)
             # also add to intermediate, which tracks ALL states
             self._add_state_to_tracker(self.intermediate_states, state)
@@ -64,8 +64,8 @@ class PlayTree:
 
     def _add_state_to_loss(self, state: GameState):
         # only add if NEW state we haven't seen this turn yet
-        if (len(self.intermediate_states) < state.turn_count
-                or state not in self.intermediate_states[state.turn_count]):
+        if (len(self.intermediate_states) < state.total_turns
+                or state not in self.intermediate_states[state.total_turns]):
             self._add_state_to_tracker(self.loss_states, state)
             # also add to intermediate, which tracks ALL states
             self._add_state_to_tracker(self.intermediate_states, state)
@@ -77,8 +77,8 @@ class PlayTree:
             # remove a random GameState from the active list and explore it
             state: GameState = self.get_active(turn).pop()
             # options are: cast spell, activate ability, let stack resolve
-            activables = state.get_valid_activations()
-            castables = state.get_valid_castables()
+            activables = state.priority.get_valid_activations()
+            castables = state.priority.get_valid_castables()
             # if there are valid actions, make new nodes by taking them
             # TODO: win and loss conditions here?
             new_nodes = []

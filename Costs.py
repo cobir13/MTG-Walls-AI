@@ -54,7 +54,8 @@ class Cost:
         if self.mana_cost is None:
             afford_mana = True
         else:
-            afford_mana = state.pool.can_afford_mana_cost(self.mana_cost)
+            player = state.player_list[subject.controller_index]
+            afford_mana = player.pool.can_afford_mana_cost(self.mana_cost)
         afford_other = all([v.can_be_done(state, subject, choices)
                             for v in self.additional])
         return afford_mana and afford_other

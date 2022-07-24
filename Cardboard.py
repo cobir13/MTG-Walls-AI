@@ -35,6 +35,10 @@ class Cardboard:
         self.summon_sick: bool = True  # Has been in play since upkeep? No.
         self.counters: List[
             str] = []  # sorted list of counters. Also other trackers
+        # track where the card is: index (within a gamestate) of the player
+        # who controls it, index of the player who ownes it, and its zone.
+        self.controller_index = -1
+        self.owner_index = -1
         self.zone = ZONE.NEW
 
     def __str__(self):
@@ -50,15 +54,17 @@ class Cardboard:
 
     def copy(self):
         new_card = Cardboard(self.rules_text)
+        # RulesText never mutates so it's ok that they're both pointing at the
+        # same instance of a RulesText
+        new_card.rules_text = self.rules_text
         # safe to copy by reference since they're all ints, str, etc
         new_card.tapped = self.tapped
         new_card.summon_sick = self.summon_sick
+        new_card.controller_index = self.controller_index
+        new_card.owner_index = self.owner_index
         new_card.zone = self.zone
         # counters is a LIST so it needs to be copied without reference
         new_card.counters = self.counters.copy()
-        # cardtype never mutates so it's ok that they're both pointing at the
-        # same instance of a RulesText
-        new_card.rules_text = self.rules_text
         return new_card
 
     def add_counter(self, addition):
@@ -76,6 +82,14 @@ class Cardboard:
     def effect(self) -> Verb:
         return self.rules_text.effect
 
+    def get_home_zone_list(self, state: GameState):
+        if self.zone in [ZONE.NEW, ZONE.UNKNOWN]:
+            raise ValueError("Can't be in Zone because has no owner!")
+        elif self.zone == ZONE.STACK:
+            return state.stack
+        else:
+            return state.player_list[self.controller_index].get_zone(self.zone)
+
     def get_activated(self):
         return self.rules_text.activated
 
@@ -87,7 +101,7 @@ class Cardboard:
             s += "T"
         if self.summon_sick:
             s += "S"
-        s += str(self.zone)
+        s += "_P%iz%s" % (self.controller_index, str(self.zone))
         if len(self.counters) > 0:
             s += "[" + ",".join(self.counters) + "]"
         return s

@@ -31,8 +31,8 @@ if __name__ == "__main__":
             ab, s, ch = tup
             return ab.activate(state, s, ch)
         elif len(tup) == 2:
-            card, ch = tup
-            return card.cast(state, ch)
+            c, ch = tup
+            return c.cast(state, ch)
 
 
     # -----------------------------------------------------------------------
@@ -40,29 +40,33 @@ if __name__ == "__main__":
     print("Testing Wall of Roots and basic GameState...")
     start_clock = time.perf_counter()
 
-    game_orig = GameState()
+    game_orig = GameState(1)
     game_orig.is_tracking_history = False  # True
-    assert len(game_orig.get_valid_activations()) == 0
-    assert len(game_orig.get_valid_castables()) == 0
+    assert len(game_orig.player_list) == 1
+    player = game_orig.player_list[0]
+    assert player.gamestate is game_orig
+    assert not game_orig.has_options
+    assert len(player.get_valid_activations()) == 0
+    assert len(player.get_valid_castables()) == 0
 
     # four copies of Wall of Roots in hand
     for i in range(4):
-        game_orig.MoveZone(Cardboard(Decklist.Roots()), ZONE.HAND)
-    assert (len(game_orig.hand) == 4)
-    assert (len(game_orig.field) == 0)
+        game_orig.give_to(Cardboard(Decklist.Roots()), ZONE.HAND)
+    assert (len(game_orig.active.hand) == 4)
+    assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
     tuple_list = Decklist.Verbs.AddMana("U").do_it(game_orig, CardNull(), [])
     assert len(tuple_list) == 1
     mana_game, _, choices = tuple_list[0]
     assert len(choices) == 0
-    assert mana_game.pool == ManaHandler.ManaPool("U")
+    assert mana_game.active.pool == ManaHandler.ManaPool("U")
     # because AddMana mutates, returned game IS original game
-    assert game_orig.pool == ManaHandler.ManaPool("U")
+    assert game_orig.active.pool == ManaHandler.ManaPool("U")
     assert mana_game is game_orig
 
     # check the abilities of Wall of Roots in hand. it has 1 but can't be used.
-    roots = game_orig.hand[0]
+    roots = game_orig.active.hand[0]
     assert len(roots.get_activated()) == 1
     roots_abil = roots.get_activated()[0]
     choices = roots_abil.get_activation_options(game_orig, roots)
@@ -70,10 +74,10 @@ if __name__ == "__main__":
     assert not roots_abil.can_be_activated(game_orig, roots, [])
 
     # move a Wall of Roots to field and try again
-    game_orig.MoveZone(game_orig.hand[0], ZONE.FIELD)
-    assert len(game_orig.hand) == 3
-    assert len(game_orig.field) == 1
-    roots = game_orig.field[0]
+    game_orig.give_to(game_orig.active.hand[0], ZONE.FIELD)
+    assert len(game_orig.active.hand) == 3
+    assert len(game_orig.active.field) == 1
+    roots = game_orig.active.field[0]
     assert len(roots.get_activated()) == 1
     assert len(roots.counters) == 0  # no counters on it yet
     roots_abil = roots.get_activated()[0]
@@ -83,7 +87,7 @@ if __name__ == "__main__":
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
-    cost_roots = cost_game.field[0]
+    cost_roots = cost_game.active.field[0]
     assert roots_abil.cost.can_afford(cost_game, cost_roots, [])
     tuple_list = roots_abil.cost.pay_cost(cost_game, cost_roots, [])
     assert len(tuple_list) == 1
@@ -93,46 +97,47 @@ if __name__ == "__main__":
         assert "-0/-1" == value or "@" in value
     # should no longer be possible to do
     assert not roots_abil.cost.can_afford(cost_game, cost_roots, [])
-    assert len(cost_game.get_valid_activations()) == 0
+    assert len(cost_game.active.get_valid_activations()) == 0
 
     # untap to reset things, then try to activate the ability "properly"
     game_orig.step_untap()
-    assert len(game_orig.get_valid_activations()) == 1
-    game_list = cast_thing(game_orig, game_orig.get_valid_activations()[0])
+    assert len(game_orig.active.get_valid_activations()) == 1
+    game_list = cast_thing(game_orig,
+                           game_orig.active.get_valid_activations()[0])
     assert len(game_list) == 1
     activ_game = game_list[0]
     assert activ_game is not game_orig
-    new_roots = activ_game.field[0]
+    new_roots = activ_game.active.field[0]
     assert roots is not new_roots
     assert new_roots.has_type(Decklist.Roots)
     assert len(roots.counters) == 0  # no counters on original
     assert len(new_roots.counters) == 2  # -0/-1 and @used
-    assert activ_game.pool == ManaHandler.ManaPool("G")
-    assert game_orig.pool == ManaHandler.ManaPool("")  # original unchanged
+    assert activ_game.active.pool == ManaHandler.ManaPool("G")
+    assert game_orig.active.pool == ManaHandler.ManaPool("")  # orig the same.
     assert len(new_roots.get_activated()) == 1  # still has one ability
-    assert len(activ_game.get_valid_activations()) == 0
+    assert len(activ_game.active.get_valid_activations()) == 0
 
     # try to cast something
-    assert len(activ_game.get_valid_castables()) == 0  # not enough mana yet
-    assert activ_game.pool == ManaHandler.ManaPool("G")
+    assert len(activ_game.active.get_valid_castables()) == 0  # no mana
+    assert activ_game.active.pool == ManaHandler.ManaPool("G")
     copygame = activ_game.copy()
-    copygame.pool.add_mana("G")  # add mana directly
+    copygame.active.pool.add_mana("G")  # add mana directly
     # all 3 roots in hand only generate 1 option--to cast Roots
-    assert (len(copygame.get_valid_castables()) == 1)
+    assert (len(copygame.active.get_valid_castables()) == 1)
     # cast the newly castable spell
-    castable = copygame.get_valid_castables()[0]
-    cardboard = castable[0]
-    assert [o is cardboard for o in copygame.hand] == [True, False, False]
+    castable = copygame.active.get_valid_castables()[0]
+    card = castable[0]
+    assert [o is card for o in copygame.active.hand] == [True, False, False]
     [copygame3] = cast_thing(copygame, castable)  # puts it on the stack
-    assert (copygame3.pool == ManaHandler.ManaPool(""))  # no mana anymore
+    assert (copygame3.active.pool == ManaHandler.ManaPool(""))  # no mana left
     assert (len(copygame3.stack) == 1)  # one spell on the stack
-    assert (len(copygame3.hand) == 2)  # two cards in hand
-    assert (len(copygame3.field) == 1)  # one card in play
+    assert (len(copygame3.active.hand) == 2)  # two cards in hand
+    assert (len(copygame3.active.field) == 1)  # one card in play
     # make sure that all the copying worked out correctly
     assert copygame3 is not copygame
-    for c in copygame.hand:
+    for c in copygame.active.hand:
         assert c is not copygame3.stack[0].card
-        for c3 in copygame3.hand:
+        for c3 in copygame3.active.hand:
             assert c is not c3
     further_copy = copygame3.copy()
     assert further_copy.stack[0] is not copygame3.stack[0]
@@ -140,18 +145,18 @@ if __name__ == "__main__":
 
     # resolve the spell from the stack
     [copygame4] = copygame3.resolve_top_of_stack()
-    assert (copygame4.pool == ManaHandler.ManaPool(""))  # still no mana
+    assert (copygame4.active.pool == ManaHandler.ManaPool(""))  # still no mana
     assert (len(copygame4.stack) == 0)  # nothing on the stack
-    assert (len(copygame4.hand) == 2)  # two cards in hand
-    assert (len(copygame4.field) == 2)  # two cards in play
+    assert (len(copygame4.active.hand) == 2)  # two cards in hand
+    assert (len(copygame4.active.field) == 2)  # two cards in play
     # should be one ability (new Roots) & no castable spells (not enough mana)
-    assert (len(copygame4.get_valid_activations()) == 1)
-    assert (len(copygame4.get_valid_castables()) == 0)
+    assert (len(copygame4.active.get_valid_activations()) == 1)
+    assert (len(copygame4.active.get_valid_castables()) == 0)
     # Stack should be empty, so resolving the stack should be impossible
     assert ([] == copygame4.resolve_top_of_stack())
     # Just to check, original game is still unchanged:
-    assert (len(activ_game.field) == 1)
-    assert (str(activ_game.pool) == "G")
+    assert (len(activ_game.active.field) == 1)
+    assert (str(activ_game.active.pool) == "G")
 
     # check that game history is NOT tracking (since tracking is off)
     assert not game_orig.is_tracking_history
@@ -165,7 +170,7 @@ if __name__ == "__main__":
     test_game = GameState()
     caryatid_in_play = Cardboard(Decklist.Caryatid())
     caryatid_in_play.zone = ZONE.FIELD
-    test_game.field.append(caryatid_in_play)
+    test_game.active.field.append(caryatid_in_play)
     roots_on_stack = Cardboard(Decklist.Roots())
     roots_on_stack.zone = ZONE.STACK
     stack_cardboard = Stack.StackCardboard(None, roots_on_stack,
@@ -183,11 +188,11 @@ if __name__ == "__main__":
     assert test_game.stack[0].card is not test_copy.stack[0].card
     assert test_game.stack[1].card.is_equiv_to(test_copy.stack[1].card)
     assert test_game.stack[1].card is not test_copy.stack[1].card
-    assert test_game.stack[1].card is test_game.field[0]
-    assert test_copy.stack[1].card is test_copy.field[0]
+    assert test_game.stack[1].card is test_game.active.field[0]
+    assert test_copy.stack[1].card is test_copy.active.field[0]
     assert test_copy.stack[1].choices[0][0] is test_copy.stack[0]
-    assert test_copy.stack[1].choices[0][1] is test_copy.field[0]
-    assert test_copy.stack[1].choices[0][1] is not test_game.field[0]
+    assert test_copy.stack[1].choices[0][1] is test_copy.active.field[0]
+    assert test_copy.stack[1].choices[0][1] is not test_game.active.field[0]
     assert test_copy.stack[1].choices[0][1] is test_copy.stack[1].card
     assert test_copy.stack[0].choices[:2] == [1, "a"]
 
@@ -201,19 +206,19 @@ if __name__ == "__main__":
     # add a caryatid to the all-roots game
     carygame1, _ = game_orig.copy_and_track([])
     carygame1.is_tracking_history = True  # start tracking
-    carygame1.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.FIELD)
+    carygame1.give_to(Cardboard(Decklist.Caryatid()), ZONE.FIELD)
     # should only see one valid ability to activate, since Caryatid not hasty
-    assert (len(carygame1.get_valid_activations()) == 1)
-    assert (len(carygame1.get_valid_castables()) == 0)  # no castable cards
+    assert (len(carygame1.active.get_valid_activations()) == 1)
+    assert (len(carygame1.active.get_valid_castables()) == 0)  # no castables
 
     # try to untap and upkeep to get rid of summonning sickness
     carygame1.step_untap()
     carygame1.step_upkeep()
-    assert len(carygame1.get_valid_castables()) == 0  # no castable cards
+    assert len(carygame1.active.get_valid_castables()) == 0  # no castables
     gameN = carygame1
     # noinspection PyTypeChecker
-    options: List[tuple] = (gameN.get_valid_activations()
-                            + gameN.get_valid_castables())
+    options: List[tuple] = (gameN.active.get_valid_activations()
+                            + gameN.active.get_valid_castables())
     assert len(options) == 2
     # as long as there are things to do, do them! auto-choose 1st option
     while len(options) > 0:
@@ -221,11 +226,12 @@ if __name__ == "__main__":
         while len(gameN.stack) > 0:
             gameN = gameN.resolve_top_of_stack()[0]
         # noinspection PyTypeChecker
-        options = gameN.get_valid_activations() + gameN.get_valid_castables()
+        options = (gameN.active.get_valid_activations()
+                   + gameN.active.get_valid_castables())
     # result should be Caryatid and two Roots in play
-    assert len(gameN.hand) == 2
-    assert len(gameN.field) == 3
-    assert gameN.pool == ManaHandler.ManaPool("G")
+    assert len(gameN.active.hand) == 2
+    assert len(gameN.active.field) == 3
+    assert gameN.active.pool == ManaHandler.ManaPool("G")
 
     # check if the history tracker worked
     historyN = gameN.get_all_history()
@@ -244,13 +250,13 @@ if __name__ == "__main__":
 
     # build a PlayTree for a game with no deck
     tree1 = PlayTree([carygame1], 5)
-    assert carygame1.turn_count == 3
-    for t in range(3):
+    assert carygame1.active.turn_count == 2
+    for t in range(2):
         assert len(tree1.get_active(t)) == 0
         assert len(tree1.get_intermediate(t)) == 0
-    assert len(tree1.get_active(3)) == 1
+    assert len(tree1.get_active(2)) == 1
     assert len(tree1.get_active()) == 1
-    assert len(tree1.get_intermediate(3)) == 1
+    assert len(tree1.get_intermediate(2)) == 1
     assert len(tree1.get_intermediate()) == 1
     # try untap and upkeep
     try:
@@ -260,20 +266,20 @@ if __name__ == "__main__":
         assert True
 
     tree_game = carygame1.copy()
-    tree_game.turn_count = 1  # pretend it's an earlier turn, for simplicity
+    tree_game.active.turn_count = 1  # to simplify, roll back to earlier turn
     # HAND: Roots, Roots, Roots
     # FIELD: Caryatid, Roots
     # Life: 20 vs 20, Deck: 0, Mana: ()
     tree_game.is_tracking_history = True
     for x in range(5):
-        tree_game.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.DECK)
+        tree_game.give_to(Cardboard(Decklist.Caryatid()), ZONE.DECK)
     tree2 = PlayTree([tree_game], 5)
     assert len(tree2.get_active()) == 1
     assert len(tree2.get_intermediate()) == 1
     # assert len(tree2.final_states) == 0
     assert tree2.traverse_counter == 1
-    assert all([len(gs.deck) == 5 for gs in tree2.get_active()])
-    assert all([len(gs.hand) == 3 for gs in tree2.get_active()])
+    assert all([len(gs.active.deck) == 5 for gs in tree2.get_active()])
+    assert all([len(gs.active.hand) == 3 for gs in tree2.get_active()])
 
     tree2.beginning_phase_for_all_valid_states()
     assert len(tree2.active_states) == 3  # turns 0, 1, 2
@@ -283,8 +289,8 @@ if __name__ == "__main__":
     assert len(tree2.get_intermediate(1)) == 1
     # assert len(tree2.final_states) == 0
     assert tree2.traverse_counter == 2
-    assert all([len(gs.deck) == 4 for gs in tree2.get_active()])
-    assert all([len(gs.hand) == 4 for gs in tree2.get_active()])
+    assert all([len(gs.active.deck) == 4 for gs in tree2.get_active()])
+    assert all([len(gs.active.hand) == 4 for gs in tree2.get_active()])
     assert all([len(gs.stack) == 0 for gs in tree2.get_active()])
 
     # HAND: Roots, Roots, Roots, Caryatid
@@ -310,10 +316,11 @@ if __name__ == "__main__":
     tree2.main_phase_for_all_active_states()
     # I never finished turn 1 properly so there are still actives there. sure.
     assert all([len(tree2.get_active(t)) == 0 for t in [0, 2, 3]])
-    assert len(tree2.get_states_no_options()) == 20
-    assert len(tree2.get_states_no_stack()) == 88  # empirical. I didn't theory
+    # These next several are empirical. I didn't theory. Too hard to count.
+    assert len(tree2.get_states_no_options()) == 17  # 20
+    assert len(tree2.get_states_no_stack()) == 85  # 88
     n = len(tree2.get_intermediate())
-    assert n == 126  # empirical. I didn't theory
+    assert n == 123  # empirical. I didn't theory
     id_list = [g.get_id() for g in tree2.get_intermediate()]
     assert n == len(id_list)
     assert n == len(set(id_list))  # making sure set hash is still working
@@ -326,56 +333,56 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
     # put some basics in hand, make sure they're playable and produce mana
-    game = GameState()
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Plains()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Island()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Swamp()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Mountain()), ZONE.HAND)
-    assert len(game.get_valid_activations()) == 0
-    assert len(game.get_valid_castables()) == 5
+    game = GameState(1)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Plains()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Island()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Swamp()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Mountain()), ZONE.HAND)
+    assert len(game.active.get_valid_activations()) == 0
+    assert len(game.active.get_valid_castables()) == 5
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     assert len(tree.get_states_no_options()) == 5
     collector = set()
     for g in tree.get_states_no_options():
-        collector.add((g.field[0].name, str(g.pool)))
-        assert len(g.field) == 1
-        assert len(g.hand) == 4
+        collector.add((g.active.field[0].name, str(g.active.pool)))
+        assert len(g.active.field) == 1
+        assert len(g.active.hand) == 4
     assert collector == {("Forest", "G"), ("Plains", "W"), ("Island", "U"),
                          ("Swamp", "B"), ("Mountain", "R")}
 
     # test a shock land the same way
-    game = GameState()
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.HallowedFountain()), ZONE.HAND)
-    assert len(game.get_valid_activations()) == 0
-    assert len(game.get_valid_castables()) == 2
+    game = GameState(1)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.HallowedFountain()), ZONE.HAND)
+    assert len(game.active.get_valid_activations()) == 0
+    assert len(game.active.get_valid_castables()) == 2
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     assert len(tree.get_states_no_options()) == 4
     collector = set()
     for g in tree.get_states_no_options():
-        collector.add((g.life, str(g.pool)))
-        assert len(g.field) == 1
-        assert len(g.hand) == 1
-        assert g.field[0].tapped
+        collector.add((g.active.life, str(g.active.pool)))
+        assert len(g.active.field) == 1
+        assert len(g.active.hand) == 1
+        assert g.active.field[0].tapped
     assert collector == {(20, "G"), (20, ""), (18, "U"), (18, "W")}
 
     # test a fetch land with many valid targets
-    game = GameState()
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.Plains()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.Swamp()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.HallowedFountain()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.BreedingPool()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.MistyRainforest()), ZONE.HAND)
-    assert len(game.get_valid_activations()) == 0
-    assert len(game.get_valid_castables()) == 1  # only option is play fetch
+    game = GameState(1)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Plains()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Swamp()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.HallowedFountain()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.BreedingPool()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.MistyRainforest()), ZONE.HAND)
+    assert len(game.active.get_valid_activations()) == 0
+    assert len(game.active.get_valid_castables()) == 1  # play fetch
     matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
-    assert len([c for c in game.deck if matcher.match(c, game, c)]) == 5
+    assert len([c for c in game.active.deck if matcher.match(c, game, c)]) == 5
 
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -385,47 +392,47 @@ if __name__ == "__main__":
     collector = set()
     ticker = 0
     for g in tree.get_states_no_options():
-        collector.add((g.life, str(g.pool)))
-        assert len(g.hand) == 0
-        assert g.grave[0].has_type(Decklist.MistyRainforest)
-        assert any([c.name == "Swamp" for c in g.deck])  # never took swamp
-        if len(g.field) == 0:
+        collector.add((g.active.life, str(g.active.pool)))
+        assert len(g.active.hand) == 0
+        assert g.active.grave[0].has_type(Decklist.MistyRainforest)
+        assert any([c.name == "Swamp" for c in g.active.deck])  # never swamp
+        if len(g.active.field) == 0:
             ticker += 1
-            assert len(g.deck) == 7
+            assert len(g.active.deck) == 7
         else:
-            assert len(g.deck) == 6
-            assert g.field[0].tapped
+            assert len(g.active.deck) == 6
+            assert g.active.field[0].tapped
     # 2 ways to have (19,"") and (17,"G")
     assert ticker == 1
     assert collector == {(19, "G"), (19, "U"), (19, ""), (17, "U"), (17, "G"),
                          (17, "W")}
 
     # what about a fetch with no valid targets
-    game = GameState()
-    game.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.Roots()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.Swamp()), ZONE.DECK)
-    game.MoveZone(Cardboard(Decklist.WindsweptHeath()), ZONE.HAND)
+    game = GameState(1)
+    game.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Roots()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Swamp()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.WindsweptHeath()), ZONE.HAND)
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     assert len(tree.get_states_no_options()) == 1
     result = tree.get_states_no_options()[0]
-    assert result.life == 19
-    assert len(result.deck) == 3
-    assert len(result.hand) == 0
-    assert len(result.grave) == 1
+    assert result.active.life == 19
+    assert len(result.active.deck) == 3
+    assert len(result.active.hand) == 0
+    assert len(result.active.grave) == 1
 
     # what about no deck at all?
-    game = GameState()
-    game.MoveZone(Cardboard(Decklist.WindsweptHeath()), ZONE.HAND)
+    game = GameState(1)
+    game.give_to(Cardboard(Decklist.WindsweptHeath()), ZONE.HAND)
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     assert len(tree.get_states_no_options()) == 1
     result = tree.get_states_no_options()[0]
-    assert result.life == 19
-    assert len(result.deck) == 0
-    assert len(result.hand) == 0
-    assert len(result.grave) == 1
+    assert result.active.life == 19
+    assert len(result.active.deck) == 0
+    assert len(result.active.hand) == 0
+    assert len(result.active.grave) == 1
     
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -434,14 +441,14 @@ if __name__ == "__main__":
     print("""Testing equality of gamestates...""")
     start_clock = time.perf_counter()
 
-    game = GameState()
+    game = GameState(1)
     # field
-    game.MoveZone(Cardboard(Decklist.Plains()), ZONE.FIELD)
+    game.give_to(Cardboard(Decklist.Plains()), ZONE.FIELD)
     # hand
-    game.MoveZone(Cardboard(Decklist.HallowedFountain()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Roots()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.HallowedFountain()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Roots()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Caryatid()), ZONE.HAND)
 
     # try to copy, make sure equality holds
     cp = game.copy()
@@ -450,12 +457,12 @@ if __name__ == "__main__":
 
     # add this forest to one but not the other
     forest = Cardboard(Decklist.Forest())
-    game.MoveZone(forest, ZONE.FIELD)
+    game.give_to(forest, ZONE.FIELD)
     assert (game != cp)
     # add a copy of the forst to the other
     forest2 = forest.copy()
     forest2.zone = ZONE.NEW
-    cp.MoveZone(forest2, ZONE.FIELD)
+    cp.give_to(forest2, ZONE.FIELD)
     # Cardboard uses "is" for eq  (or else "in list" breaks)
     assert forest != forest2
     assert forest is not forest2
@@ -476,34 +483,34 @@ if __name__ == "__main__":
     assert (cp4 in testset)
 
     # two lands. put into play in opposite order. Should be equivalent.
-    game1 = GameState()
-    game1.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game1.MoveZone(Cardboard(Decklist.Plains()), ZONE.HAND)
+    game1 = GameState(1)
+    game1.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game1.give_to(Cardboard(Decklist.Plains()), ZONE.HAND)
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, game1.hand[0], [])[0][0]
-    game1B = mover.do_it(game1A, game1A.hand[0], [])[0][0]
+    game1A = mover.do_it(game1, game1.active.hand[0], [])[0][0]
+    game1B = mover.do_it(game1A, game1A.active.hand[0], [])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, game2.hand[1], [])[0][0]
-    game2B = mover.do_it(game2A, game2A.hand[0], [])[0][0]
+    game2A = mover.do_it(game2, game2.active.hand[1], [])[0][0]
+    game2B = mover.do_it(game2A, game2A.active.hand[0], [])[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
     # all cards (including lands!) mark summoning sickness
-    game1 = GameState()
-    game1.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game1.MoveZone(Cardboard(Decklist.Plains()), ZONE.HAND)
+    game1 = GameState(1)
+    game1.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game1.give_to(Cardboard(Decklist.Plains()), ZONE.HAND)
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, game1.hand[0], [])[0][0]
+    game1A = mover.do_it(game1, game1.active.hand[0], [])[0][0]
     game1A.step_untap()
-    game1B = mover.do_it(game1A, game1A.hand[0], [])[0][0]
+    game1B = mover.do_it(game1A, game1A.active.hand[0], [])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, game2.hand[1], [])[0][0]
+    game2A = mover.do_it(game2, game2.active.hand[1], [])[0][0]
     game2A.step_untap()
-    game2B = mover.do_it(game2A, game2A.hand[0], [])[0][0]
+    game2B = mover.do_it(game2A, game2A.active.hand[0], [])[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.step_untap()
@@ -517,41 +524,41 @@ if __name__ == "__main__":
     print("Testing Caretakers, Axebane, Battlement...")
     start_clock = time.perf_counter()
 
-    game = GameState()
-    game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.HAND)
-    game.MoveZone(game.hand[0], ZONE.FIELD)
+    game = GameState(1)
+    game.give_to(Cardboard(Decklist.Caretaker()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Caretaker()), ZONE.HAND)
+    game.give_to(game.active.hand[0], ZONE.FIELD)
     assert (len(game.super_stack) == 0)  # nothing triggers off of this move
-    assert game.field[0].summon_sick
-    assert len(game.get_valid_activations()) == 0
+    assert game.active.field[0].summon_sick
+    assert len(game.active.get_valid_activations()) == 0
     # what if I give the caretaker something to tap?
     caryatid = Cardboard(Decklist.Caryatid())
-    game.MoveZone(caryatid, ZONE.FIELD)
+    game.give_to(caryatid, ZONE.FIELD)
     # no, caretaker is still summon_sick. good.
-    assert len(game.get_valid_activations()) == 0
-    game.field.remove(caryatid)
+    assert len(game.active.get_valid_activations()) == 0
+    game.active.field.remove(caryatid)
 
     game.step_untap()
-    assert not game.field[0].summon_sick
-    assert (len(game.get_valid_activations()) == 0)  # nothing to tap
+    assert not game.active.field[0].summon_sick
+    assert (len(game.active.get_valid_activations()) == 0)  # nothing to tap
 
     # give it something to tap
     caryatid.zone = ZONE.NEW
-    game.MoveZone(caryatid, ZONE.FIELD)
-    assert len(game.field) == 2
-    assert len(game.get_valid_activations()) == 1
+    game.give_to(caryatid, ZONE.FIELD)
+    assert len(game.active.field) == 2
+    assert len(game.active.get_valid_activations()) == 1
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     [univ1] = tree.get_states_no_options()
-    assert len(univ1.hand) == 0  # used mana to cast 2nd Caretaker
-    assert len(univ1.field) == 3
-    assert univ1.pool == ManaHandler.ManaPool("")
-    assert all([c.tapped or c.summon_sick for c in univ1.field])
+    assert len(univ1.active.hand) == 0  # used mana to cast 2nd Caretaker
+    assert len(univ1.active.field) == 3
+    assert univ1.active.pool == ManaHandler.ManaPool("")
+    assert all([c.tapped or c.summon_sick for c in univ1.active.field])
 
     # Rewind to before casting 2nd Caretaker. Give 1st TWO things to tap.
-    game.MoveZone(game.hand[0], ZONE.FIELD)
+    game.give_to(game.active.hand[0], ZONE.FIELD)
     # only one ability, but two options to activate it
-    ability_tuples = game.get_valid_activations()
+    ability_tuples = game.active.get_valid_activations()
     assert len(ability_tuples) == 2
     assert ability_tuples[0][0] == ability_tuples[1][0]
     assert ability_tuples[0][1] == ability_tuples[1][1]
@@ -559,11 +566,12 @@ if __name__ == "__main__":
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     [univ2, univ3] = tree.get_states_no_options()
-    assert (univ2.pool == ManaHandler.ManaPool("A"))
-    assert (univ3.pool == ManaHandler.ManaPool("A"))
-    assert (len(univ2.field) == len(univ3.field))
+    assert (univ2.active.pool == ManaHandler.ManaPool("A"))
+    assert (univ3.active.pool == ManaHandler.ManaPool("A"))
+    assert (len(univ2.active.field) == len(univ3.active.field))
     # check that they are really tapped differently
-    assert [c.tapped for c in univ2.field] != [c.tapped for c in univ3.field]
+    assert ([c.tapped for c in univ2.active.field]
+            != [c.tapped for c in univ3.active.field])
     assert univ2 != univ3
 
     # see what happens with two active caretakers
@@ -571,7 +579,7 @@ if __name__ == "__main__":
     game3.step_untap()
     # 2 Caretakers plus Caryatid in play. 5 possibilities. But Caretakers are
     # equivalent so we only see 3 options. Good.
-    game3_abils = game3.get_valid_activations()
+    game3_abils = game3.active.get_valid_activations()
     assert len(game3_abils) == 3
     care3_abils = [tup for tup in game3_abils if tup[1].name == "Caretaker"]
     universes = []
@@ -580,29 +588,30 @@ if __name__ == "__main__":
             universes += g.clear_super_stack()
     assert (len(universes) == 2)
     [univ4, univ5] = universes
-    assert (univ4.pool == ManaHandler.ManaPool("A"))
-    assert (univ5.pool == ManaHandler.ManaPool("A"))
-    assert (len(univ4.field) == len(univ5.field))
-    assert [c.tapped for c in univ4.field] != [c.tapped for c in univ5.field]
+    assert (univ4.active.pool == ManaHandler.ManaPool("A"))
+    assert (univ5.active.pool == ManaHandler.ManaPool("A"))
+    assert (len(univ4.active.field) == len(univ5.active.field))
+    assert ([c.tapped for c in univ4.active.field]
+            != [c.tapped for c in univ5.active.field])
     # One universe has action left (caryatid), other doesn't (lone caretaker)
-    assert ({len(univ4.get_valid_activations()),
-             len(univ5.get_valid_activations())} == {0, 1})
+    assert ({len(univ4.active.get_valid_activations()),
+             len(univ5.active.get_valid_activations())} == {0, 1})
 
     # may as well use this setup to test Axebane and Battlement as well
     axe = Cardboard(Decklist.Axebane())
     battle = Cardboard(Decklist.Battlement())
     game6 = univ2.copy()
-    game6.MoveZone(axe, ZONE.FIELD)
-    game6.MoveZone(battle, ZONE.FIELD)
-    assert len(game6.get_valid_activations()) == 0  # still summon_sick
+    game6.give_to(axe, ZONE.FIELD)
+    game6.give_to(battle, ZONE.FIELD)
+    assert len(game6.active.get_valid_activations()) == 0  # still summon_sick
     game6.step_untap()
     # axebane; battlement; caryatid; caretaker with 4 targets to tap
-    assert len(game6.get_valid_activations()) == 7
+    assert len(game6.active.get_valid_activations()) == 7
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_for_all_active_states()
     collector = set()
     for g in tree6.get_states_no_options():
-        collector.add(str(g.pool))
+        collector.add(str(g.active.pool))
     assert collector == {"GGGGGAAAAAAA", "GGGGGAAAAAA", "AAAAAAA", "GGGGGAA",
                          "AAA"}
     assert len(tree6.get_states_no_options()) == 1+1+2+2+1
@@ -629,17 +638,17 @@ if __name__ == "__main__":
     print("Can PlayTree find 8 mana on turn 3...")
     start_clock = time.perf_counter()
 
-    game = GameState()
+    game = GameState(1)
     game.is_tracking_history = True
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Roots()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Battlement()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Roots()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Caretaker()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Battlement()), ZONE.HAND)
     # deck
     for x in range(10):
-        game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+        game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
     # tree. Turn 1.
     tree = PlayTree([game], 5)
     tree.main_phase_for_all_active_states(1)
@@ -668,7 +677,7 @@ if __name__ == "__main__":
     assert len(intermed) == len(set(intermed))
     assert len(no_opts) == 62
     assert tree.traverse_counter == 3716
-    assert max([g.pool.cmc() for g in no_opts]) == 8
+    assert max([g.active.pool.cmc() for g in no_opts]) == 8
     print("      ...done checking, %0.2f sec. (~0.70 2022-07-22)"
           % (time.perf_counter() - start_clock))
 
@@ -677,17 +686,17 @@ if __name__ == "__main__":
     print("Testing Wall of Blossoms, Arcades, and ETBs")
     start_clock = time.perf_counter()
 
-    game = GameState()
+    game = GameState(1)
     game.is_tracking_history = False
     # field
-    game.MoveZone(Cardboard(Decklist.Plains()), ZONE.FIELD)
+    game.give_to(Cardboard(Decklist.Plains()), ZONE.FIELD)
     # hand
-    game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.HAND)
-    game.MoveZone(Cardboard(Decklist.Forest()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Blossoms()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Blossoms()), ZONE.HAND)
+    game.give_to(Cardboard(Decklist.Forest()), ZONE.HAND)
     # deck
     for x in range(10):
-        game.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+        game.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
 
     tree = PlayTree([game], 5)
     # only option is play Forest, play Blossoms, draw Island
@@ -713,7 +722,7 @@ if __name__ == "__main__":
     assert (any([c.has_type(Decklist.Island) for c in final2.field]))
 
     # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
-    final2.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.HAND)
+    final2.give_to(Cardboard(Decklist.Caryatid()), ZONE.HAND)
     tree3 = PlayTree([final2], 5)
     tree3.beginning_phase_for_all_valid_states()
     tree3.main_phase_for_all_active_states()
@@ -723,18 +732,18 @@ if __name__ == "__main__":
         assert len(g.deck) == 6
 
     # but what if there was an Arcades in play?
-    gameA = GameState()
+    gameA = GameState(1)
     # deck
     for x in range(10):
-        gameA.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
-    gameA.MoveZone(Cardboard(Decklist.Arcades()), ZONE.FIELD)
+        gameA.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+    gameA.give_to(Cardboard(Decklist.Arcades()), ZONE.FIELD)
     assert (len(gameA.super_stack) == 0)  # Arcades doesn't trigger itself
     # add Blossoms to field and hopefully draw 2
-    gameA.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.FIELD)
+    gameA.give_to(Cardboard(Decklist.Blossoms()), ZONE.FIELD)
     assert len(gameA.super_stack) == 2
     assert len(gameA.stack) == 0
-    assert len(gameA.hand) == 0  # haven't draw or put triggers on stack
-    assert len(gameA.deck) == 10  # haven't draw or put triggers on stack
+    assert len(gameA.active.hand) == 0  # haven't draw, put triggers on stack
+    assert len(gameA.active.deck) == 10  # haven't draw, put triggers on stack
     # clear the super_stack and then stack. should come to the same thing.
     gameA, gameA1 = gameA.clear_super_stack()
     assert gameA != gameA1  # different order of triggers
@@ -752,7 +761,7 @@ if __name__ == "__main__":
     assert len(gameA.hand) == 2
     assert len(gameA.deck) == 8
     # now let's try to add a Caryatid to field and hopefully draw 1
-    gameA.MoveZone(Cardboard(Decklist.Caryatid()), ZONE.FIELD)
+    gameA.give_to(Cardboard(Decklist.Caryatid()), ZONE.FIELD)
     assert len(gameA.super_stack) == 1
     assert len(gameA.hand) == 2  # haven't draw or put triggers on stack
     assert len(gameA.deck) == 8  # haven't draw or put triggers on stack
@@ -775,7 +784,7 @@ if __name__ == "__main__":
     # def cast_and_resolve_company(state):
     #     # cast Collected Company
     #     state.pool.add_mana("GGGG")
-    #     state.MoveZone(Cardboard(Decklist.Company()), ZONE.HAND)
+    #     state.give_to(Cardboard(Decklist.Company()), ZONE.HAND)
     #     castables = state.get_valid_castables()
     #     print(castables)
     #     assert len(castables) == 1
@@ -788,12 +797,12 @@ if __name__ == "__main__":
     #
     # game = GameState()
     # # deck of 6 cards
-    # game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Axebane()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Battlement()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Axebane()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Battlement()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game)
     # assert (len(universes) == 4)
@@ -812,9 +821,9 @@ if __name__ == "__main__":
     # # deck of 6 forests on top, then 10 islands
     # gameF = GameState()
     # for _ in range(6):
-    #     gameF.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    #     gameF.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
     # for _ in range(10):
-    #     gameF.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+    #     gameF.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
     # # should be forests on top
     # assert all([c.has_type(Decklist.Forest) for c in gameF.deck[:6]])
     # # cast Collected Company
@@ -830,10 +839,10 @@ if __name__ == "__main__":
     # # deck of 5 forests on top, one Caretaker, then 10 islands
     # game1 = GameState()
     # for _ in range(5):
-    #     game1.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game1.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    #     game1.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # game1.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
     # for _ in range(10):
-    #     game1.MoveZone(Cardboard(Decklist.Island()), ZONE.DECK)
+    #     game1.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
     # assert (len(game1.deck) == 16)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game1)
@@ -849,7 +858,7 @@ if __name__ == "__main__":
     # # deck of only 4 cards total, all Caretakers
     # game4 = GameState()
     # for _ in range(4):
-    #     game4.MoveZone(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    #     game4.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
     # # should be forests on top
     # assert (len(game4.deck) == 4)
     # # cast Collected Company
@@ -862,10 +871,10 @@ if __name__ == "__main__":
     #
     # # Does Blossoms trigger correctly? start with 12 cards in deck
     # game = GameState()
-    # game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Omens()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Omens()), ZONE.DECK)
     # for _ in range(10):
-    #     game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    #     game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game)
     # assert len(universes) == 2  # two draws could be on stack in either order
@@ -882,10 +891,10 @@ if __name__ == "__main__":
     # # will get two GameStates even though they are identical! And that's ok.
     # # it's not worth the effort to optimize this out, right now.
     # game = GameState()
-    # game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # game.MoveZone(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Blossoms()), ZONE.DECK)
     # for _ in range(10):
-    #     game.MoveZone(Cardboard(Decklist.Forest()), ZONE.DECK)
+    #     game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game)
     # assert len(universes) == 2  # two draws could be on stack in either order

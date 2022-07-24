@@ -192,7 +192,7 @@ class Animate(VerbOnSubjectCard):
         # add a "revert at end of turn" ability
         rules.former = subject.rules_text
         rules.trig_endstep.append(TriggeredAbility("revert " + subject.name,
-                                                   AlwaysTrigger(), Revert))
+                                                   AlwaysTrigger(), Revert()))
         # overwrite with new RulesText
         subject.rules_text = rules
         return [(state, subject, choices)]
@@ -200,9 +200,3 @@ class Animate(VerbOnSubjectCard):
     @property
     def mutates(self):
         return True
-
-
-
-
-
-

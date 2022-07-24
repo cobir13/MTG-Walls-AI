@@ -38,26 +38,21 @@ class GameState:
     of the game and provides tools for others to progress the game.
     """
 
-    def __init__(self):
-        self.deck: List[Cardboard] = []  # list of Cardboard objects
-        self.hand: List[Cardboard] = []  # list of Cardboard objects
-        self.field: List[Cardboard] = []  # list of Cardboard objects
-        self.grave: List[Cardboard] = []  # list of Cardboard objects
-        self.stack: List[StackCardboard | StackAbility] = []
-        self.pool: ManaPool = ManaPool("")
-        # super_stack is a list of StackObject waiting to be put onto
+    PHASES = ["untap", "upkeep", "draw", "main1", "combat", "main2",
+              "endstep", "cleanup"]
+
+    def __init__(self, num_players: int = 1):
+        # super_stack is a list of StackTrigger waiting to be put onto
         # the real stack. NOTHING CAN BE EXECUTED WHILE STUFF IS ON
         # THE SUPERSTACK (incl state-based)
+        self.stack: List[StackCardboard | StackAbility] = []
         self.super_stack: List[StackTrigger] = []
-        self.turn_count: int = 1
-        self.is_my_turn: bool = True
-        self.life: int = 20
-        self.opponent_life: int = 20
-        self.has_played_land: int = False
-        self.num_spells_cast: int = 0  # number of spells you cast this turn
-        # self.num_lands_played
-        # self.num_lands_permitted
-        # self.opponent_list = [] ???
+        self.player_list: List[Player] = []
+        for _ in range(num_players):
+            Player(self)  # adds single new player to the player_list
+        self.active_player_index: int = 0
+        self.priority_player_index: int = 0
+        self.phase = 0
         # If we are tracking history, then we write down the previous distinct
         # GameState and a string describing how we got from there to here.
         # Things that mutate will add to the string, and things that copy
@@ -66,21 +61,7 @@ class GameState:
         self.previous_state: GameState | None = None
         self.events_since_previous: str = ""
 
-    def __str__(self):
-        txt = "HAND:    " + ",".join([str(card) for card in self.hand])
-        if len(self.field) > 0:
-            txt += "\nFIELD:   " + ",".join([str(card) for card in self.field])
-        if len(self.grave) > 0:
-            txt += "\nGRAVE:   " + ",".join([str(card) for card in self.grave])
-        if len(self.stack) > 0:
-            txt += "\nSTACK:   " + ",".join([str(obj) for obj in self.stack])
-        txt += "\nLife: %2i vs %2i" % (self.life, self.opponent_life)
-        txt += "    Deck: %2i" % len(self.deck)
-        txt += "    Mana: (%s)" % str(self.pool)
-        return txt
-
     def __hash__(self):
-        # self.get_id()
         return self.get_id().__hash__()  # hash the string of the get_id
 
     def __neg__(self, other):
@@ -88,73 +69,34 @@ class GameState:
 
     def __eq__(self, other):
         return isinstance(other, GameState) and self.get_id() == other.get_id()
-        # # easy disqualifications first
-        # if not (len(self.deck) == len(other.deck)
-        #         and len(self.hand) == len(other.hand)
-        #         and len(self.field) == len(other.field)
-        #         and len(self.grave) == len(other.grave)
-        #         and len(self.stack) == len(other.stack)
-        #         and len(self.super_stack) == len(other.super_stack)
-        #         and self.turn_count == other.turn_count
-        #         and self.is_my_turn == other.is_my_turn
-        #         and self.life == other.life
-        #         and self.opponent_life == other.opponent_life
-        #         and self.has_played_land == other.has_played_land
-        #         and self.num_spells_cast == other.num_spells_cast
-        #         and self.pool == other.pool):
-        #     return False
-        # # also need to compare hands, fields, etc. We know they are sorted
-        # # and have the same length, so just step through them
-        # for ii in range(len(self.hand)):
-        #     if not self.hand[ii].is_equiv_to(other.hand[ii]):
-        #         return False
-        # for ii in range(len(self.grave)):
-        #     if not self.grave[ii].is_equiv_to(other.grave[ii]):
-        #         return False
-        # for ii in range(len(self.field)):
-        #     if not self.field[ii].is_equiv_to(other.field[ii]):
-        #         return False
-        # # stack isn't SORTED but it's ORDERED so can treat it the same
-        # for ii in range(len(self.stack)):
-        #     if not self.stack[ii].is_equiv_to(other.stack[ii]):
-        #         return False
-        # # if got to here, we're good!
-        # return True
+
+    def __str__(self):
+        txt = "\n".join([str(p) for p in self.player_list])
+        txt += "\nPhase %i" % self.phase
+        if len(self.stack) > 0:
+            txt += "\nSTACK:  " + ",".join([str(s) for s in self.stack])
+        if len(self.super_stack) > 0:
+            txt += "\nSUPER:  " + ",".join([str(s) for s in self.super_stack])
+        return txt
 
     def get_id(self):
-        turn = "%s%i" % ("MY" if self.is_my_turn else "OP", self.turn_count)
-        life = "%ivs%i" % (self.life, self.opponent_life)
-        land = "Land1" if self.has_played_land else "Land0"
-        storm = "storm%i" % self.num_spells_cast
-        pool = "(%s)" % str(self.pool)
-        deck = "deck%i" % len(self.deck)
-        hand = ",".join([c.get_id() for c in self.hand])
-        field = ",".join([c.get_id() for c in self.field])
-        grave = ",".join([c.get_id() for c in self.grave])
+        players = [p.get_id() for p in self.player_list]
+        phase = "\nPhase %i" % self.phase
         stack = ",".join([c.get_id() for c in self.stack])
-        return "|".join([turn, life, land, storm, pool,
-                         deck, hand, field, grave, stack])
+        super_stack = ",".join([c.get_id() for c in self.super_stack])
+        return "\n".join(players + [phase, stack, super_stack])
 
-    # @staticmethod
-    # def construct_from_string(id_string: str):
-    #     game = GameState()
-    #     parts = id_string.split("|")
-    #     game.is_my_turn = parts[0][:2] == "MY"  # turn
-    #     game.turn_count = int(parts[0][2:])
-    #     my_life, op_life = parts[1].split("vs")  # life
-    #     game.life = int(my_life)
-    #     game.opponent_life = int(op_life)
-    #     game.has_played_land = parts[2][4:] == "1"  # land
-    #     game.num_spells_cast = int(parts[3][5:])  # storm
-    #     game.hand = [Cardboard.construct_from_string(s)
-    #                  for s in parts[4].split(",") if s != ""]
-    #     game.field = [Cardboard.construct_from_string(s)
-    #                   for s in parts[5].split(",") if s != ""]
-    #     game.grave = [Cardboard.construct_from_string(s)
-    #                   for s in parts[6].split(",") if s != ""]
-    #     game.stack = [StackObject.construct_from_string(s)
-    #                   for s in parts[7].split(",") if s != ""]
-    #     return game
+    @property
+    def active(self) -> Player:
+        return self.player_list[self.active_player_index]
+
+    @property
+    def priority(self) -> Player:
+        return self.player_list[self.priority_player_index]
+
+    @property
+    def total_turns(self):
+        return sum([p.turn_count for p in self.player_list])
 
     def copy_and_track(self, track_list) -> Tuple[GameState, list]:
         """Returns a disconnected copy of the gamestate and also
@@ -164,25 +106,13 @@ class GameState:
         If track_list has non-Cardboard objects, they're also
         returned"""
         # make new Gamestate and start copying attributes by value
-        state = GameState()
-        # copy mana pool
-        state.pool = self.pool.copy()
-        # these are all ints or bools, so safe to copy directly
-        state.turn_count = self.turn_count
-        state.is_my_turn = self.is_my_turn
-        state.life = self.life
-        state.opponent_life = self.opponent_life
-        state.has_played_land = self.has_played_land
-        state.num_spells_cast = self.num_spells_cast
+        state = GameState(0)
+        # copy the player list. new players automatically added to state.
+        [p.copy(state) for p in self.player_list]
+        # copy history stuff
         state.is_tracking_history = self.is_tracking_history
         state.previous_state = self if state.is_tracking_history else None
         state.events_since_previous = ""
-        # for the lists of Cardboards (hand, deck, field, grave), spin
-        # through making copies as I go. The ordering will be maintained
-        state.hand = [c.copy() for c in self.hand]
-        state.deck = [c.copy() for c in self.deck]
-        state.field = [c.copy() for c in self.field]
-        state.grave = [c.copy() for c in self.grave]
         # now copy the stack and superstack, which are made of StackObjects.
         # Need to append as I go, in case of pointers to StackObjects, so
         # I can't use list comprehensions. Must use a loop. I tried. --Cobi.
@@ -197,8 +127,7 @@ class GameState:
         return state, new_track_list
 
     @staticmethod
-    def copy_stack_object(state_orig: GameState, state_new: GameState,
-                          obj: StackObject):
+    def copy_stack_object(state_orig: GameState, state_new: GameState, obj):
         """This function assumes that everything except the
         stack and superstack have already been copied
         correctly. In other words, all Cardboards have
@@ -207,9 +136,9 @@ class GameState:
         # if this StackObject is a pointer to a DIFFERENT StackObject on the
         # stack which already has a copy, then just return a pointer to that
         # copy. (Relevant for e.g. counterspell, which targets a StackObject)
-        if isinstance(obj, StackObject) and obj in state_orig.stack:
+        if obj in state_orig.stack:
             index = state_orig.stack.index(obj)
-            if len(state_new.stack) > index:
+            if len(state_new.stack) > state_orig.stack.index(obj):
                 return state_new.stack[index]
         # If card is ACTUALLY on the stack, then just make new copy of it. But
         # if it's in a non-stack zone, this is a pointer, and we need to find
@@ -217,8 +146,8 @@ class GameState:
         if obj.card.zone == ZONE.STACK:
             new_card = obj.card.copy()
         else:
-            zone_orig = state_orig.get_zone(obj.card.zone)
-            zone_new = state_new.get_zone(obj.card.zone)
+            zone_orig = obj.card.get_home_zone_list(state_orig)
+            zone_new = obj.card.get_home_zone_list(state_new)
             # look for true equality (not just equivalence) in old cards
             jj = [ii for ii, c in enumerate(zone_orig) if c is obj.card][0]
             new_card = zone_new[jj]
@@ -246,8 +175,8 @@ class GameState:
                 if item.zone == ZONE.STACK:
                     new_card = item.copy()  # truly on stack, so isn't ref
                 else:
-                    zone_orig = state_orig.get_zone(item.zone)
-                    zone_new = state_new.get_zone(item.zone)
+                    zone_orig = item.get_home_zone_list(state_orig)
+                    zone_new = item.get_home_zone_list(state_new)
                     jj = [ii for ii, c in enumerate(zone_orig) if c is item][0]
                     new_card = zone_new[jj]
                 new_list.append(new_card)
@@ -266,21 +195,6 @@ class GameState:
     def copy(self) -> GameState:
         return self.copy_and_track([])[0]
 
-    def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
-        if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
-            zone = self.deck
-        elif zone_name == ZONE.HAND:
-            zone = self.hand
-        elif zone_name == ZONE.FIELD:
-            zone = self.field
-        elif zone_name == ZONE.GRAVE:
-            zone = self.grave
-        elif zone_name == ZONE.STACK:
-            zone = self.stack
-        else:
-            raise IndexError
-        return zone
-
     def get_all_history(self):
         text = ""
         if self.previous_state is not None:
@@ -294,23 +208,38 @@ class GameState:
         """Either has items on the stack to resolve, or has
         activated abilities that can be activated (including
         mana abilities), or has cards that can be cast."""
-        return (len(self.stack) + len(self.get_valid_activations())
-                + len(self.get_valid_castables())) > 0
+        opts = sum(
+            [len(p.get_valid_activations()) + len(p.get_valid_castables())
+             for p in self.player_list])
+        return opts + len(self.stack) > 0
 
-    # -----MUTATING FUNCTIONS
+    def get_zone(self, zone, player_index: int | None):
+        """Returns the zone belonging to the specified player.
+        If `player_index` is None and the zone is a private zone
+        that ought to belong to only a single player (HAND, DECk,
+        FIELD, GRAVE), then returns a concatenated list of ALL
+        of those zones. This latter functionality is useful for
+        stuff like "find every creature in play, no matter who
+        controls it." """
+        if zone in [ZONE.NEW, ZONE.UNKNOWN]:
+            raise ValueError("These zones don't actually exist!")
+        elif zone == ZONE.STACK:
+            return self.stack
+        elif player_index is not None:
+            return self.player_list[player_index].get_zone(zone)
+        else:
+            new_list = []
+            for player in self.player_list:
+                new_list += player.get_zone(zone)
+            return new_list
 
-    def re_sort(self, zone_name):
-        """sort the specified zone, if it is a zone that is supposed
-        to be sorted"""
-        if zone_name == ZONE.HAND:
-            self.hand.sort(key=Cardboard.get_id)
-        elif zone_name == ZONE.FIELD:
-            self.field.sort(key=Cardboard.get_id)
-        elif zone_name == ZONE.GRAVE:
-            self.grave.sort(key=Cardboard.get_id)
-        # no other zones are sorted, so we're done.
+    def get_all_public_cards(self):
+        faceup = []
+        for player in self.player_list:
+            faceup += player.field + player.grave
+        return faceup
 
-    def MoveZone(self, cardboard, destination):
+    def give_to(self, cardboard, destination, player_index=0):
         """Move the specified piece of cardboard from the zone
         it is currently in to the specified destination zone.
         Raises IndexError if the cardboard is not in the zone
@@ -318,6 +247,10 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
+        if cardboard.controller_index < 0:
+            cardboard.controller_index = player_index
+        if cardboard.owner_index < 0:
+            cardboard.owner_index = player_index
         mover = MoveToZone(destination)
         mover.add_self_to_state_history = lambda g, c, ch: None  # silent
         mover.do_it(self, cardboard, [])
@@ -329,44 +262,55 @@ class GameState:
         toughness is less than 0.
         Adds any triggered StackAbilities to the super_stack.
         """
-        i = 0
-        while i < len(self.field):
-            cardboard = self.field[i]
-            toughness = Get.Toughness().get(self, cardboard)
-            if toughness is not None and toughness <= 0:
-                MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
-                continue  # don't increment counter
-            i += 1
-        # legend rule   # TODO
+        for player in self.player_list:
+            i = 0
+            while i < len(player.field):
+                cardboard = player.field[i]
+                toughness = Get.Toughness().get(self, cardboard)
+                if toughness is not None and toughness <= 0:
+                    MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
+                    continue  # don't increment counter
+                i += 1
+            # legend rule   # TODO
 
     def step_untap(self):
-        """MUTATES. Adds any triggered StackAbilities to the super_stack."""
+        """MUTATES. Adds any triggered StackAbilities to the
+        super_stack. This function is where things reset for
+        the turn."""
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
-            turn = self.turn_count
-            self.events_since_previous += "\nUntap step: now turn %i" % turn
-        self.pool = ManaPool("")
+            turn = self.active.turn_count
+            ii = self.active_player_index
+            self.events_since_previous += "\nUntap step: P%i T%i" % (turn, ii)
+        self.phase = GameState.PHASES.index("untap")
+        # make sure that the stack is empty
         self.stack = []
-        self.turn_count += 1
-        self.has_played_land = False
-        self.num_spells_cast = 0  # reset this counter
+        self.super_stack = []
+        # resets that happen for all players
+        for player in self.player_list:
+            player.pool = ManaPool("")
+            player.num_spells_cast = 0
+            player.num_lands_played = 0
+            for card in player.field:
+                # erase the invisible counters
+                card.counters = [c for c in card.counters if c[0] not in "@$"]
+        # things which happen only for the newly active player
+        self.active.turn_count += 1
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
-        for card in self.field:
+        for card in self.active.field:
             UntapSelf().do_it(self, card, [])
             card.summon_sick = False
-            # erase the invisible counters
-            card.counters = [c for c in card.counters if
-                             c[0] not in ("@", "$")]
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def step_upkeep(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
-        for cardboard in self.hand + self.field + self.grave:
-            for ability in cardboard.rules_text.trig_upkeep:
-                new_effect = StackTrigger(ability, cardboard, [])
+        self.phase = GameState.PHASES.index("upkeep")
+        for card in self.get_all_public_cards():
+            for ability in card.rules_text.trig_upkeep:
+                new_effect = StackTrigger(ability, card, [])
                 self.super_stack.append(new_effect)
 
     def step_draw(self):
@@ -375,6 +319,7 @@ class GameState:
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
             self.events_since_previous += "\nDraw step"
+        self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
         DrawCard().do_it(self, CardNull(), [])
@@ -475,13 +420,114 @@ class GameState:
     def step_attack(self):
         if self.is_tracking_history:
             self.events_since_previous += "\nGo to combat"
+        self.phase = GameState.PHASES.index("combat")
         print("not yet implemented")
         return
 
-    # -------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+
+
+class Player:
+    def __init__(self, state: GameState):
+        """Initializer also adds the new Player to the
+        GameState's list of players"""
+        self.gamestate: GameState = state
+        self.player_index: int = len(state.player_list)
+        state.player_list.append(self)
+        self.turn_count: int = 0
+        self.life: int = 20
+        self.num_lands_played: int = 0
+        self.num_spells_cast: int = 0  # number of spells you cast this turn
+        self.pool: ManaPool = ManaPool("")
+        # game zones
+        self.deck: List[Cardboard] = []  # list of Cardboard objects
+        self.hand: List[Cardboard] = []  # list of Cardboard objects
+        self.field: List[Cardboard] = []  # list of Cardboard objects
+        self.grave: List[Cardboard] = []  # list of Cardboard objects
+
+    @property
+    def is_my_turn(self):
+        return self.player_index == self.gamestate.active_player_index
+
+    @property
+    def is_my_priority(self):
+        return self.player_index == self.gamestate.priority_player_index
+
+    @property
+    def land_drops_left(self):
+        return 1 - self.num_lands_played
+
+    def __str__(self):
+        txt = "Player%i" % self.player_index
+        txt += "(ACTIVE)" if self.is_my_turn else ""
+        txt += "(PRIORITY)" if self.is_my_priority else ""
+        txt += "  T:%2i" % self.turn_count
+        txt += "  HP:%2i" % self.life
+        txt += "  Deck:%2i" % len(self.deck)
+        txt += "  Mana:(%6s)" % str(self.pool)
+        if len(self.hand) > 0:
+            txt += "\nHAND:   " + ",".join([str(card) for card in self.hand])
+        if len(self.field) > 0:
+            txt += "\nFIELD:  " + ",".join([str(card) for card in self.field])
+        if len(self.grave) > 0:
+            txt += "\nGRAVE:  " + ",".join([str(card) for card in self.grave])
+        return txt
+
+    def get_id(self):
+        index = "P%i" % self.player_index
+        index += "A" if self.is_my_turn else ""
+        index += "P" if self.is_my_priority else ""
+        turn = "t%i" % self.turn_count
+        life = "life%i" % self.life
+        land = "land%i" % self.num_lands_played
+        storm = "storm%i" % self.num_spells_cast
+        pool = "(%s)" % str(self.pool)
+        deck = "deck%i" % len(self.deck)
+        hand = ",".join([c.get_id() for c in self.hand])
+        field = ",".join([c.get_id() for c in self.field])
+        grave = ",".join([c.get_id() for c in self.grave])
+        return "|".join([index, turn, life, land, storm, pool,
+                         deck, hand, field, grave])
+
+    def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
+        if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
+            zone = self.deck
+        elif zone_name == ZONE.HAND:
+            zone = self.hand
+        elif zone_name == ZONE.FIELD:
+            zone = self.field
+        elif zone_name == ZONE.GRAVE:
+            zone = self.grave
+        else:
+            raise IndexError
+        return zone
+
+    def copy(self, new_state: GameState) -> Player:
+        """Returns a disconnected copy of the Player and also
+        a list of Cardboards in the new Player corresponding
+        to the list of Cardboards we were asked to track. This
+        allows tracking "between split universes."
+        If track_list has non-Cardboard objects, they're also
+        returned"""
+        new_player = Player(new_state)
+        # copy the ints by value
+        new_player.turn_count = self.turn_count
+        new_player.life = self.life
+        new_player.num_lands_played = self.num_lands_played
+        new_player.num_spells_cast = self.num_spells_cast
+        # copy mana pool
+        new_player.pool = self.pool.copy()
+        # for the lists of Cardboards (hand, deck, field, grave), spin
+        # through making copies as I go. The ordering will be maintained
+        new_player.hand = [c.copy() for c in self.hand]
+        new_player.deck = [c.copy() for c in self.deck]
+        new_player.field = [c.copy() for c in self.field]
+        new_player.grave = [c.copy() for c in self.grave]
+        return new_player
 
     def get_valid_activations(self) -> List[Tuple[
-                                       ActivatedAbility, Cardboard, list]]:
+        ActivatedAbility, Cardboard, list]]:
         """
         Return a list of all abilities that can be put on the
         stack right now. The form of the return is a tuple of
@@ -490,14 +536,15 @@ class GameState:
         """
         activatables = []
         active_objects = []  # objects I've already checked through
+        game = self.gamestate
         for source in self.hand + self.field + self.grave:
             if any([source.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
                 # find available choice options, see if any let me activate
-                for choices in ability.get_activation_options(self, source):
-                    if ability.can_be_activated(self, source, choices):
+                for choices in ability.get_activation_options(game, source):
+                    if ability.can_be_activated(game, source, choices):
                         # this ability with this set of choices is castable!
                         activatables.append((ability, source, choices))
                         add_object = True
@@ -511,17 +558,28 @@ class GameState:
         have not yet been paid for or moved from their current
         zones. Think of these like pointers."""
         castables = []
-        # look for all cards that can be cast
         active_objects = []
+        game = self.gamestate
         for card in self.hand:
             if any([card.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
             add_object = False
             # find available choice options, see if any let me cast the card
-            for choices in card.get_cast_options(self):
-                if card.can_be_cast(self, choices):
+            for choices in card.get_cast_options(game):
+                if card.can_be_cast(game, choices):
                     castables.append((card, choices))
                     add_object = True
             if add_object:  # track any card that can be cast at least one way
                 active_objects.append(card)
         return castables
+
+    def re_sort(self, zone_name):
+        """sort the specified zone, if it is a zone that is supposed
+        to be sorted"""
+        if zone_name == ZONE.HAND:
+            self.hand.sort(key=Cardboard.get_id)
+        elif zone_name == ZONE.FIELD:
+            self.field.sort(key=Cardboard.get_id)
+        elif zone_name == ZONE.GRAVE:
+            self.grave.sort(key=Cardboard.get_id)
+        # no other zones are sorted, so we're done.

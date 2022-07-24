@@ -61,7 +61,8 @@ class Caretaker(Creature):
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
                                 Verbs.TapAny(Match.NotSelf() & Match.Untapped()
-                                             & Match.CardType(Creature))),
+                                             & Match.CardType(Creature)
+                                             & Match.YouControl())),
                            Verbs.AddMana("A"))
 
 
@@ -78,9 +79,11 @@ class Battlement(Creature):
         self.add_activated("Battlement add G",
                            Cost(TapSymbol()),
                            VerbManyTimes(Verbs.AddMana("G"),
-                                         Get.NumberInZone(
-                                             Match.Keyword("defender"),
-                                             ZONE.FIELD)))
+                                         Get.NumberInZone(ZONE.FIELD,
+                                                          Match.Keyword(
+                                                              "defender")
+                                                          & Match.YouControl())
+                                         ))
 
 
 # -----------------------------------------------------------------------------
@@ -96,9 +99,11 @@ class Axebane(Creature):
         self.add_activated("Axebane add Au",
                            Cost(TapSymbol()),
                            VerbManyTimes(Verbs.AddMana("A"),
-                                         Get.NumberInZone(
-                                             Match.Keyword("defender"),
-                                             ZONE.FIELD)))
+                                         Get.NumberInZone(ZONE.FIELD,
+                                                          Match.Keyword(
+                                                              "defender")
+                                                          & Match.YouControl())
+                                         ))
 
 
 # -----------------------------------------------------------------------------
@@ -148,21 +153,21 @@ class Arcades(Creature):
 # -----------------------------------------------------------------------------
 
 
-class Company(Instant):
-    def __init__(self):
-        super().__init__()
-        self.name = "CollectedCompany"
-        self.cost = Cost("3G")
-        get_from = Get.ListTopOfDeck(Match.CardType(Creature) &
-                                     Match.ManaValue("<=", 3),
-                                     get_depth=6)
-        self.effect = VerbOnSplitList(
-            act_on_chosen=Verbs.MoveToZone(ZONE.FIELD),
-            act_on_non_chosen=Verbs.MoveToZone(ZONE.DECK_BOTTOM),
-            chooser=Get.Chooser(getter=get_from,
-                                num_to_choose=2,
-                                can_be_fewer=True)
-            )
+# class Company(Instant):
+#     def __init__(self):
+#         super().__init__()
+#         self.name = "CollectedCompany"
+#         self.cost = Cost("3G")
+#         get_from = Get.ListTopOfDeck(Match.CardType(Creature) &
+#                                      Match.ManaValue("<=", 3),
+#                                      get_depth=6)
+#         self.effect = VerbOnSplitList(
+#             act_on_chosen=Verbs.MoveToZone(ZONE.FIELD),
+#             act_on_non_chosen=Verbs.MoveToZone(ZONE.DECK_BOTTOM),
+#             chooser=Get.Chooser(getter=get_from,
+#                                 num_to_choose=2,
+#                                 can_be_fewer=True)
+#             )
 
 
 # coco = Company()
