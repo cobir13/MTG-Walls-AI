@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from ManaHandler import ManaCost
-from Verbs import Verb, PayMana, ManyVerbs, NullVerb
+from Verbs import Verb, PayMana, MultiVerb, NullVerb
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -31,11 +31,11 @@ class Cost:
             elif len(self.additional) == 1:
                 return self.additional[0]
             else:  # longer than 1
-                return ManyVerbs(self.additional)
+                return MultiVerb(self.additional)
         else:
             mana_verb = PayMana(str(self.mana_cost))
             if len(self.additional) > 0:
-                return ManyVerbs([mana_verb] + self.additional)
+                return MultiVerb([mana_verb] + self.additional)
             else:
                 return mana_verb
 

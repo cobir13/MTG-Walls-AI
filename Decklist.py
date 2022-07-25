@@ -9,7 +9,6 @@ from RulesText import Creature, Land, Instant, TapSymbol  # , Sorcery
 import ZONE
 import MatchCardPatterns as Match
 import Verbs
-from Verbs import ChooseAVerb, VerbManyTimes, VerbOnSplitList
 from Costs import Cost
 
 from Abilities import TriggerOnMove, AsEnterEffect, TriggerOnSelfEnter
@@ -29,7 +28,7 @@ class Roots(Creature):
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 5)
         self.add_activated("Roots add G",
-                           Cost(Verbs.AddCounterToSelf("-0/-1"),
+                           Cost(Verbs.AddCounter("-0/-1"),
                                 Verbs.ActivateOncePerTurn("Roots add G")),
                            Verbs.AddMana("G"))
 
@@ -60,9 +59,10 @@ class Caretaker(Creature):
         self.set_power_toughness(0, 3)
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
-                                Verbs.TapAny(Match.Another() & Match.Untapped()
-                                             & Match.CardType(Creature)
-                                             & Match.YouControl())),
+                                Verbs.Tap().on(Match.Another()
+                                               & Match.Untapped()
+                                               & Match.CardType(Creature)
+                                               & Match.YouControl())),
                            Verbs.AddMana("A"))
 
 
@@ -76,14 +76,13 @@ class Battlement(Creature):
         self.cost = Cost("1G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
-        self.add_activated("Battlement add G",
-                           Cost(TapSymbol()),
-                           VerbManyTimes(Verbs.AddMana("G"),
-                                         Get.NumberInZone(ZONE.FIELD,
-                                                          Match.Keyword(
-                                                              "defender")
-                                                          & Match.YouControl())
-                                         ))
+        self.add_activated(
+            "Battlement add G",
+            Cost(TapSymbol()),
+            Verbs.AddMana(Get.ForEach("G", Get.Count(ZONE.FIELD,
+                                                     Match.Keyword("defender")
+                                                     & Match.YouControl())))
+            )
 
 
 # -----------------------------------------------------------------------------
@@ -96,14 +95,13 @@ class Axebane(Creature):
         self.cost = Cost("2G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 3)
-        self.add_activated("Axebane add Au",
-                           Cost(TapSymbol()),
-                           VerbManyTimes(Verbs.AddMana("A"),
-                                         Get.NumberInZone(ZONE.FIELD,
-                                                          Match.Keyword(
-                                                              "defender")
-                                                          & Match.YouControl())
-                                         ))
+        self.add_activated(
+            "Axebane add Au",
+            Cost(TapSymbol()),
+            Verbs.AddMana(Get.ForEach("A", Get.Count(ZONE.FIELD,
+                                                     Match.Keyword("defender")
+                                                     & Match.YouControl())))
+            )
 
 
 # -----------------------------------------------------------------------------
@@ -232,7 +230,8 @@ class TempleGarden(Forest, Plains):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
-                           ChooseAVerb([Verbs.Tap(), Verbs.LoseOwnLife(2)])
+                           Verbs.Defer(Verbs.Modal([Verbs.Tap(),
+                                                    Verbs.LoseLife(2)]))
                            )
 
 
@@ -244,7 +243,8 @@ class BreedingPool(Forest, Island):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
-                           ChooseAVerb([Verbs.Tap(), Verbs.LoseOwnLife(2)])
+                           Verbs.Defer(Verbs.Modal([Verbs.Tap(),
+                                                    Verbs.LoseLife(2)]))
                            )
 
 
@@ -256,7 +256,8 @@ class HallowedFountain(Plains, Island):
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
-                           ChooseAVerb([Verbs.Tap(), Verbs.LoseOwnLife(2)])
+                           Verbs.Defer(Verbs.Modal([Verbs.Tap(),
+                                                    Verbs.LoseLife(2)]))
                            )
 
 
@@ -270,7 +271,8 @@ class WindsweptHeath(Land):
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
-                           Verbs.LoseOwnLife(1) + Verbs.Sacrifice()
+                           Verbs.LoseLife(1)
+                           + Verbs.Sacrifice()
                            + Verbs.Tutor(ZONE.FIELD, 1,
                                          Match.CardType(Forest)
                                          | Match.CardType(Plains))
@@ -285,7 +287,8 @@ class MistyRainforest(Land):
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
-                           Verbs.LoseOwnLife(1) + Verbs.Sacrifice()
+                           Verbs.LoseLife(1)
+                           + Verbs.Sacrifice()
                            + Verbs.Tutor(ZONE.FIELD, 1,
                                          Match.CardType(Forest)
                                          | Match.CardType(Island))
@@ -300,7 +303,8 @@ class FloodedStrand(Land):
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
-                           Verbs.LoseOwnLife(1) + Verbs.Sacrifice()
+                           Verbs.LoseLife(1)
+                           + Verbs.Sacrifice()
                            + Verbs.Tutor(ZONE.FIELD, 1,
                                          Match.CardType(Island)
                                          | Match.CardType(Plains))

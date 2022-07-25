@@ -17,8 +17,7 @@ if TYPE_CHECKING:
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
     AlwaysTrigger
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
-    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent, \
-    VerbOnSubjectCard
+    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent, BaseVerb
 import ZONE
 
 
@@ -145,7 +144,9 @@ class TapSymbol(Tap):
         return (super().can_be_done(state, subject, choices)
                 and not (Match.CardType(Creature).match(subject, state,
                                                         subject)
-                         and subject.summon_sick))
+                         and subject.summon_sick
+                         and not Match.Keyword("haste").match(subject, state,
+                                                              subject)))
 
     def __str__(self):
         return "{T}"
@@ -153,7 +154,7 @@ class TapSymbol(Tap):
 
 # ----------
 
-class Revert(VerbOnSubjectCard):
+class Revert(BaseVerb):
     def can_be_done(self, state: GameState, subject: Cardboard,
                     choices: list) -> bool:
         return True
@@ -168,7 +169,7 @@ class Revert(VerbOnSubjectCard):
         return True
 
 
-class Animate(VerbOnSubjectCard):
+class Animate(BaseVerb):
     def __init__(self, creature_type: Creature):
         super().__init__()
         self.creature_type = creature_type

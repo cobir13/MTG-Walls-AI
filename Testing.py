@@ -7,13 +7,12 @@ Created on Tue Dec 29 22:15:57 2020
 from __future__ import annotations
 from typing import Tuple, List
 
-import RulesText
 from Abilities import ActivatedAbility
 import ZONE
 from GameState import GameState
 import ManaHandler
 import Decklist
-from Cardboard import Cardboard, CardNull
+from Cardboard import Cardboard
 from PlayTree import PlayTree
 import Verbs
 import Stack
@@ -56,13 +55,14 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("U").do_it(game_orig, CardNull(), [])
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig,
+                                                   game_orig.active, [])
     assert len(tuple_list) == 1
     mana_game, _, choices = tuple_list[0]
     assert len(choices) == 0
-    assert mana_game.active.pool == ManaHandler.ManaPool("U")
+    assert mana_game.active.pool == ManaHandler.ManaPool("R")
     # because AddMana mutates, returned game IS original game
-    assert game_orig.active.pool == ManaHandler.ManaPool("U")
+    assert game_orig.active.pool == ManaHandler.ManaPool("R")
     assert mana_game is game_orig
 
     # check the abilities of Wall of Roots in hand. it has 1 but can't be used.

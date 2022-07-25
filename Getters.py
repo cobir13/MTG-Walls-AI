@@ -87,8 +87,19 @@ class ConstString(Const, String):
 
 # ----------
 
+class ForEach(String):
+    def __init__(self, string_to_copy: str, num: Integer):
+        self.string_to_copy = string_to_copy
+        self.num_to_copy = num
 
-class NumberInZone(Integer):
+    def get(self, state: GameState, source: SOURCE):
+        return self.string_to_copy * self.num_to_copy.get(state, source)
+
+
+# ----------
+
+
+class Count(Integer):
     """Get the number of Cardboards which match all given pattern.
     NOTE: checks all Players' zones, so be sure to include the
     pattern for "YouControl" or similar."""
