@@ -17,7 +17,7 @@ from PlayTree import PlayTree
 import Verbs
 import Stack
 import Costs
-import MatchCardPatterns as Match
+import Match as Match
 import time
 
 if __name__ == "__main__":
@@ -55,8 +55,7 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig,
-                                                   game_orig.active, [])
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, PLAYER, SUBJECT)
     assert len(tuple_list) == 1
     mana_game, _, choices = tuple_list[0]
     assert len(choices) == 0
@@ -382,7 +381,9 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 1  # play fetch
     matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
-    assert len([c for c in game.active.deck if matcher.match(c, game, c)]) == 5
+    assert len([c for c in game.active.deck if
+                matcher.match(Player | Cardboard | StackObject, GameState,
+                              SOURCE)]) == 5
 
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -489,11 +490,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, game1.active.hand[0], [])[0][0]
-    game1B = mover.do_it(game1A, game1A.active.hand[0], [])[0][0]
+    game1A = mover.do_it(game1, PLAYER, SUBJECT)[0][0]
+    game1B = mover.do_it(game1A, PLAYER, SUBJECT)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, game2.active.hand[1], [])[0][0]
-    game2B = mover.do_it(game2A, game2A.active.hand[0], [])[0][0]
+    game2A = mover.do_it(game2, PLAYER, SUBJECT)[0][0]
+    game2B = mover.do_it(game2A, PLAYER, SUBJECT)[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -504,13 +505,13 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, game1.active.hand[0], [])[0][0]
+    game1A = mover.do_it(game1, PLAYER, SUBJECT)[0][0]
     game1A.step_untap()
-    game1B = mover.do_it(game1A, game1A.active.hand[0], [])[0][0]
+    game1B = mover.do_it(game1A, PLAYER, SUBJECT)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, game2.active.hand[1], [])[0][0]
+    game2A = mover.do_it(game2, PLAYER, SUBJECT)[0][0]
     game2A.step_untap()
-    game2B = mover.do_it(game2A, game2A.active.hand[0], [])[0][0]
+    game2B = mover.do_it(game2A, PLAYER, SUBJECT)[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.step_untap()

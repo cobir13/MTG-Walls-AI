@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from RulesText import RulesText
 import Costs
+import Match
 
 
 # -----------------------------------------------------------------------------
@@ -37,7 +38,7 @@ class Cardboard:
             str] = []  # sorted list of counters. Also other trackers
         # track where the card is: index (within a gamestate) of the player
         # who controls it, index of the player who ownes it, and its zone.
-        self.controller_index = -1
+        self.player_index = -1  # controller. duck-type to Player.player_index
         self.owner_index = -1
         self.zone = ZONE.NEW
 
@@ -60,7 +61,7 @@ class Cardboard:
         # safe to copy by reference since they're all ints, str, etc
         new_card.tapped = self.tapped
         new_card.summon_sick = self.summon_sick
-        new_card.controller_index = self.controller_index
+        new_card.player_index = self.player_index
         new_card.owner_index = self.owner_index
         new_card.zone = self.zone
         # counters is a LIST so it needs to be copied without reference
@@ -88,7 +89,7 @@ class Cardboard:
         elif self.zone == ZONE.STACK:
             return state.stack
         else:
-            return state.player_list[self.controller_index].get_zone(self.zone)
+            return state.player_list[self.player_index].get_zone(self.zone)
 
     def get_activated(self):
         return self.rules_text.activated
@@ -101,7 +102,7 @@ class Cardboard:
             s += "T"
         if self.summon_sick:
             s += "S"
-        s += "_P%iz%s" % (self.controller_index, str(self.zone))
+        s += "_P%iz%s" % (self.player_index, str(self.zone))
         if len(self.counters) > 0:
             s += "[" + ",".join(self.counters) + "]"
         return s
@@ -137,10 +138,11 @@ class Cardboard:
                          c[0] == "$"]  # sticky counters stay
 
     def get_cast_options(self, state: GameState):
-        return self.rules_text.caster_verb.choose_choices(state, self, None)
+        return self.rules_text.caster_verb.get_input_options(state, self, None)
 
     def can_be_cast(self, state: GameState, choices: list):
-        return self.rules_text.caster_verb.can_be_done(state, self, choices)
+        return self.rules_text.caster_verb.can_be_done(state, PLAYER, SUBJECT,
+                                                       self, choices)
 
     def cast(self, state: GameState, choices: list) -> List[GameState]:
         """Returns a list of GameStates where this spell has
@@ -152,8 +154,7 @@ class Cardboard:
         new_source = things[0]
         new_choices = things[1:]
         caster = new_source.rules_text.caster_verb
-        return [g for g, _, _ in caster.do_it(new_state, new_source,
-                                              new_choices)]
+        return [g for g, _, _ in caster.do_it(new_state, PLAYER, SUBJECT)]
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
@@ -264,6 +265,10 @@ class CardNull(Cardboard):
 
     def mana_value(self):
         return None
+
+
+
+
 
 # if __name__ == "__main__":
 #     import Decklist

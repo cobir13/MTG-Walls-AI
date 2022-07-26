@@ -19,6 +19,7 @@ class StackObject:
         # list of any modes or targets or other choices made during casting
         # or activation.  If targets are Cardboards, they are pointers.
         self.choices: list = choices
+        self.player_index = card.player_index  # TODO: only USUALLY true!
 
     @property
     def cost(self) -> Cost | None:

@@ -7,7 +7,7 @@ Created on Tue Dec 29 11:50:12 2020
 import RulesText
 from RulesText import Creature, Land, Instant, TapSymbol  # , Sorcery
 import ZONE
-import MatchCardPatterns as Match
+import Match as Match
 import Verbs
 from Costs import Cost
 

@@ -247,13 +247,13 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        if cardboard.controller_index < 0:
-            cardboard.controller_index = player_index
+        if cardboard.player_index < 0:
+            cardboard.player_index = player_index
         if cardboard.owner_index < 0:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination)
         mover.add_self_to_state_history = lambda g, c, ch: None  # silent
-        mover.do_it(self, cardboard, [])
+        mover.do_it(self, PLAYER, SUBJECT)
 
     # -------------------------------------------------------------------------
 
@@ -268,7 +268,7 @@ class GameState:
                 cardboard = player.field[i]
                 toughness = Get.Toughness().get(self, cardboard)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, cardboard, [])
+                    MoveToZone(ZONE.GRAVE).do_it(self, PLAYER, SUBJECT)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -299,7 +299,7 @@ class GameState:
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
-            Untap().do_it(self, card, [])
+            Untap().do_it(self, PLAYER, SUBJECT)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
@@ -322,7 +322,7 @@ class GameState:
         self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
-        DrawCard().do_it(self, CardNull(), [])
+        DrawCard().do_it(self, PLAYER, SUBJECT)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
@@ -346,13 +346,12 @@ class GameState:
         tuple_list = [(new_state, stack_obj.card, [])]
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.effect is not None:
-            tuple_list = stack_obj.effect.do_it(new_state, stack_obj.card,
-                                                stack_obj.choices)
+            tuple_list = stack_obj.effect.do_it(new_state, PLAYER, SUBJECT)
         # if card is on stack (not just a pointer), move it to destination zone
         if stack_obj.card.zone == ZONE.STACK:
             mover = MoveToZone(stack_obj.card.rules_text.cast_destination)
             for g, s, ch in tuple_list:
-                mover.do_it(g, s, ch)  # mutates in-place
+                mover.do_it(g, PLAYER, SUBJECT)  # mutates in-place
         # clear the superstack and return!
         results = []
         for state2, _, _ in tuple_list:
@@ -433,6 +432,7 @@ class Player:
         """Initializer also adds the new Player to the
         GameState's list of players"""
         self.gamestate: GameState = state
+        # duck-type to Cardboard.player_index
         self.player_index: int = len(state.player_list)
         state.player_list.append(self)
         self.turn_count: int = 0
@@ -502,6 +502,10 @@ class Player:
         else:
             raise IndexError
         return zone
+
+    def has_type(self, some_type):
+        """duck-typed with Cardboard so SOURCE is valid type hint"""
+        return isinstance(self, some_type)
 
     def copy(self, new_state: GameState) -> Player:
         """Returns a disconnected copy of the Player and also

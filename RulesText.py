@@ -7,7 +7,7 @@ Created on Mon Dec 28 21:13:28 2020
 from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
-import MatchCardPatterns as Match
+import Match as Match
 import Costs
 
 if TYPE_CHECKING:
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
     AlwaysTrigger
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
-    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent, BaseVerb
+    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent
 import ZONE
 
 
@@ -139,14 +139,15 @@ class Sorcery(Spell):
 class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
-    def can_be_done(self, state: GameState, subject: Cardboard,
-                    choices: list) -> bool:
-        return (super().can_be_done(state, subject, choices)
-                and not (Match.CardType(Creature).match(subject, state,
-                                                        subject)
-                         and subject.summon_sick
-                         and not Match.Keyword("haste").match(subject, state,
-                                                              subject)))
+    def can_be_done(self, state: GameState, controller, subject,
+                    *inputs: Cardboard) -> bool:
+        return (super().can_be_done(state, PLAYER, SUBJECT, inputs, choices)
+                and not (Match.CardType(Creature).match(
+                    Player | Cardboard | StackObject, GameState, SOURCE)
+                         and inputs.summon_sick
+                         and not Match.Keyword("haste").match(
+                            Player | Cardboard | StackObject, GameState,
+                            SOURCE)))
 
     def __str__(self):
         return "{T}"
@@ -155,11 +156,10 @@ class TapSymbol(Tap):
 # ----------
 
 class Revert(BaseVerb):
-    def can_be_done(self, state: GameState, subject: Cardboard,
-                    choices: list) -> bool:
+    def can_be_done(self, state: GameState, *inputs: Cardboard) -> bool:
         return True
 
-    def do_it(self, state, subject, choices):
+    def do_it(self, state, *inputs):
         while hasattr(subject.rules_text, "former"):
             subject.rules_text = subject.rules_text.former
         return [(state, subject, choices)]
@@ -174,11 +174,10 @@ class Animate(BaseVerb):
         super().__init__()
         self.creature_type = creature_type
 
-    def can_be_done(self, state: GameState, subject: Cardboard,
-                    choices: list) -> bool:
-        return subject.zone == ZONE.FIELD
+    def can_be_done(self, state: GameState, *inputs: Cardboard) -> bool:
+        return inputs.zone == ZONE.FIELD
 
-    def do_it(self, state, subject, choices):
+    def do_it(self, state, *inputs):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name

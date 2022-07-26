@@ -11,7 +11,7 @@ from typing import List, TYPE_CHECKING
 import Verbs
 import Costs
 import ZONE
-import MatchCardPatterns as Match
+import Match as Match
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -110,11 +110,12 @@ class ActivatedAbility:
 
     def get_activation_options(self, state: GameState, source: Cardboard
                                ) -> List[list]:
-        return self.caster_verb.choose_choices(state, source, source)
+        return self.caster_verb.get_input_options(state, source, source)
 
     def can_be_activated(self, state: GameState, source: Cardboard,
                          choices: list):
-        return self.caster_verb.can_be_done(state, source, choices)
+        return self.caster_verb.can_be_done(state, PLAYER, SUBJECT, source,
+                                            choices)
 
     def activate(self, state: GameState, source: Cardboard, choices: list
                  ) -> List[GameState]:
@@ -122,8 +123,8 @@ class ActivatedAbility:
         been cast (put onto the stack) and all costs paid.
         GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
         # PlayAbility.do_it does not mutate
-        return [g for g, _, _ in self.caster_verb.do_it(state, source,
-                                                        choices)]
+        return [g for g, _, _ in
+                self.caster_verb.do_it(state, PLAYER, SUBJECT)]
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))
@@ -154,12 +155,13 @@ class TriggeredAbility:
 
     def get_target_options(self, state: GameState, source: Cardboard,
                            cause: Cardboard) -> List[list]:
-        return self.caster_verb.choose_choices(state, source, cause)
+        return self.caster_verb.get_input_options(state, source, cause)
 
     def can_be_added(self, state: GameState, source: Cardboard, choices: list):
         """First element of `choices` must be the thing which
         caused this ability to trigger."""
-        return self.caster_verb.can_be_done(state, source, choices)
+        return self.caster_verb.can_be_done(state, PLAYER, SUBJECT, source,
+                                            choices)
 
     def add_to_stack(self, state: GameState, source: Cardboard, choices: list
                      ) -> List[GameState]:
@@ -168,8 +170,8 @@ class TriggeredAbility:
         First element of `choices` must be the thing which
         caused this ability to trigger.
         Returns a list of new GameStates, DOES NOT MUTATE."""
-        return [g for g, _, _ in self.caster_verb.do_it(state, source,
-                                                        choices)]
+        return [g for g, _, _ in
+                self.caster_verb.do_it(state, PLAYER, SUBJECT)]
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.trigger), str(self.effect))
