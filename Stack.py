@@ -1,25 +1,27 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility
     from Cardboard import Cardboard
     from Verbs import Verb
     from Costs import Cost
+    from GameState import GameState
 
 
 class StackObject:
 
     def __init__(self, ability: ActivatedAbility | TriggeredAbility | None,
-                 card: Cardboard, choices: list):
+                 card: Cardboard, choices: tuple, caster_verb: Verb):
         # The Ability that is being activated, if any
         self.ability: ActivatedAbility | TriggeredAbility | None = ability
         # The Cardboard being cast, or the source of the ability, if any
         self.card: Cardboard = card
         # list of any modes or targets or other choices made during casting
         # or activation.  If targets are Cardboards, they are pointers.
-        self.choices: list = choices
+        self.choices: tuple = choices
         self.player_index = card.player_index  # TODO: only USUALLY true!
+        self.caster_verb = caster_verb
 
     @property
     def cost(self) -> Cost | None:
@@ -56,6 +58,13 @@ class StackObject:
     def name(self):
         return self.get_id()
 
+    def put_on_stack(self, state: GameState) -> List[GameState]:
+        """Returns a list of GameStates where this spell has
+        been cast (put onto the stack) and all costs paid.
+        GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
+        # PlayAbility.do_it does not mutate
+        return [g for g, _ in self.caster_verb.do_it(state, self)]
+
 
 class StackAbility(StackObject):
 
@@ -81,23 +90,29 @@ class StackAbility(StackObject):
 class StackTrigger(StackAbility):
 
     def __init__(self, ability: TriggeredAbility, card: Cardboard,
-                 choices: list):
+                 choices: tuple | list, caster_verb: Verb):
         """First entry in `choices` should be the Cardboard that
         caused the ability to trigger."""
-        super().__init__(ability, card, choices)
+        super().__init__(ability, card, choices, caster_verb)
         assert len(choices) >= 1
 
     @property
     def cause(self):
         return self.choices[0]
 
+    # def move_from_super_to_stack(self, game) -> List[GameState]:
+    #     if not self.caster_verb.can_be_done(game, self):
+    #         return [game]
+    #     else:
+    #         return [g for g, _ in self.caster_verb.do_it(game, self)]
+
 
 class StackCardboard(StackObject):
 
     def __init__(self, ability: ActivatedAbility | TriggeredAbility | None,
-                 card: Cardboard, choices: list):
+                 card: Cardboard, choices: tuple, caster_verb: Verb):
         assert ability is None
-        super().__init__(None, card, choices)
+        super().__init__(None, card, choices, caster_verb)
 
     def __str__(self):
         return "Spell: " + self.card.name

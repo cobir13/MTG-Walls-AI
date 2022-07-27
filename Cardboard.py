@@ -7,6 +7,7 @@ Created on Mon Dec 28 21:13:28 2020
 
 from __future__ import annotations
 
+import Stack
 import ZONE
 import tkinter as tk
 from typing import List, TYPE_CHECKING
@@ -14,10 +15,10 @@ from typing import List, TYPE_CHECKING
 if TYPE_CHECKING:
     from GameState import GameState
     from Verbs import Verb
+    from Stack import StackCardboard
 
 from RulesText import RulesText
 import Costs
-import Match
 
 
 # -----------------------------------------------------------------------------
@@ -137,24 +138,33 @@ class Cardboard:
         self.counters = [c for c in self.counters if
                          c[0] == "$"]  # sticky counters stay
 
-    def get_cast_options(self, state: GameState):
-        return self.rules_text.caster_verb.get_input_options(state, self, None)
-
-    def can_be_cast(self, state: GameState, choices: list):
-        return self.rules_text.caster_verb.can_be_done(state, PLAYER, SUBJECT,
-                                                       self, choices)
-
-    def cast(self, state: GameState, choices: list) -> List[GameState]:
-        """Returns a list of GameStates where this spell has
-        been cast (put onto the stack) and all costs paid.
-        GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
-        # if not self.rules_text.caster_verb.mutates:
-        #     return [g for g, _, _ in caster.do_it(state, self, choices)]
-        new_state, things = state.copy_and_track([self]+choices)
-        new_source = things[0]
-        new_choices = things[1:]
-        caster = new_source.rules_text.caster_verb
-        return [g for g, _, _ in caster.do_it(new_state, PLAYER, SUBJECT)]
+    def valid_stack_objects(self, state: GameState) -> List[StackCardboard]:
+        """Create as many valid StackCardboards as possible,
+        one for each valid way to cast this Cardboard.
+        This function doesn't ACTUALLY add them to stack
+        or pay their costs, it just works out the payment
+        options and target options and makes usable
+        StackObjects accordingly. If the card cannot be
+        cast, the empty list is returned."""
+        # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+        player = state.player_list[self.player_index]
+        payments = self.cost.get_options(state, player, self, None)
+        # keep only the valid ones
+        payments = [ch for ch in payments if self.cost.can_afford(state, *ch)]
+        # 601.2c: choose targets and modes
+        targets = self.effect.get_input_options(state, player, self, None)
+        targets = [ch for ch in targets if self.effect.can_be_done(state, *ch)]
+        # combine all combinations of these
+        obj_list = []
+        for sub_pay in payments:
+            for sub_target in targets:
+                # concatenate sub-lists
+                inputs = sub_pay + sub_target
+                # figure out which verb can be used to cast this object
+                caster_verb = self.rules_text.caster_verb
+                obj = Stack.StackCardboard(None, self, inputs, caster_verb)
+                obj_list.append(obj)
+        return obj_list
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
@@ -265,10 +275,6 @@ class CardNull(Cardboard):
 
     def mana_value(self):
         return None
-
-
-
-
 
 # if __name__ == "__main__":
 #     import Decklist

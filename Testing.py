@@ -55,9 +55,9 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, PLAYER, SUBJECT)
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, game_orig.active)
     assert len(tuple_list) == 1
-    mana_game, _, choices = tuple_list[0]
+    mana_game, choices = tuple_list[0]
     assert len(choices) == 0
     assert mana_game.active.pool == ManaHandler.ManaPool("R")
     # because AddMana mutates, returned game IS original game
@@ -68,9 +68,9 @@ if __name__ == "__main__":
     roots = game_orig.active.hand[0]
     assert len(roots.get_activated()) == 1
     roots_abil = roots.get_activated()[0]
-    choices = roots_abil.get_activation_options(game_orig, roots)
-    assert choices == [[]]  # list of empty list
-    assert not roots_abil.can_be_activated(game_orig, roots, [])
+    choices = roots_abil.activation_options(game_orig, game_orig.active, roots)
+    assert len(choices[0]) == 1  # all the ability needs is the target Roots
+    assert not roots_abil.can_be_activated(game_orig, choices)
 
     # move a Wall of Roots to field and try again
     game_orig.give_to(game_orig.active.hand[0], ZONE.FIELD)
@@ -80,9 +80,8 @@ if __name__ == "__main__":
     assert len(roots.get_activated()) == 1
     assert len(roots.counters) == 0  # no counters on it yet
     roots_abil = roots.get_activated()[0]
-    choices = roots_abil.get_activation_options(game_orig, roots)
-    assert choices == [[]]  # list of empty list
-    assert roots_abil.can_be_activated(game_orig, roots, [])
+    choices = roots_abil.activation_options(game_orig, game_orig.active, roots)
+    assert roots_abil.can_be_activated(game_orig, choices)
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
@@ -382,8 +381,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_castables()) == 1  # play fetch
     matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
     assert len([c for c in game.active.deck if
-                matcher.match(Player | Cardboard | StackObject, GameState,
-                              SOURCE)]) == 5
+                matcher.match(c, game, game.active.hand[0])]) == 5
 
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -490,11 +488,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, PLAYER, SUBJECT)[0][0]
-    game1B = mover.do_it(game1A, PLAYER, SUBJECT)[0][0]
+    game1A = mover.do_it(game1, game1.active.hand[0])[0][0]
+    game1B = mover.do_it(game1A, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, PLAYER, SUBJECT)[0][0]
-    game2B = mover.do_it(game2A, PLAYER, SUBJECT)[0][0]
+    game2A = mover.do_it(game2, game2.active.hand[1])[0][0]
+    game2B = mover.do_it(game2A, game2.active.hand[0])[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -505,13 +503,13 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, PLAYER, SUBJECT)[0][0]
+    game1A = mover.do_it(game1, game1.active.hand[0])[0][0]
     game1A.step_untap()
-    game1B = mover.do_it(game1A, PLAYER, SUBJECT)[0][0]
+    game1B = mover.do_it(game1A, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, PLAYER, SUBJECT)[0][0]
+    game2A = mover.do_it(game2, game2.active.hand[1])[0][0]
     game2A.step_untap()
-    game2B = mover.do_it(game2A, PLAYER, SUBJECT)[0][0]
+    game2B = mover.do_it(game2A, game2.active.hand[0])[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.step_untap()

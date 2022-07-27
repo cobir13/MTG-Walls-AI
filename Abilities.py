@@ -11,10 +11,11 @@ from typing import List, TYPE_CHECKING
 import Verbs
 import Costs
 import ZONE
-import Match as Match
+import Match
+import Stack
 
 if TYPE_CHECKING:
-    from GameState import GameState
+    from GameState import GameState, Player
     from Cardboard import Cardboard
 
 # ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 class Trigger:
 
     def __init__(self, verb_type: type,
-                 pattern_for_subject: Match.CardPattern):
+                 pattern_for_subject: Match.Pattern):
         self.verb_type = verb_type
         self.pattern = pattern_for_subject
 
@@ -42,7 +43,7 @@ class Trigger:
 
 class TriggerOnMove(Trigger):
 
-    def __init__(self, pattern_for_subject: Match.CardPattern, origin,
+    def __init__(self, pattern_for_subject: Match.Pattern, origin,
                  destination):
         super().__init__(Verbs.MoveToZone, pattern_for_subject)
         self.origin = origin
@@ -104,27 +105,36 @@ class ActivatedAbility:
         self.name: str = name
         self.cost: Costs.Cost = cost
         self.effect: Verbs.Verb = effect
-        self.caster_verb: Verbs.PlayAbility = Verbs.PlayAbility(self)
-        if effect.is_type(Verbs.AddMana):
-            self.caster_verb = Verbs.PlayManaAbility(self)
 
-    def get_activation_options(self, state: GameState, source: Cardboard
-                               ) -> List[list]:
-        return self.caster_verb.get_input_options(state, source, source)
-
-    def can_be_activated(self, state: GameState, source: Cardboard,
-                         choices: list):
-        return self.caster_verb.can_be_done(state, PLAYER, SUBJECT, source,
-                                            choices)
-
-    def activate(self, state: GameState, source: Cardboard, choices: list
-                 ) -> List[GameState]:
-        """Returns a list of GameStates where this spell has
-        been cast (put onto the stack) and all costs paid.
-        GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
-        # PlayAbility.do_it does not mutate
-        return [g for g, _, _ in
-                self.caster_verb.do_it(state, PLAYER, SUBJECT)]
+    def valid_stack_objects(self, state: GameState, player: Player,
+                            source: Cardboard) -> List[Stack.StackAbility]:
+        """Create as many valid StackAbilities as possible,
+        one for each valid way to activate this ability.
+        This function doesn't ACTUALLY add them to stack
+        or pay their costs, it just works out the payment
+        options and target options and makes usable
+        StackObjects accordingly. If the ability cannot
+        be activated, the empty list is returned."""
+        # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+        payments = self.cost.get_options(state, player, source, None)
+        # keep only the valid ones
+        payments = [ch for ch in payments if self.cost.can_afford(state, *ch)]
+        # 601.2c: choose targets and modes
+        targets = self.effect.get_input_options(state, player, source, None)
+        targets = [ch for ch in targets if self.effect.can_be_done(state, *ch)]
+        # combine all combinations of these
+        obj_list = []
+        for sub_pay in payments:
+            for sub_target in targets:
+                # concatenate sub-lists
+                inputs = sub_pay + sub_target
+                # figure out which verb can be used to cast this object
+                caster_verb: Verbs.UniversalCaster = Verbs.PlayAbility()
+                if self.effect.is_type(Verbs.AddMana):
+                    caster_verb = Verbs.PlayManaAbility()
+                obj = Stack.StackAbility(self, source, inputs, caster_verb)
+                obj_list.append(obj)
+        return obj_list
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))
@@ -138,40 +148,26 @@ class TriggeredAbility:
         self.name: str = name
         self.trigger: Trigger = trigger
         self.effect: Verbs.Verb = effect
-        add_triggered_ability = Verbs.AddTriggeredAbility(self)
-        self.caster_verb: Verbs.AddTriggeredAbility = add_triggered_ability
-        if isinstance(self.trigger, AsEnterEffect):
-            self.caster_verb = Verbs.AddAsEntersAbility(self)
+        self.num_inputs = effect.num_inputs
 
-    def is_triggered(self, verb: Verbs.Verb, state: GameState,
-                     source: Cardboard, trigger_card: Cardboard):
+    def add_any_to_super(self, verb: Verbs.Verb, state: GameState,
+                         source: Cardboard, trigger_card: Cardboard | None):
         """
-        Returns boolean "the given Verb `verb` being performed on
-        the card `trigger_card` meets self's trigger condition."
-        `source` is assumed to be the source of this triggered
-        ability.
+        MUTATES.
+        Checks if the given Verb `verb` being performed on the
+        card `trigger_card` meets this ability's trigger
+        condition. `source` is assumed to be the source of this
+        triggered ability. If the ability IS triggered, MUTATES
+        the GameState `state` to add a StackTrigger object to
+        the super_stack.
         """
-        return self.trigger.is_triggered(verb, state, source, trigger_card)
-
-    def get_target_options(self, state: GameState, source: Cardboard,
-                           cause: Cardboard) -> List[list]:
-        return self.caster_verb.get_input_options(state, source, cause)
-
-    def can_be_added(self, state: GameState, source: Cardboard, choices: list):
-        """First element of `choices` must be the thing which
-        caused this ability to trigger."""
-        return self.caster_verb.can_be_done(state, PLAYER, SUBJECT, source,
-                                            choices)
-
-    def add_to_stack(self, state: GameState, source: Cardboard, choices: list
-                     ) -> List[GameState]:
-        """Returns a list of GameStates where a StackObject
-        for this ability has been added to the stack.
-        First element of `choices` must be the thing which
-        caused this ability to trigger.
-        Returns a list of new GameStates, DOES NOT MUTATE."""
-        return [g for g, _, _ in
-                self.caster_verb.do_it(state, PLAYER, SUBJECT)]
+        if self.trigger.is_triggered(verb, state, source, trigger_card):
+            caster_verb = Verbs.AddTriggeredAbility()
+            if isinstance(self.trigger, AsEnterEffect):
+                caster_verb = Verbs.AddAsEntersAbility()
+            stack_obj = Stack.StackTrigger(self, source, [trigger_card],
+                                           caster_verb)
+            state.super_stack.append(stack_obj)
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.trigger), str(self.effect))

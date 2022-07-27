@@ -4,8 +4,7 @@ Created on Tue Dec 29 11:50:12 2020
 
 @author: Cobi
 """
-import RulesText
-from RulesText import Creature, Land, Instant, TapSymbol  # , Sorcery
+from RulesText import Creature, Land, TapSymbol  # , Instant, Sorcery
 import ZONE
 import Match as Match
 import Verbs

@@ -9,15 +9,17 @@ from typing import List, TYPE_CHECKING
 
 import Match as Match
 import Costs
+import Verbs
 
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
+    from Verbs import INPUT
 
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
     AlwaysTrigger
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
-    PlayCardboard, PlayLand, PlaySpellWithEffect, PlayPermanent
+    PlayCardboard, PlayLand, PlayPermanent
 import ZONE
 
 
@@ -104,7 +106,7 @@ class Land(Permanent):
 # ---------------------------------------------------------------------------
 
 class Spell(RulesText):
-    caster_verb: PlayCardboard = PlaySpellWithEffect()
+    caster_verb: PlayCardboard = PlayCardboard()
 
     def __init__(self):
         """
@@ -139,15 +141,14 @@ class Sorcery(Spell):
 class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
-    def can_be_done(self, state: GameState, controller, subject,
-                    *inputs: Cardboard) -> bool:
-        return (super().can_be_done(state, PLAYER, SUBJECT, inputs, choices)
-                and not (Match.CardType(Creature).match(
-                    Player | Cardboard | StackObject, GameState, SOURCE)
-                         and inputs.summon_sick
-                         and not Match.Keyword("haste").match(
-                            Player | Cardboard | StackObject, GameState,
-                            SOURCE)))
+    def can_be_done(self, state: GameState, subject: Cardboard, *others: INPUT
+                    ) -> bool:
+        return (super().can_be_done(state, subject, *others)
+                and not (Match.CardType(Creature).match(subject, state,
+                                                        subject)
+                         and subject.summon_sick
+                         and not Match.Keyword("haste").match(subject, state,
+                                                              subject)))
 
     def __str__(self):
         return "{T}"
@@ -155,29 +156,29 @@ class TapSymbol(Tap):
 
 # ----------
 
-class Revert(BaseVerb):
-    def can_be_done(self, state: GameState, *inputs: Cardboard) -> bool:
+class Revert(Verbs.AffectSubjectCard):
+    def can_be_done(self, state: GameState, *inputs: INPUT) -> bool:
         return True
 
-    def do_it(self, state, *inputs):
+    def do_it(self, state, subject: Cardboard, *inputs):
         while hasattr(subject.rules_text, "former"):
-            subject.rules_text = subject.rules_text.former
-        return [(state, subject, choices)]
+            subject.rules_text = getattr(subject.rules_text, "former")
+        return [(state, inputs)]
 
     @property
     def mutates(self):
         return True
 
 
-class Animate(BaseVerb):
+class Animate(Verbs.AffectSubjectCard):
     def __init__(self, creature_type: Creature):
         super().__init__()
         self.creature_type = creature_type
 
-    def can_be_done(self, state: GameState, *inputs: Cardboard) -> bool:
-        return inputs.zone == ZONE.FIELD
+    def can_be_done(self, state, subject: Cardboard, *others: INPUT) -> bool:
+        return subject.zone == ZONE.FIELD
 
-    def do_it(self, state, *inputs):
+    def do_it(self, state, subject: Cardboard, *others):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name
@@ -195,7 +196,7 @@ class Animate(BaseVerb):
                                                    AlwaysTrigger(), Revert()))
         # overwrite with new RulesText
         subject.rules_text = rules
-        return [(state, subject, choices)]
+        return super().do_it(state, subject, *others)
 
     @property
     def mutates(self):

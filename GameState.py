@@ -9,14 +9,13 @@ from typing import List, Tuple
 # if TYPE_CHECKING:
 #     from Abilities import ActivatedAbility
 
-from Cardboard import Cardboard, CardNull  # actually needs
+from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
 import ZONE
 from ManaHandler import ManaPool
-from Stack import StackAbility, StackCardboard, StackTrigger, StackObject
+from Stack import StackCardboard, StackTrigger, StackObject
 from Verbs import MoveToZone, DrawCard, Untap
 import Choices
-from Abilities import ActivatedAbility
 
 
 class GameState:
@@ -45,7 +44,7 @@ class GameState:
         # super_stack is a list of StackTrigger waiting to be put onto
         # the real stack. NOTHING CAN BE EXECUTED WHILE STUFF IS ON
         # THE SUPERSTACK (incl state-based)
-        self.stack: List[StackCardboard | StackAbility] = []
+        self.stack: List[StackObject] = []
         self.super_stack: List[StackTrigger] = []
         self.player_list: List[Player] = []
         for _ in range(num_players):
@@ -98,7 +97,8 @@ class GameState:
     def total_turns(self):
         return sum([p.turn_count for p in self.player_list])
 
-    def copy_and_track(self, track_list) -> Tuple[GameState, list]:
+    def copy_and_track(self, track_list: list | tuple
+                       ) -> Tuple[GameState, list | tuple]:
         """Returns a disconnected copy of the gamestate and also
         a list of Cardboards in the new gamestate corresponding
         to the list of Cardboards we were asked to track. This
@@ -252,8 +252,8 @@ class GameState:
         if cardboard.owner_index < 0:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination)
-        mover.add_self_to_state_history = lambda g, c, ch: None  # silent
-        mover.do_it(self, PLAYER, SUBJECT)
+        mover.add_self_to_state_history = lambda *args: None  # silent
+        mover.do_it(self, cardboard)
 
     # -------------------------------------------------------------------------
 
@@ -268,7 +268,7 @@ class GameState:
                 cardboard = player.field[i]
                 toughness = Get.Toughness().get(self, cardboard)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, PLAYER, SUBJECT)
+                    MoveToZone(ZONE.GRAVE).do_it(self, cardboard)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -299,7 +299,7 @@ class GameState:
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
-            Untap().do_it(self, PLAYER, SUBJECT)
+            Untap().do_it(self, card)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
@@ -310,8 +310,8 @@ class GameState:
         self.phase = GameState.PHASES.index("upkeep")
         for card in self.get_all_public_cards():
             for ability in card.rules_text.trig_upkeep:
-                new_effect = StackTrigger(ability, card, [])
-                self.super_stack.append(new_effect)
+                # adds any triggering abilities to self.super_stack
+                ability.add_any_to_super(self, self, card, None)
 
     def step_draw(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
@@ -322,7 +322,7 @@ class GameState:
         self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
-        DrawCard().do_it(self, PLAYER, SUBJECT)
+        DrawCard().do_it(self, self.active)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
@@ -346,12 +346,12 @@ class GameState:
         tuple_list = [(new_state, stack_obj.card, [])]
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.effect is not None:
-            tuple_list = stack_obj.effect.do_it(new_state, PLAYER, SUBJECT)
+            tuple_list = stack_obj.effect.do_it(new_state, *stack_obj.choices)
         # if card is on stack (not just a pointer), move it to destination zone
         if stack_obj.card.zone == ZONE.STACK:
             mover = MoveToZone(stack_obj.card.rules_text.cast_destination)
-            for g, s, ch in tuple_list:
-                mover.do_it(g, PLAYER, SUBJECT)  # mutates in-place
+            for g, ch in tuple_list:
+                mover.do_it(g, *ch)  # mutates in-place
         # clear the superstack and return!
         results = []
         for state2, _, _ in tuple_list:
@@ -372,21 +372,15 @@ class GameState:
                 list(enumerate(self.super_stack)),
                 "Add to stack"):
             ii = item[0]  # index first, then object second
-            new_state = self.copy()
-            trigger = new_state.super_stack.pop(ii)
-            ability = trigger.ability
-            card = trigger.card
-            cause = trigger.choices[0]
-            # get_target_options adds `cause` to `choices` for creating the
-            # new StackTrigger
-            for choices in ability.get_target_options(new_state, card, cause):
-                if ability.can_be_added(new_state, card, choices):
-                    results += ability.add_to_stack(new_state, card, choices)
-                else:
-                    # If can't resolve ability, still remove it from the stack.
-                    # For example, invalid target still removes the trigger
-                    # from the super_stack.
-                    results += [new_state.copy()]
+            state2 = self.copy()
+            obj = state2.super_stack.pop(ii)
+            if not obj.caster_verb.can_be_done(state2, obj):
+                # If can't resolve ability, still use the GameState where it
+                # was removed from the stack. e.g. invalid targets still
+                # removes the trigger from the super_stack.
+                results += [state2]
+            else:
+                results += [g for g, _ in obj.caster_verb.do_it(state2, obj)]
         # recurse
         final_results = []
         for state in results:
@@ -530,15 +524,14 @@ class Player:
         new_player.grave = [c.copy() for c in self.grave]
         return new_player
 
-    def get_valid_activations(self) -> List[Tuple[
-        ActivatedAbility, Cardboard, list]]:
+    def get_valid_activations(self) -> List[StackObject]:
         """
         Return a list of all abilities that can be put on the
         stack right now. The form of the return is a tuple of
         the inputs that Verb.PlayAbility needs in order
         to put a newly activated ability onto the stack.
         """
-        activatables = []
+        activatables: List[StackObject] = []
         active_objects = []  # objects I've already checked through
         game = self.gamestate
         for source in self.hand + self.field + self.grave:
@@ -546,35 +539,29 @@ class Player:
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                # find available choice options, see if any let me activate
-                for choices in ability.get_activation_options(game, source):
-                    if ability.can_be_activated(game, source, choices):
-                        # this ability with this set of choices is castable!
-                        activatables.append((ability, source, choices))
-                        add_object = True
-            if add_object:  # track any object whose ability we looked at
+                can_do = ability.valid_stack_objects(game, self, source)
+                if len(can_do) > 0:
+                    add_object = True
+                activatables += can_do
+            if add_object:  # track object to not look at any similar again.
                 active_objects.append(source)
         return activatables
 
-    def get_valid_castables(self) -> List[Tuple[Cardboard, list]]:
+    def get_valid_castables(self) -> List[StackObject]:
         """Return a list of all cast-able cards that can be put
         on the stack right now, as a list of Cardboard's which
         have not yet been paid for or moved from their current
         zones. Think of these like pointers."""
-        castables = []
+        castables: List[StackCardboard] = []
         active_objects = []
         game = self.gamestate
         for card in self.hand:
             if any([card.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
-            add_object = False
-            # find available choice options, see if any let me cast the card
-            for choices in card.get_cast_options(game):
-                if card.can_be_cast(game, choices):
-                    castables.append((card, choices))
-                    add_object = True
-            if add_object:  # track any card that can be cast at least one way
+            can_do = card.valid_stack_objects(game)
+            if len(can_do) > 0:
                 active_objects.append(card)
+                castables += can_do
         return castables
 
     def re_sort(self, zone_name):

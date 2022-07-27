@@ -5,8 +5,9 @@ from ManaHandler import ManaCost
 from Verbs import Verb, PayMana, MultiVerb, NullVerb
 
 if TYPE_CHECKING:
-    from GameState import GameState
+    from GameState import GameState, Player
     from Cardboard import Cardboard
+    from Verbs import INPUT
 
 
 class Cost:
@@ -23,6 +24,10 @@ class Cost:
                 self.mana_cost = args[0]
                 args = args[1:]
         self.additional: List[Verb] = list(args)
+        self.num_inputs = sum([v.num_inputs for v in self.additional])
+        self.mana_value = 0
+        if self.mana_cost is not None:
+            self.mana_value = self.mana_cost.cmc()
 
     def _get_multi_verb(self) -> Verb:
         if self.mana_cost is None:
@@ -35,38 +40,28 @@ class Cost:
         else:
             mana_verb = PayMana(str(self.mana_cost))
             if len(self.additional) > 0:
+                # noinspection PyTypeChecker
                 return MultiVerb([mana_verb] + self.additional)
             else:
                 return mana_verb
 
-    @property
-    def mana_value(self) -> int:
-        if self.mana_cost is not None:
-            return self.mana_cost.cmc()
-        else:
-            return 0
-
-    @property
-    def num_inputs(self) -> int:
-        return sum([v.num_inputs for v in self.additional])
-
-    def can_afford(self, state: GameState, subject: Cardboard, choices: list):
+    def can_afford(self, state: GameState, subject: Cardboard, *other: INPUT):
         if self.mana_cost is None:
             afford_mana = True
         else:
             player = state.player_list[subject.player_index]
             afford_mana = player.pool.can_afford_mana_cost(self.mana_cost)
-        afford_other = all([v.can_be_done(state, PLAYER, SUBJECT, subject,
-                                          choices)
+        afford_other = all([v.can_be_done(state, subject, *other)
                             for v in self.additional])
         return afford_mana and afford_other
 
-    def pay_cost(self, state: GameState, subject: Cardboard, choices: list):
-        return self._get_multi_verb().do_it(state, PLAYER, SUBJECT)
+    def pay_cost(self, state: GameState, choices: list | tuple):
+        return self._get_multi_verb().do_it(state, *choices)
 
-    def get_options(self, state: GameState, source: Cardboard | None,
-                    cause: Cardboard | None):
-        return self._get_multi_verb().get_input_options(state, source, cause)
+    def get_options(self, state: GameState, controller: Player,
+                    source: Cardboard | None, cause: Cardboard | None):
+        return self._get_multi_verb().get_input_options(state, controller,
+                                                        source, cause)
 
     def __str__(self):
         if self.mana_cost is not None and len(self.additional) > 0:

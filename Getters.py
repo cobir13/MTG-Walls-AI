@@ -8,10 +8,10 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from GameState import GameState, Player
+    from GameState import GameState
     from Cardboard import Cardboard
     # from ManaHandler import ManaCost
-    from Verbs import INPUT, SUBJECT, CAUSE
+    from Verbs import INPUT
 
 import Choices
 import Match as Match

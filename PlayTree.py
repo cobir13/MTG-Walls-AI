@@ -82,16 +82,13 @@ class PlayTree:
             # if there are valid actions, make new nodes by taking them
             # TODO: win and loss conditions here?
             new_nodes = []
-            for ability, source, choice_list in activables:
-                for game in ability.activate(state, source, choice_list):
-                    new_nodes += game.clear_super_stack()
-            for card, choice_list in castables:
-                for game in card.cast(state, choice_list):
-                    new_nodes += game.clear_super_stack()
+            for stack_object in activables + castables:
+                for state2 in stack_object.put_on_stack(state):
+                    new_nodes += state2.clear_super_stack()
             if len(state.stack) > 0:
                 # list of GameStates with the top effect on the stack resolved
-                for game in state.resolve_top_of_stack():
-                    new_nodes += game.clear_super_stack()
+                for state2 in state.resolve_top_of_stack():
+                    new_nodes += state2.clear_super_stack()
             # add these new nodes to the trackers
             for new_state in new_nodes:
                 self._add_state_to_active(new_state)  # only adds if truly new
