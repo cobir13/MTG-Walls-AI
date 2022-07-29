@@ -95,7 +95,7 @@ class Nothing(Pattern):
 
 class YouControl(Pattern):
     def match(self, subject: Cardboard, state, asker: INPUT) -> bool:
-        return subject.player_index == asker.player_index
+        return subject.player_index == asker.index
 
 
 class CardType(Pattern):
@@ -114,7 +114,8 @@ class Keyword(Pattern):
         self.keyword_to_match = keyword
 
     def match(self, subject: SUBJECT, state: GameState, asker: INPUT) -> bool:
-        return self.keyword_to_match in Get.Keywords().get(state, subject)
+        return self.keyword_to_match in Get.Keywords().get(state, player,
+                                                           subject)
 
     def __str__(self):
         return super().__str__() + "(" + self.keyword_to_match + ")"
@@ -125,7 +126,7 @@ class Name(Pattern):
         self.name_to_match = name
 
     def match(self, subject: SUBJECT, state: GameState, asker: INPUT) -> bool:
-        return self.name_to_match == Get.CardName().get(state, subject)
+        return self.name_to_match == Get.CardName().get(state, player, subject)
 
     def __str__(self):
         return super().__str__() + "(" + self.name_to_match + ")"
@@ -142,7 +143,8 @@ class Counter(Pattern):
         self.counter_to_match = counter_to_match
 
     def match(self, subject: SUBJECT, state: GameState, asker: INPUT) -> bool:
-        return self.counter_to_match in Get.Counters().get(state, subject)
+        return self.counter_to_match in Get.Counters().get(state, player,
+                                                           subject)
 
     def __str__(self):
         return super().__str__() + "(" + self.counter_to_match + ")"
@@ -150,12 +152,12 @@ class Counter(Pattern):
 
 class Tapped(Pattern):
     def match(self, subject: SUBJECT, state: GameState, asker: INPUT) -> bool:
-        return Get.IsTapped().get(state, subject)
+        return Get.IsTapped().get(state, player, subject)
 
 
 class Untapped(Pattern):
     def match(self, subject: SUBJECT, state: GameState, asker: INPUT) -> bool:
-        return Get.IsUntapped().get(state, subject)
+        return Get.IsUntapped().get(state, player, subject)
 
 
 class Another(Pattern):
@@ -178,7 +180,7 @@ class NumericPattern(Pattern):
         self.getter = getter
 
     def match(self, subject: SUBJECT, state: GameState, asker: INPUT) -> bool:
-        card_value = self.getter.get(state, subject)
+        card_value = self.getter.get(state, player, subject)
         if card_value is None:
             return False
         if self.comparator == "=" or self.comparator == "==":

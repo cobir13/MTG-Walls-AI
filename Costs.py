@@ -7,7 +7,7 @@ from Verbs import Verb, PayMana, MultiVerb, NullVerb
 if TYPE_CHECKING:
     from GameState import GameState, Player
     from Cardboard import Cardboard
-    from Verbs import INPUT
+    from Verbs import INPUTS, RESULT
 
 
 class Cost:
@@ -45,20 +45,22 @@ class Cost:
             else:
                 return mana_verb
 
-    def can_afford(self, state: GameState, subject: Cardboard, *other: INPUT):
+    def can_afford(self, state: GameState, player: int,
+                   subject: Cardboard, other_inputs: INPUTS) -> bool:
         if self.mana_cost is None:
             afford_mana = True
         else:
-            player = state.player_list[subject.player_index]
+            player = state.player_list[player]
             afford_mana = player.pool.can_afford_mana_cost(self.mana_cost)
-        afford_other = all([v.can_be_done(state, subject, *other)
+        afford_other = all([v.can_be_done(state, player, subject, other_inputs)
                             for v in self.additional])
         return afford_mana and afford_other
 
-    def pay_cost(self, state: GameState, choices: list | tuple):
-        return self._get_multi_verb().do_it(state, *choices)
+    def pay_cost(self, state: GameState, player: int, subject: Cardboard,
+                 choices: INPUTS) -> List[RESULT]:
+        return self._get_multi_verb().do_it(state, player, subject, choices)
 
-    def get_options(self, state: GameState, controller: Player,
+    def get_options(self, state: GameState, controller: int,
                     source: Cardboard | None, cause: Cardboard | None):
         return self._get_multi_verb().get_input_options(state, controller,
                                                         source, cause)

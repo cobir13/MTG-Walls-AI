@@ -38,8 +38,8 @@ class Trigger:
     def __str__(self):
         return "Trigger(%s,%s)" % (self.verb_type.__name__, str(self.pattern))
 
-# ----------
 
+# ----------
 
 class TriggerOnMove(Trigger):
 
@@ -121,7 +121,8 @@ class ActivatedAbility:
         payments = [ch for ch in payments if self.cost.can_afford(state, *ch)]
         # 601.2c: choose targets and modes
         targets = self.effect.get_input_options(state, player, source, None)
-        targets = [ch for ch in targets if self.effect.can_be_done(state, *ch)]
+        targets = [ch for ch in targets if
+                   self.effect.can_be_done(state, INT,, *ch]
         # combine all combinations of these
         obj_list = []
         for sub_pay in payments:
@@ -139,8 +140,14 @@ class ActivatedAbility:
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))
 
+    def get_id(self):
+        return str(self)
+
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)
+
+    def copy(self):
+        return self
 
 
 class TriggeredAbility:
@@ -172,5 +179,11 @@ class TriggeredAbility:
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.trigger), str(self.effect))
 
+    def get_id(self):
+        return str(self)
+
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)
+
+    def copy(self):
+        return self

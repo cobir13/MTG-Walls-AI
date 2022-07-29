@@ -141,14 +141,14 @@ class Sorcery(Spell):
 class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
-    def can_be_done(self, state: GameState, subject: Cardboard, *others: INPUT
-                    ) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and not (Match.CardType(Creature).match(subject, state,
-                                                        subject)
-                         and subject.summon_sick
-                         and not Match.Keyword("haste").match(subject, state,
-                                                              subject)))
+    def can_be_done(self, state: GameState, controller, source: Cardboard,
+                    *other_input: INPUT) -> bool:
+        return (super().can_be_done(state, INT, source, *other_input)
+                and not (Match.CardType(Creature).match(source, state,
+                                                        source)
+                         and source.summon_sick
+                         and not Match.Keyword("haste").match(source, state,
+                                                              source)))
 
     def __str__(self):
         return "{T}"
@@ -156,13 +156,13 @@ class TapSymbol(Tap):
 
 # ----------
 
-class Revert(Verbs.AffectSubjectCard):
-    def can_be_done(self, state: GameState, *inputs: INPUT) -> bool:
+class Revert(Verbs.AffectSourceCard):
+    def can_be_done(self, state: GameState, controller, source: INPUT) -> bool:
         return True
 
-    def do_it(self, state, subject: Cardboard, *inputs):
-        while hasattr(subject.rules_text, "former"):
-            subject.rules_text = getattr(subject.rules_text, "former")
+    def do_it(self, state, controller, source: Cardboard, *other_input):
+        while hasattr(source.rules_text, "former"):
+            source.rules_text = getattr(source.rules_text, "former")
         return [(state, inputs)]
 
     @property
@@ -170,33 +170,34 @@ class Revert(Verbs.AffectSubjectCard):
         return True
 
 
-class Animate(Verbs.AffectSubjectCard):
+class Animate(Verbs.AffectSourceCard):
     def __init__(self, creature_type: Creature):
         super().__init__()
         self.creature_type = creature_type
 
-    def can_be_done(self, state, subject: Cardboard, *others: INPUT) -> bool:
-        return subject.zone == ZONE.FIELD
+    def can_be_done(self, state, controller, source: Cardboard,
+                    *other_input: INPUT) -> bool:
+        return source.zone == ZONE.FIELD
 
-    def do_it(self, state, subject: Cardboard, *others):
+    def do_it(self, state, controller, source: Cardboard, *other_input):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name
-        rules.name = subject.name
+        rules.name = source.name
         # add the previous keywords and abilities in addition to the new ones
-        rules.keywords += subject.rules_text.keywords
-        rules.activated += subject.rules_text.activated
-        rules.trig_verb += subject.rules_text.trig_verb
-        rules.trig_upkeep += subject.rules_text.trig_upkeep
-        rules.trig_attack += subject.rules_text.trig_attack
-        rules.trig_endstep += subject.rules_text.trig_endstep
+        rules.keywords += source.rules_text.keywords
+        rules.activated += source.rules_text.activated
+        rules.trig_verb += source.rules_text.trig_verb
+        rules.trig_upkeep += source.rules_text.trig_upkeep
+        rules.trig_attack += source.rules_text.trig_attack
+        rules.trig_endstep += source.rules_text.trig_endstep
         # add a "revert at end of turn" ability
-        rules.former = subject.rules_text
-        rules.trig_endstep.append(TriggeredAbility("revert " + subject.name,
+        rules.former = source.rules_text
+        rules.trig_endstep.append(TriggeredAbility("revert " + source.name,
                                                    AlwaysTrigger(), Revert()))
         # overwrite with new RulesText
-        subject.rules_text = rules
-        return super().do_it(state, subject, *others)
+        source.rules_text = rules
+        return super().do_it(state, INT, source, *other_input)
 
     @property
     def mutates(self):

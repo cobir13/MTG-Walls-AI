@@ -34,7 +34,7 @@ class GameState:
     phases or untapping at the untap step. All of these actions
     should be called by an outside function of some sort. The
     GameState does not progress the game, it merely tracks the state
-    of the game and provides tools for others to progress the game.
+    of the game and provides tools for other_input to progress the game.
     """
 
     PHASES = ["untap", "upkeep", "draw", "main1", "combat", "main2",
@@ -116,46 +116,14 @@ class GameState:
         # now copy the stack and superstack, which are made of StackObjects.
         # Need to append as I go, in case of pointers to StackObjects, so
         # I can't use list comprehensions. Must use a loop. I tried. --Cobi.
-        for s in self.stack:
-            state.stack.append(GameState.copy_stack_object(self, state, s))
-        for s in self.super_stack:
-            state.super_stack.append(GameState.copy_stack_object(self,
-                                                                 state, s))
+        for obj in self.stack:
+            state.stack.append(obj.copy(self, state))
+        for obj in self.super_stack:
+            state.super_stack.append(obj.copy(self, state))
         # finally, copy the track_list, which can contain any types
         new_track_list = GameState.copy_arbitrary_list(self, state, track_list)
         # return!
         return state, new_track_list
-
-    @staticmethod
-    def copy_stack_object(state_orig: GameState, state_new: GameState, obj):
-        """This function assumes that everything except the
-        stack and superstack have already been copied
-        correctly. In other words, all Cardboards have
-        already been copied. It is only StackObjects which
-        remain to be copied."""
-        # if this StackObject is a pointer to a DIFFERENT StackObject on the
-        # stack which already has a copy, then just return a pointer to that
-        # copy. (Relevant for e.g. counterspell, which targets a StackObject)
-        if obj in state_orig.stack:
-            index = state_orig.stack.index(obj)
-            if len(state_new.stack) > state_orig.stack.index(obj):
-                return state_new.stack[index]
-        # If card is ACTUALLY on the stack, then just make new copy of it. But
-        # if it's in a non-stack zone, this is a pointer, and we need to find
-        # the copied version of whatever it's pointing to.
-        if obj.card.zone == ZONE.STACK:
-            new_card = obj.card.copy()
-        else:
-            zone_orig = obj.card.get_home_zone_list(state_orig)
-            zone_new = obj.card.get_home_zone_list(state_new)
-            # look for true equality (not just equivalence) in old cards
-            jj = [ii for ii, c in enumerate(zone_orig) if c is obj.card][0]
-            new_card = zone_new[jj]
-        # the StackObject's list of choices is copied by another function
-        new_choices = GameState.copy_arbitrary_list(state_orig, state_new,
-                                                    obj.choices)
-        return obj.__class__(ability=obj.ability, card=new_card,
-                             choices=new_choices)
 
     @staticmethod
     def copy_arbitrary_list(state_orig: GameState, state_new: GameState,
@@ -172,18 +140,9 @@ class GameState:
         new_list = []
         for item in list_to_copy:
             if isinstance(item, Cardboard):
-                if item.zone == ZONE.STACK:
-                    new_card = item.copy()  # truly on stack, so isn't ref
-                else:
-                    zone_orig = item.get_home_zone_list(state_orig)
-                    zone_new = item.get_home_zone_list(state_new)
-                    jj = [ii for ii, c in enumerate(zone_orig) if c is item][0]
-                    new_card = zone_new[jj]
-                new_list.append(new_card)
+                new_list.append(item.copy_as_pointer(state_orig, state_new))
             elif isinstance(item, StackObject):
-                new_obj = GameState.copy_stack_object(state_orig, state_new,
-                                                      item)
-                new_list.append(new_obj)
+                new_list.append(item.copy(state_orig, state_new))
             elif isinstance(item, list) or isinstance(item, tuple):
                 new_iterable = GameState.copy_arbitrary_list(state_orig,
                                                              state_new, item)
@@ -215,7 +174,7 @@ class GameState:
 
     def get_zone(self, zone, player_index: int | None):
         """Returns the zone belonging to the specified player.
-        If `player_index` is None and the zone is a private zone
+        If `index` is None and the zone is a private zone
         that ought to belong to only a single player (HAND, DECk,
         FIELD, GRAVE), then returns a concatenated list of ALL
         of those zones. This latter functionality is useful for
@@ -247,13 +206,13 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        if cardboard.player_index < 0:
-            cardboard.player_index = player_index
+        if cardboard.index < 0:
+            cardboard.index = player_index
         if cardboard.owner_index < 0:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination)
         mover.add_self_to_state_history = lambda *args: None  # silent
-        mover.do_it(self, cardboard)
+        mover.do_it(self, player_index, cardboard, [])
 
     # -------------------------------------------------------------------------
 
@@ -266,9 +225,10 @@ class GameState:
             i = 0
             while i < len(player.field):
                 cardboard = player.field[i]
-                toughness = Get.Toughness().get(self, cardboard)
+                toughness = Get.Toughness().get(self, player.index, cardboard)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, cardboard)
+                    MoveToZone(ZONE.GRAVE).do_it(self, player.index,
+                                                 cardboard, [])
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -299,7 +259,7 @@ class GameState:
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
-            Untap().do_it(self, card)
+            Untap().do_it(self, self.active_player_index, card, [])
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
@@ -322,7 +282,7 @@ class GameState:
         self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
-        DrawCard().do_it(self, self.active)
+        DrawCard().do_it(self, self.active_player_index, None, [])
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
@@ -342,16 +302,17 @@ class GameState:
         assert (isinstance(self.stack[-1], StackObject))
         new_state = self.copy()
         # remove StackObject from the stack
-        stack_obj = new_state.stack.pop(-1)
-        tuple_list = [(new_state, stack_obj.card, [])]
+        obj = new_state.stack.pop(-1)
+        tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
         # perform the effect (resolve ability, perform spell, etc)
-        if stack_obj.effect is not None:
-            tuple_list = stack_obj.effect.do_it(new_state, *stack_obj.choices)
+        if obj.effect is not None:
+            tuple_list = obj.effect.do_it(new_state, obj.player_index,
+                                          obj.source_card, obj.choices)
         # if card is on stack (not just a pointer), move it to destination zone
-        if stack_obj.card.zone == ZONE.STACK:
-            mover = MoveToZone(stack_obj.card.rules_text.cast_destination)
+        if isinstance(obj.obj, Cardboard):
+            mover = MoveToZone(obj.obj.rules_text.cast_destination)
             for g, ch in tuple_list:
-                mover.do_it(g, *ch)  # mutates in-place
+                mover.do_it(g, obj.player_index, obj.obj, obj.choices)
         # clear the superstack and return!
         results = []
         for state2, _, _ in tuple_list:
@@ -374,13 +335,16 @@ class GameState:
             ii = item[0]  # index first, then object second
             state2 = self.copy()
             obj = state2.super_stack.pop(ii)
-            if not obj.caster_verb.can_be_done(state2, obj):
+            if not obj.caster_verb.can_be_done(state2, obj.player_index,
+                                               obj.source_card, [obj]):
                 # If can't resolve ability, still use the GameState where it
                 # was removed from the stack. e.g. invalid targets still
                 # removes the trigger from the super_stack.
                 results += [state2]
             else:
-                results += [g for g, _ in obj.caster_verb.do_it(state2, obj)]
+                results += [g for g, _ in
+                            obj.caster_verb.do_it(state2, obj.player_index,
+                                                  obj.source_card, [obj])]
         # recurse
         final_results = []
         for state in results:
@@ -426,8 +390,8 @@ class Player:
         """Initializer also adds the new Player to the
         GameState's list of players"""
         self.gamestate: GameState = state
-        # duck-type to Cardboard.player_index
-        self.player_index: int = len(state.player_list)
+        # duck-type to Cardboard.index
+        self.index: int = len(state.player_list)
         state.player_list.append(self)
         self.turn_count: int = 0
         self.life: int = 20
@@ -442,18 +406,18 @@ class Player:
 
     @property
     def is_my_turn(self):
-        return self.player_index == self.gamestate.active_player_index
+        return self.index == self.gamestate.active_player_index
 
     @property
     def is_my_priority(self):
-        return self.player_index == self.gamestate.priority_player_index
+        return self.index == self.gamestate.priority_player_index
 
     @property
     def land_drops_left(self):
         return 1 - self.num_lands_played
 
     def __str__(self):
-        txt = "Player%i" % self.player_index
+        txt = "Player%i" % self.index
         txt += "(ACTIVE)" if self.is_my_turn else ""
         txt += "(PRIORITY)" if self.is_my_priority else ""
         txt += "  T:%2i" % self.turn_count
@@ -469,7 +433,7 @@ class Player:
         return txt
 
     def get_id(self):
-        index = "P%i" % self.player_index
+        index = "P%i" % self.index
         index += "A" if self.is_my_turn else ""
         index += "P" if self.is_my_priority else ""
         turn = "t%i" % self.turn_count

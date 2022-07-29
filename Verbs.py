@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     # SOURCE = Cardboard | Player
     SUBJECT = Cardboard | Player | StackObject
     CAUSE = Cardboard | Player | None
-    INPUT = Cardboard | Player | StackObject | int | list | None
-    RESULT = Tuple[GameState, Tuple[INPUT]]
+    INPUTS = List[Cardboard | Player | StackObject | int | list | None]
+    RESULT = Tuple[GameState, int, Cardboard | None, INPUTS]
 
 import ZONE
 import Match as Match
@@ -43,23 +43,23 @@ class Verb:
         self.num_inputs: int = num_inputs  # includes usual "subject" at [0].
         self.copies: bool = copies  # returns copies of GameStates, not mutate.
 
-    def get_input_options(self, state: GameState, controller: Player,
+    def get_input_options(self, state: GameState, player: int,
                           source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
-        """A list of possibly input tuples, the first
-         `num_inputs` of which match `input_signature`
-         for their types."""
+                          ) -> List[INPUTS]:
+        """A list of possibly input lists that are meant to
+        be plugged into can_be_done and do_it"""
         return []
 
-    def can_be_done(self, state: GameState, subject: INPUT,
-                    *others: INPUT) -> bool:
+    def can_be_done(self, state: GameState, player: int,
+                    source: Cardboard | None, other_inputs: INPUTS) -> bool:
         """GameState; subject to apply the Verb to; any
         additional inputs needed. The specific type of
         `subject` and of the other inputs is specified
         by `input_signature`"""
-        return 1 + len(others) >= self.num_inputs
+        return 1 + len(other_inputs) >= self.num_inputs
 
-    def do_it(self, state: GameState, subject: INPUT, *others: INPUT
+    def do_it(self, state: GameState, player: int,
+              source: Cardboard | None, other_inputs: INPUTS
               ) -> List[RESULT]:
         """Carries out the Verb. Adds any new triggers to the
          super_stack and shortens input argument list to "use
@@ -68,15 +68,15 @@ class Verb:
          the input GameState. If `copies` is False, then just
          mutates it.
          """
-        self.add_self_to_state_history(state, subject, *others)
+        self.add_self_to_state_history(state, player, source, other_inputs)
         # `trigger_source` is source of the trigger. Not to be confused
         # with `subject`, which is the cause of the Verb which is
         # potentially CAUSING the trigger.
         for trigger_source in state.get_all_public_cards():
             for ability in trigger_source.rules_text.trig_verb:
                 # add any abilities that trigger to the super_stack
-                ability.add_any_to_super(self, state, trigger_source, subject)
-        return [(state, others[self.num_inputs:])]
+                ability.add_any_to_super(self, state, trigger_source, source)
+        return [(state, player, source, other_inputs[self.num_inputs:])]
 
     def is_type(self, verb_type: type) -> bool:
         return isinstance(self, verb_type)
@@ -89,18 +89,19 @@ class Verb:
     def __str__(self):
         return type(self).__name__
 
-    def add_self_to_state_history(self, state: GameState, subject: INPUT,
-                                  *others: INPUT) -> None:
+    def add_self_to_state_history(self, state: GameState, player,
+                                  source: Cardboard | None,
+                                  other_inputs: INPUTS) -> None:
         """If the GameState is tracking history, adds a note
         to that history describing this Verb. Mutates state,
         technically, in that note is added rather than added
         to a copy."""
         if state.is_tracking_history:
-            record = "\n%s %s" % (str(self), subject.name)
+            record = "\n%s %s" % (str(self), source.name)
             state.events_since_previous += record
 
-    def on(self, subject_getter: Get.Getter) -> ApplyTo:
-        return ApplyTo(subject_getter, self)
+    def on(self, subject_getter: Get.Getter) -> ApplyToCard:
+        return ApplyToCard(subject_getter, self)
 
 
 class MultiVerb(Verb):
@@ -121,13 +122,14 @@ class MultiVerb(Verb):
         super().__init__(sum([v.num_inputs for v in self.sub_verbs]),
                          any([v.copies for v in self.sub_verbs]))
 
-    def get_input_options(self, state, controller, source, cause):
+    def get_input_options(self, state, player, source, cause
+                          ) -> List[INPUTS]:
         # list of sublists. start with 1 sublist, which is empty
-        choices = [()]
+        choices = [[]]
         # get any choices from any sub-verbs
         for v in self.sub_verbs:
             if v.num_inputs >= 0:
-                verb_choices = v.get_input_options(state, controller,
+                verb_choices = v.get_input_options(state, player,
                                                    source, cause)
                 new_list = []
                 for sublist in choices:
@@ -135,25 +137,26 @@ class MultiVerb(Verb):
                 choices = new_list
         return choices
 
-    def can_be_done(self, state, *inputs) -> bool:
-        if not super().can_be_done(state, *inputs):
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        if not super().can_be_done(state, player, source, other_inputs):
             return False
         i_start = 0
         for v in self.sub_verbs:
             i_end = i_start + v.num_inputs
-            if not v.can_be_done(state, *inputs[i_start:i_end]):
+            if not v.can_be_done(state, player, source,
+                                 other_inputs[i_start:i_end]):
                 # if any verb cannot be done, the whole list cannot be done
                 return False
             i_start = i_end  # increment to use the next choices for next verb
         return True  # if reached here, all verbs are doable!
 
-    def do_it(self, state, *inputs) -> List[RESULT]:
-        tuple_list = [(state, inputs)]
+    def do_it(self, state, player, source, other_inputs) -> List[RESULT]:
+        tuple_list = [(state, source)]
         for v in self.sub_verbs:
             new_tuple_list = []
-            for st, ins in tuple_list:
+            for st, pl, srce, ins in tuple_list:
                 # uses up inputs as it goes, dumps shorter inputs into list. 
-                new_tuple_list += v.do_it(st, *ins)
+                new_tuple_list += v.do_it(st, pl, srce, ins)
             tuple_list = new_tuple_list
         # The do_it functions of each Verb will handle triggers for those
         # sub-verbs. The Multi-Verb itself can't cause any triggers.
@@ -166,34 +169,36 @@ class MultiVerb(Verb):
         return " & ".join([v.__str__() for v in self.sub_verbs])
 
 
-class AffectSubjectPlayer(Verb):
+class AffectController(Verb):
     def __init__(self):
-        super().__init__(1, True)
+        """Subject is the player of the Verb"""
+        super().__init__(0, True)
 
-    def get_input_options(self, state: GameState, controller: Player,
-                          source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
-        """Subject is the controller of the Verb"""
-        return [(controller,)]
+    # def get_input_options(self, state: GameState, player: Player,
+    #                       source: Cardboard | None, cause: Cardboard | None
+    #                       ) -> List[Tuple[INPUTS]]:
+    #     """Subject is the player of the Verb"""
+    #     return [(player,)]
 
 
-class AffectSubjectCard(Verb):
+class AffectSourceCard(Verb):
     def __init__(self):
-        super().__init__(1, True)
+        """Subject is the source card of the Verb"""
+        super().__init__(0, True)
 
-    def get_input_options(self, state: GameState, controller: Player,
-                          source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
-        """Subject is the source of the Verb"""
-        return [(source,)]
+    # def get_input_options(self, state: GameState, player: Player,
+    #                       source: Cardboard | None, cause: Cardboard | None
+    #                       ) -> List[Tuple[INPUTS]]:
+    #     """Subject is the source of the Verb"""
+    #     return [(source,)]
 
 
-class ApplyTo(Verb):
-    """Chooses a subject and then applies the given Verb to
-    that subject.
-    `subject` is a list giving the targets chosen for the
-    sub-verb.  If the list is longer than length 1, then
-    the sub-verb is applied to each of them in turn.
+class ApplyToCard(Verb):
+    """Chooses targets and then passes those targets along
+    to the sub-verb AS THOUGH THEY WERE THE SOURCE OF THE
+    SUB-VERB.
+    If the chooser returns a list longer than length 1, then
+    the sub-verb is applied to all the targets in turn.
     """
 
     def __init__(self, subject_getter: Get.Getter, verb: Verb):
@@ -201,13 +206,12 @@ class ApplyTo(Verb):
                          not subject_getter.single_output or verb.copies)
         self.getter = subject_getter
         self.verb = verb
-        assert self.verb.num_inputs == 1
+        assert verb.num_inputs == 0
         self.allowed_to_fail = (hasattr(self.getter, "can_be_less")
                                 and self.getter.can_be_less)
 
-    def get_input_options(self, state: GameState, controller: Player,
-                          source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
+    def get_input_options(self, state, player, source, cause
+                          ) -> List[INPUTS]:
         """
         Returns a list of sub-lists. Each sub-list represents
         one possible way to choose modes and/or targets for this
@@ -218,68 +222,78 @@ class ApplyTo(Verb):
         performed (often identical to the source).
         """
         # list of sublists. start with 1 sublist, which is empty
-        choices = [[x] for x in self.getter.get(state, source)]
-        assert self.verb.num_inputs == 1
-        # verb_choices = self.verb.get_input_options(state, source, cause)
+        choices = [[x] for x in self.getter.get(state, player, source)]
+        assert self.verb.num_inputs == 0
+        # verb_choices = self.verb.get_input_options(state, player,
+        #                                            source, cause)
         # new_list = []
         # for sublist in choices:
         #     new_list += [sublist + ch for ch in verb_choices]
         # choices = new_list
         return choices
 
-    def can_be_done(self, state, subject_list: list, *inputs) -> bool:
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
         """
-        The first element of `choices` is a list of length 0
+        The first element of `other_inputs` is a list of length 0
         or 1 containing the single target of the given Verb.
         If empty, the chooser "failed to find" a target. The
         Verb will not be applied to anything. Still may be ok.
         """
-        if not super().can_be_done(state, subject_list, *inputs):
-            return False
-        if len(subject_list) == 0:
+        if not super().can_be_done(state, player, source, other_inputs):
+            return False  # confirms other_inputs is long enough
+        targets = other_inputs[0]
+        if len(targets) == 0:
             # chooser failed to find a target. ok only if "allowed" to fail.
             return self.allowed_to_fail
-        return any([self.verb.can_be_done(state, target, *inputs)
-                    for target in subject_list[0]])
+        return any([self.verb.can_be_done(state, player, t, other_inputs[1:])
+                    for t in targets])
 
-    def do_it(self, state: GameState, subject_list: list, *inputs):
-        """Expects the first element of `choices` to be a list
-        of subjects that the Verb should be applied to.
-        The first element of `choices` is also allowed to be
-        empty. This is the "fail to find" mode. The Verb
+    def do_it(self, state: GameState, player, source, other_inputs):
+        """Expects the first element of `other_inputs` to be a
+        list of subjects that the Verb should be applied to.
+        The first element of `other_inputs` is also allowed to
+        be empty. This is the "fail to find" mode. The Verb
         will not be applied to anything, but this is ok."""
-        if len(subject_list) == 0:
+        targets = other_inputs[0]
+        if len(targets) == 0:
             # Failed to find target. If got this far, presumably failing is ok.
-            # So do nothing and trigger.
+            # So do nothing and trigger nothing. Do snip the inputs though.
             if not self.copies:
-                state2, things = state.copy_and_track(inputs)
-                return [(state2, things)]
+                state2, things = state.copy_and_track(
+                    [source] + other_inputs[1:])
+                source2 = things[0]
+                inputs2 = things[1:]
+                return [(state2, player, source2, inputs2)]
             else:
-                return [(state, inputs)]
+                return [(state, player, source, other_inputs[1:])]
         else:
             if self.copies:
                 # make some extra choices to chew through. Should look like:
-                # target1, choiceA, ... choiceN, target2, choiceA, ... choiceN,
-                # final_choicesX, ... final_choicesZ
-                concat_choices = []
-                for target in subject_list:
-                    concat_choices.append(target)
-                    concat_choices += inputs[:self.verb.num_inputs - 1]
-                concat_choices += inputs[self.verb.num_inputs - 1:]
+                # [target1, ... targetN, otherX, ... otherZ, source].
+                concat_choices = targets + other_inputs[1:] + [source]
+                # concat_choices = []
+                # for target in targets:
+                #     concat_choices.append(target)
+                #     concat_choices += other_inputs[1:self.verb.num_inputs+1]
+                # concat_choices += [source]
+                # concat_choices += other_inputs[self.verb.num_inputs + 1:]
                 # copy gamestate (and these choices) and then start do_it loop
                 state2, concat2 = state.copy_and_track(concat_choices)
-                # standard "state, source, choices" format
-                tuple_list: List[RESULT] = [(state2, tuple(concat2))]
-                for _ in range(len(inputs[0])):
+                # standard "state, player, source, choices" format
+                tuple_list = [(state2, player, concat2[0], concat2)]
+                for _ in range(len(targets)):
                     new_list = []
-                    for g, ins in tuple_list:
-                        new_list += self.verb.do_it(g, *ins)
+                    for g, plr, _, ins in tuple_list:
+                        new_list += self.verb.do_it(g, plr, ins[0], ins[1:])
                     tuple_list = new_list
-                return tuple_list
+                # at this point we've done all the work, but still need to
+                # extract the source to return!
+                return [(g, plr, ins[-1], ins[:-1])
+                        for g, plr, trg, ins in tuple_list]
             else:
-                for target in subject_list:
-                    self.verb.do_it(state, target, *inputs)
-                return [(state, inputs[self.num_inputs - 1:])]
+                for target in targets:
+                    self.verb.do_it(state, player, target, other_inputs[1:])
+                return [(state, player, source, other_inputs[1:])]
 
     def is_type(self, verb_type: type):
         return self.verb.is_type(verb_type)
@@ -291,7 +305,9 @@ class ApplyTo(Verb):
 #
 # 
 class Modal(Verb):
-    """Mode is chosen at cast-time"""
+    """Choose between various Verbs. All options should require
+    the same number of inputs. Mode is chosen at cast-time,
+    not on resolution."""
 
     def __init__(self, list_of_verbs: List[Verb], num_to_choose: int = 1):
         super().__init__(1 + num_to_choose * list_of_verbs[0].num_inputs,
@@ -303,30 +319,30 @@ class Modal(Verb):
         options = [(ii, str(v)) for ii, v in enumerate(self.sub_verbs)]
         self.chooser = Get.Chooser(Get.Const(options), num_to_choose, False)
 
-    def get_input_options(self, state: GameState, controller: Player,
-                          source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
+    def get_input_options(self, state, player, source, cause
+                          ) -> List[INPUTS]:
         # choices are: the verbs I choose, together with THEIR choices
-        modes: List[Tuple[Tuple[int, str]]] = self.chooser.get(state, source)
-        choices: List[Tuple[INPUT]] = []
+        modes: List[Tuple[Tuple[int, str]]] = self.chooser.get(state, player,
+                                                               source)
+        choices: List[INPUTS] = []
         for set_of_verbs in modes:
             verb_indices = [index for index, name in set_of_verbs]
             multi = MultiVerb([self.sub_verbs[ii] for ii in verb_indices])
-            for sub_choice in multi.get_input_options(state, controller,
+            for sub_choice in multi.get_input_options(state, player,
                                                       source, cause):
                 # noinspection PyTypeChecker
-                choices.append((verb_indices,) + sub_choice)
+                choices.append([verb_indices] + sub_choice)
         return choices
 
-    def can_be_done(self, state, *inputs: INPUT) -> bool:
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
         """first element of choices is the choice of which verbs to use"""
-        multi = MultiVerb([self.sub_verbs[ii] for ii in inputs[0]])
-        return multi.can_be_done(state, *inputs[1:])
+        multi = MultiVerb([self.sub_verbs[ii] for ii in other_inputs[0]])
+        return multi.can_be_done(state, player, source, other_inputs)
 
-    def do_it(self, state: GameState, *inputs: INPUT) -> List[RESULT]:
+    def do_it(self, state: GameState, player, source, other_inputs):
         """first element of choices is the choice of which verb to use"""
-        multi = MultiVerb([self.sub_verbs[ii] for ii in inputs[0]])
-        return multi.do_it(state, *inputs[1:])
+        multi = MultiVerb([self.sub_verbs[ii] for ii in other_inputs[0]])
+        return multi.do_it(state, player, source, other_inputs)
 
     def __str__(self):
         return " or ".join([v.__str__() for v in self.sub_verbs])
@@ -342,33 +358,31 @@ class Defer(Verb):
     """
 
     def __init__(self, verb: Verb):
-        super().__init__(3, copies=True)
+        super().__init__(1, copies=True)
         self.verb = verb
 
-    def get_input_options(self, state: GameState, controller: Player,
-                          source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
-        """A list of possibly input tuples, the first
-         `num_inputs` of which match `input_signature`
-         for their types."""
-        return [(controller, source, cause)]
+    def get_input_options(self, state, player, source, cause
+                          ) -> List[INPUTS]:
+        """Saves the cause so that the sub-verb can run
+        its own get_input_options function later on."""
+        return [[cause]]
 
-    def do_it(self, state: GameState, controller: Player,
-              source: Cardboard | None, cause: Cardboard | None,
-              *others: INPUT):
-        # others should be empty
+    def do_it(self, state: GameState, player, source, other_inputs):
+        cause = other_inputs[0]
         results = []
         if self.verb.copies:
-            choices = self.verb.get_input_options(state, controller,
+            choices = self.verb.get_input_options(state, player,
                                                   source, cause)
             for choice in choices:
-                results += self.verb.do_it(state, *choice)
+                results += self.verb.do_it(state, player, source, choice)
         else:
-            choices = self.verb.get_input_options(state, controller,
+            choices = self.verb.get_input_options(state, player,
                                                   source, cause)
             for choice in choices:
-                state2, things = state.copy_and_track(choice)
-                results += self.verb.do_it(state2, *things)
+                state2, things = state.copy_and_track([source] + choice)
+                source2 = things[0]
+                ch2 = things[1:]
+                results += self.verb.do_it(state2, player, source2, ch2)
         return results
 
     def is_type(self, verb_type: type):
@@ -437,7 +451,7 @@ class Defer(Verb):
 #
 #     def can_be_done(self, state: GameState, subject: Cardboard,
 #                     choices: list) -> bool:
-#         # Note that NO INPUT ARE BEING PASSED TO THE SUB_VERBS. This is
+#         # Note that NO INPUTS ARE BEING PASSED TO THE SUB_VERBS. This is
 #         # because they are assumed to take no inputs and act only on their
 #         # subjects.
 #         all_options = self.chooser.getter.get(state, subject)
@@ -499,7 +513,7 @@ class Defer(Verb):
 
 
 # # noinspection PyMissingConstructor
-# class VerbOnCause(ApplyTo):
+# class VerbOnCause(ApplyToCard):
 #     """Applies the given VerbOnSubjectCard to the `cause`
 #     argument of get_input_options. Which is to say, ensures
 #     that the `cause` argument is returned as the first
@@ -511,7 +525,7 @@ class Defer(Verb):
 #         self.verb = verb
 # 
 #     def get_input_options(self, state: GameState, source: SOURCE,
-#                           cause: CAUSE) -> List[INPUT]:
+#                           cause: CAUSE) -> List[INPUTS]:
 #         return [[[cause]]]
 
 
@@ -524,20 +538,21 @@ class NullVerb(Verb):
     def __init__(self):
         super().__init__(0, True)
 
-    def get_input_options(self, state, controller, source, cause):
+    def get_input_options(self, state, player, source, cause):
         return [()]
 
-    def do_it(self, state: GameState, *inputs: INPUT):
-        return [(state, inputs)]
+    def do_it(self, state: GameState, player, source, other_inputs):
+        return [(state, player, source, other_inputs)]
 
-    def add_self_to_state_history(self, state, *inputs):
+    def add_self_to_state_history(self, state, player, source,
+                                  other_inputs):
         return
 
     def __str__(self):
         return ""
 
 
-class PayMana(AffectSubjectPlayer):
+class PayMana(AffectController):
     """deducts the given amount of mana from the Player's
     mana pool."""
 
@@ -547,30 +562,33 @@ class PayMana(AffectSubjectPlayer):
             mana_string = Get.ConstString(mana_string)
         self.string_getter: Get.String = mana_string
 
-    def can_be_done(self, state, subject: INPUT, *others: INPUT) -> bool:
-        if not super().can_be_done(state, subject, *others):
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        if not super().can_be_done(state, player, source, other_inputs):
             return False
-        cost = ManaHandler.ManaCost(self.string_getter.get(state, subject))
-        return subject.pool.can_afford_mana_cost(cost)
+        mana_str = self.string_getter.get(state, player, source)
+        pool = state.player_list[player].pool
+        return pool.can_afford_mana_cost(ManaHandler.ManaCost(mana_str))
 
-    def do_it(self, state, subject, *others):
-        cost = ManaHandler.ManaCost(self.string_getter.get(state, subject))
-        subject.pool.pay_mana_cost(cost)
+    def do_it(self, state, player, source, other_inputs):
+        mana_str = self.string_getter.get(state, player, source)
+        pool = state.player_list[player].pool
+        pool.pay_mana_cost(ManaHandler.ManaCost(mana_str))
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
     def __str__(self):
         return "PayMana{%s}" % str(self.string_getter)
 
-    def add_self_to_state_history(self, state: GameState, subject: INPUT,
-                                  *inputs: Player):
+    def add_self_to_state_history(self, state: GameState, player,
+                                  source, other_inputs: Player):
         if state.is_tracking_history:
-            cost = ManaHandler.ManaCost(self.string_getter.get(state, subject))
+            cost = ManaHandler.ManaCost(
+                self.string_getter.get(state, player, source))
             text = "\nPay %s" % str(cost)
             state.events_since_previous += text
 
 
-class AddMana(AffectSubjectPlayer):
+class AddMana(AffectController):
     """adds the given amount of mana to the GameState's mana pool"""
 
     def __init__(self, mana_string: Get.String | str):
@@ -579,20 +597,22 @@ class AddMana(AffectSubjectPlayer):
             mana_string = Get.ConstString(mana_string)
         self.string_getter: Get.String = mana_string
 
-    def do_it(self, state, subject, *others):
-        pool = ManaHandler.ManaPool(self.string_getter.get(state, subject))
-        subject.pool.add_mana(pool)
+    def do_it(self, state, player, source, other_inputs):
+        mana_str = self.string_getter.get(state, player, source)
+        pool = state.player_list[player].pool
+        pool.add_mana(ManaHandler.ManaPool(mana_str))
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state, subject, *others):
+    def add_self_to_state_history(self, state, player, source, other_inputs):
         if state.is_tracking_history:
-            pool = ManaHandler.ManaPool(self.string_getter.get(state, subject))
+            pool = ManaHandler.ManaPool(
+                self.string_getter.get(state, player, source))
             text = "\nAdd %s" % str(pool)
             state.events_since_previous += text
 
 
-class LoseLife(AffectSubjectPlayer):
+class LoseLife(AffectController):
     def __init__(self, damage_getter: Get.Integer | int):
         """The subject player loses the given amount of life"""
         super().__init__()
@@ -600,68 +620,72 @@ class LoseLife(AffectSubjectPlayer):
             damage_getter = Get.ConstInteger(damage_getter)
         self.damage_getter: Get.Integer = damage_getter
 
-    def do_it(self, state, subject, *others):
-        subject.life -= self.damage_getter.get(state, subject)
+    def do_it(self, state, player, source, other_inputs):
+        pl = state.player_list[player]
+        pl.life -= self.damage_getter.get(state, player, source)
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state, subject, *inputs):
+    def add_self_to_state_history(self, state, player, source, other_inputs):
         if state.is_tracking_history:
-            text = "\nLose %i life" % self.damage_getter.get(state, subject)
+            text = "\nLose %i life" % self.damage_getter.get(state, player,
+                                                             source)
             state.events_since_previous += text
 
 
-class Tap(AffectSubjectCard):
+class Tap(AffectSourceCard):
     """taps `source` if it was not already tapped."""
 
-    def can_be_done(self, state: GameState, subject,
-                    *others: Cardboard) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and subject.zone == ZONE.FIELD and not subject.tapped)
+    def can_be_done(self, state, player, source, other_inputs):
+        return (super().can_be_done(state, player, source, other_inputs)
+                and source.zone == ZONE.FIELD and not source.tapped)
 
-    def do_it(self, state: GameState, subject, *others):
-        subject.tapped = True
+    def do_it(self, state: GameState, player, source, other_inputs):
+        source.tapped = True
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
 
-class Untap(AffectSubjectCard):
+class Untap(AffectSourceCard):
     def __init__(self):
         super().__init__()
 
-    def can_be_done(self, state: GameState, subject, *others) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and subject.tapped and subject.zone == ZONE.FIELD)
+    def can_be_done(self, state: GameState, player, source,
+                    other_inputs) -> bool:
+        return (super().can_be_done(state, player, source, other_inputs)
+                and source.tapped and source.zone == ZONE.FIELD)
 
-    def do_it(self, state: GameState, subject, *others):
-        subject.tapped = False
+    def do_it(self, state: GameState, player, source, other_inputs):
+        source.tapped = False
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
 
-class AddCounter(AffectSubjectCard):
+class AddCounter(AffectSourceCard):
     """Adds the given counter string to the subject card"""
 
     def __init__(self, counter_text: str):
         super().__init__()
         self.counter_text = counter_text
 
-    def can_be_done(self, state: GameState, subject, *others) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and subject.zone == ZONE.FIELD)
+    def can_be_done(self, state: GameState, player, source,
+                    other_inputs) -> bool:
+        return (super().can_be_done(state, player, source, other_inputs)
+                and source.zone == ZONE.FIELD)
 
-    def do_it(self, state, subject, *others):
-        subject.add_counter(self.counter_text)
+    def do_it(self, state, player, source, other_inputs):
+        source.add_counter(self.counter_text)
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state: GameState, subject, *others):
+    def add_self_to_state_history(self, state: GameState, player, source,
+                                  other_inputs):
         if state.is_tracking_history:
-            text = "\nPut %s counter on %s" % (self.counter_text, subject.name)
+            text = "\nPut %s counter on %s" % (self.counter_text, source.name)
             state.events_since_previous += text
 
 
-class ActivateOncePerTurn(AffectSubjectCard):
+class ActivateOncePerTurn(AffectSourceCard):
     """Marks the given `subject` as only able to activate this ability once
     per turn"""
 
@@ -669,51 +693,53 @@ class ActivateOncePerTurn(AffectSubjectCard):
         super().__init__()
         self.counter_text = "@" + ability_name  # "@" is invisible counter
 
-    def can_be_done(self, state, subject, *others) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and subject.zone == ZONE.FIELD
-                and self.counter_text not in subject.counters)
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        return (super().can_be_done(state, player, source, other_inputs)
+                and source.zone == ZONE.FIELD
+                and self.counter_text not in source.counters)
 
-    def do_it(self, state, subject, *others):
-        subject.add_counter(self.counter_text)
+    def do_it(self, state, player, source, other_inputs):
+        source.add_counter(self.counter_text)
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state, *inputs):
+    def add_self_to_state_history(self, state, player, source, other_inputs):
         return  # doesn't mark itself as having done anything
 
 
 class ActivateOnlyAsSorcery(Verb):
-    """Checks that the stack is empty and cannot be done otherwise"""
+    """Checks that the stack is empty and the player has
+     priority. Otherwise, can_be_done will return False."""
 
-    def can_be_done(self, state, subject, *others) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and len(state.stack) == 0 and len(state.super_stack) == 0)
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        return (super().can_be_done(state, player, source, other_inputs)
+                and len(state.stack) == 0 and len(state.super_stack) == 0
+                and state.active_player_index == player)
 
-    def do_it(self, state, *inputs):
+    def do_it(self, state, player, source, other_inputs):
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, *inputs)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state: GameState, *inputs: INPUT):
+    def add_self_to_state_history(self, state, player, source, other_inputs):
         return  # doesn't mark itself as having done anything
 
 
-class Shuffle(AffectSubjectPlayer):
-    """Shuffles the deck of the controller of `subject`"""
+class Shuffle(AffectController):
+    """Shuffles the deck of the player of `subject`"""
 
-    def do_it(self, state, subject, *others):
+    def do_it(self, state, player, source, other_inputs):
         # add triggers to super_stack, reduce length of input list
         """Mutates. Reorder deck randomly."""
-        random.shuffle(subject.deck)
-        return super().do_it(state, subject, *others)
+        random.shuffle(state.player_list[player].deck)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state, *inputs):
+    def add_self_to_state_history(self, state, player, source, other_inputs):
         if state.is_tracking_history:
             state.events_since_previous += "\nShuffle"
 
 
-class MoveToZone(AffectSubjectCard):
-    """Moves the subject card to its controller's given zone.
+class MoveToZone(AffectSourceCard):
+    """Moves the subject card to its player's given zone.
     NOTE: cannot actually remove the subject card from the
     stack (because it's wrapped in a StackObject).
     NOTE: cannot actually add the subject card to the stack
@@ -729,45 +755,45 @@ class MoveToZone(AffectSubjectCard):
         self.destination = destination_zone
         self.origin = None  # to let triggers check where card moved from
 
-    def can_be_done(self, state, subject: Cardboard, *others) -> bool:
-        if not super().can_be_done(state, subject, *others):
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        if not super().can_be_done(state, player, source, other_inputs):
             return False
-        elif subject.zone in [ZONE.DECK, ZONE.DECK_BOTTOM, ZONE.HAND,
-                              ZONE.FIELD, ZONE.GRAVE]:
-            return subject in state.get_zone(subject.zone,
-                                             subject.player_index)
+        elif source.zone in [ZONE.DECK, ZONE.DECK_BOTTOM, ZONE.HAND,
+                             ZONE.FIELD, ZONE.GRAVE]:
+            return source in state.get_zone(source.zone,
+                                            source.player_index)
         else:
             return True
 
-    def do_it(self, state, subject, *others):
+    def do_it(self, state, player, source, other_inputs):
         # NOTE: Cardboard can't live on the stack. only StackObjects do. So
         # reassign card zone and remove/add to zones as appropriate, but never
         # directly add or remove from the stack. StackCardboard does the rest.
-        self.origin = subject.zone  # so trigger knows where card moved from
+        self.origin = source.zone  # so trigger knows where card moved from
         # remove from origin
         if self.origin in [ZONE.DECK, ZONE.DECK_BOTTOM, ZONE.HAND,
                            ZONE.FIELD, ZONE.GRAVE]:
-            zone = state.get_zone(subject.zone, subject.player_index)
-            zone.remove(subject)
+            zone = state.get_zone(source.zone, source.player_index)
+            zone.remove(source)
         # add to destination
-        subject.zone = self.destination
+        source.zone = self.destination
         if self.destination in [ZONE.HAND, ZONE.FIELD, ZONE.GRAVE]:
             # these three zones must remain sorted at all times
             zone_list = state.get_zone(self.destination,
-                                       subject.player_index)
-            zone_list.append(subject)  # can add to any index b/c about to sort
-            player = state.player_list[subject.player_index]
+                                       source.player_index)
+            zone_list.append(source)  # can add to any index b/c about to sort
+            player = state.player_list[source.player_index]
             player.re_sort(self.destination)
         elif self.destination == ZONE.DECK:
-            deck = state.get_zone(ZONE.DECK, subject.player_index)
-            deck.insert(0, subject)  # add to top (index 0) of deck
+            deck = state.get_zone(ZONE.DECK, source.player_index)
+            deck.insert(0, source)  # add to top (index 0) of deck
         elif self.destination == ZONE.DECK_BOTTOM:
-            deck = state.get_zone(ZONE.DECK, subject.player_index)
-            deck.append(subject)  # add to bottom (index -1) of deck
+            deck = state.get_zone(ZONE.DECK, source.player_index)
+            deck.append(source)  # add to bottom (index -1) of deck
         # any time you change zones, reset the cardboard parameters
-        subject.reset_to_default_cardboard()
+        source.reset_to_default_cardboard()
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
     def __str__(self):
         if self.destination == ZONE.DECK:
@@ -787,68 +813,70 @@ class MoveToZone(AffectSubjectCard):
         return "MoveTo" + text
 
 
-class DrawCard(AffectSubjectPlayer):
-    """The controller of `subject` draws from index 0 of deck"""
+class DrawCard(AffectController):
+    """The player of `subject` draws from index 0 of deck"""
 
-    def can_be_done(self, state, *inputs) -> bool:
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
         # Even if the deck is 0, you CAN draw. you'll just lose
-        return super().can_be_done(state, *inputs)
+        return super().can_be_done(state, player, source, other_inputs)
 
-    def do_it(self, state, subject: Player, *others: INPUT):
-        if len(subject.deck) > 0:
+    def do_it(self, state, player: int, source, other_inputs: INPUTS):
+        if len(state.player_list[player].deck) > 0:
             mover = MoveToZone(ZONE.HAND)
             # Adds move triggers to super_stack
-            mover.do_it(state, subject.deck[0])
+            mover.do_it(state, player, state.player_list[player].deck[0], [])
             # add triggers to super_stack, reduce length of input list
-            return super().do_it(state, subject, *others)
+            return super().do_it(state, player, source, other_inputs)
         else:
             raise LoseTheGameError
 
 
-class MarkAsPlayedLand(AffectSubjectPlayer):
+class MarkAsPlayedLand(AffectController):
     """Doesn't actually move any cards, just toggles the
-    gamestate to say that the controller of `subject` has
+    gamestate to say that the player of `subject` has
     played a land this turn"""
 
-    def can_be_done(self, state, subject: Player, *others: INPUT) -> bool:
-        return subject.land_drops_left > 0
+    def can_be_done(self, state, player, source, other_inputs: INPUTS) -> bool:
+        return state.player_list[player].land_drops_left > 0
 
-    def do_it(self, state, subject: Player, *others: INPUT):
-        subject.num_lands_played += 1
+    def do_it(self, state, player, source, other_inputs: INPUTS):
+        state.player_list[player].num_lands_played += 1
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
-    def add_self_to_state_history(self, state: GameState, *inputs):
+    def add_self_to_state_history(self, state, player, source, other_inputs):
         return
 
 
-class Sacrifice(AffectSubjectCard):
-    def can_be_done(self, state, subject: Cardboard, *others) -> bool:
-        return (super().can_be_done(state, subject, *others)
-                and subject.zone == ZONE.FIELD)
+class Sacrifice(AffectSourceCard):
+    def can_be_done(self, state, player, source: Cardboard,
+                    other_inputs) -> bool:
+        return (super().can_be_done(state, player, source, other_inputs)
+                and source.zone == ZONE.FIELD)
 
-    def do_it(self, state, subject, *others):
-        MoveToZone(ZONE.GRAVE).do_it(state, subject)
+    def do_it(self, state, player, source, other_inputs):
+        MoveToZone(ZONE.GRAVE).do_it(state, player, source, [])
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
 
-class Destroy(AffectSubjectCard):
-    def can_be_done(self, state, subject: Cardboard, *others) -> bool:
+class Destroy(AffectSourceCard):
+    def can_be_done(self, state, player, source: Cardboard,
+                    other_inputs) -> bool:
         # allowed to attempt even if indestructible
-        return (super().can_be_done(state, subject, *others)
-                and subject.zone == ZONE.FIELD)
+        return (super().can_be_done(state, player, source, other_inputs)
+                and source.zone == ZONE.FIELD)
 
-    def do_it(self, state, subject, *others):
-        if not Match.Keyword("indestructible").match(subject, state, subject):
-            MoveToZone(ZONE.GRAVE).do_it(state, subject)
+    def do_it(self, state, player, source, other_inputs):
+        if not Match.Keyword("indestructible").match(source, state, source):
+            MoveToZone(ZONE.GRAVE).do_it(state, player, source, [])
         # add triggers to super_stack, reduce length of input list
-        return super().do_it(state, subject, *others)
+        return super().do_it(state, player, source, other_inputs)
 
 
 # ----------
 
-class Tutor(ApplyTo):
+class Tutor(ApplyToCard):
     def __init__(self, zone_to_move_to, num_to_find: int,
                  pattern: Match.Pattern):
         getter = Get.Chooser(Get.ListFromZone(pattern, ZONE.DECK),
@@ -877,64 +905,72 @@ class UniversalCaster(Verb):
     def __init__(self):
         super().__init__(1, copies=True)
 
-    def get_input_options(self, state: GameState, controller: Player,
+    def get_input_options(self, state: GameState, player: Player,
                           source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Tuple[INPUT]]:
-        """Shouldn't ever use this. Input IS a Cardboard or StackObject"""
-        return []
+                          ):
+        """This should never be called. Inputs will be a single
+        element, a StackObject to cast (to pay its costs and move
+        it to the stack)."""
+        raise Exception
 
-    def can_be_done(self, state, obj: StackObject, *others) -> bool:
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
         """Can the given Cardboard or StackObject be put onto
         the stack?
         """
-        if not super().can_be_done(state, obj, *others):
+        if not super().can_be_done(state, player, source, other_inputs):
             return False
+        obj: StackObject = other_inputs[0]
         num_payments = 0
-        if obj.cost is not None:
+        if source.cost is not None:
             num_payments = obj.cost.num_inputs
-        pay_choices = obj.choices[:num_payments]
-        target_choices = obj.choices[pay_choices:]
-        return ((obj.cost is None or obj.cost.can_afford(state, *pay_choices))
-                and (obj.effect is None
-                     or obj.effect.can_be_done(state, *target_choices)))
+        pay_choices = obj.choices[1:num_payments + 1]
+        target_choices = obj.choices[1 + num_payments:]
+        return ((obj.cost is None
+                 or obj.cost.can_afford(state, player, source, pay_choices))
+                and (source.effect is None
+                     or source.effect.can_be_done(state, player, source,
+                                                  target_choices)))
 
-    def do_it(self, state: GameState, obj: StackObject, *others):
+    def do_it(self, state: GameState, player, source, other_inputs):
         """Put the StackObject onto the stack, paying any
         necessary costs. Bypass the stack if necessary."""
         # check to make sure the execution is legal
-        if not self.can_be_done(state, obj, *others):
+        if not self.can_be_done(state, player, source, other_inputs):
             return []
         # 601.2a: add the spell to the stack
-        state2, [copy_of_obj] = state.copy_and_track([obj])
-        self._add_to_stack(state2, copy_of_obj)
+        obj: StackObject = other_inputs[0]
+        state2, [source2, obj2] = state.copy_and_track([source, obj])
+        self._add_to_stack(state2, obj2)
         # 601.2b: choose costs (additional costs, choose X, choose hybrid. For
         #   me this has already been done by choices.)
         # 601.2c: choose targets and modes -- already done by choices.
         # 601.2f: determine total cost -- part of payment for me, I think?
         # 601.2g: activate mana abilities -- I don't actually permit this.
         # 601.2h: pay costs
-        num_payments = 0
-        if obj.cost is not None:
-            num_payments = obj.cost.num_inputs
-        pay_choices = copy_of_obj.choices[:num_payments] + (copy_of_obj,)
-        # keep only the targets.
-        copy_of_obj.choices = copy_of_obj.choices[pay_choices:]
-        list_of_tuples = copy_of_obj.cost.pay_cost(state2, pay_choices)
+        if source.cost is not None:
+            num_payments = source.cost.num_inputs
+            pay_choices = obj2.choices[:num_payments] + [obj2]
+            # keep only the targets.
+            obj2.choices = obj2.choices[pay_choices:]
+            tuple_list: List[RESULT] = obj2.cost.pay_cost(state2, player,
+                                                          source2, pay_choices)
+        else:
+            tuple_list: List[RESULT] = [(state2, player, source, [obj2])]
         # if necessary, the object will now instantly resolve. We are
         # guaranteed that the object is be the latest item on the stack, as
         # triggers go to SUPER-stack. obj was put on stack so early because
         # then it can be automatically copied by GameState, for ease.
         new_tuple_list = []
-        for g1, obj_as_input in list_of_tuples:
-            # only remaining INPUT is the copy_of_obj we manually added
-            new_tuple_list += self._remove_if_needed(g1, *obj_as_input)
+        for result in tuple_list:
+            # only item remaining in input is the copy_of_obj we added
+            new_tuple_list += self._remove_if_needed(*result)
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already
         # been added to the superstack during ability.cost.pay. Now add
         # any trigger that trigger off of this activation/casting itself.
         final_results = []
-        for g2, obj_as_input in new_tuple_list:
-            final_results += super().do_it(g2, *obj_as_input)
+        for g2, p2, s2, input2 in new_tuple_list:
+            final_results += super().do_it(g2, p2, s2, input2)
         return final_results
 
     @staticmethod
@@ -945,16 +981,16 @@ class UniversalCaster(Verb):
         game.stack.append(obj)
 
     @staticmethod
-    def _remove_if_needed(game: GameState, obj: StackObject
-                          ) -> List[Tuple[GameState, Tuple[StackObject]]]:
+    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
+                          obj_as_input: List[StackObject]) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that. MUTATES."""
-        return [(game, (obj,))]
+        return [(game, player, source, obj_as_input)]
 
-    def add_self_to_state_history(self, state: GameState, obj: StackObject,
-                                  *inputs: INPUT):
+    def add_self_to_state_history(self, state: GameState, player,
+                                  source: StackObject, other_inputs: INPUTS):
         if state.is_tracking_history:
-            record = "\n*** %s %s ***" % (str(self), str(obj))
+            record = "\n*** %s %s ***" % (str(self), str(source))
             state.events_since_previous += record
 
 
@@ -965,73 +1001,78 @@ class PlayAbility(UniversalCaster):
 
 class PlayManaAbility(PlayAbility):
     @staticmethod
-    def _remove_if_needed(game: GameState, obj: StackObject
-                          ) -> List[Tuple[GameState, Tuple[StackObject]]]:
+    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
+                          obj_as_input: List[StackObject]) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that."""
         stack_obj = game.stack.pop(-1)
-        assert stack_obj is obj
+        assert stack_obj is obj_as_input[0]
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.effect is None:
-            return [(game, (obj,))]
+            return [(game, player, source, obj_as_input)]
         else:
-            # add stack_obj so that it will remain once choices are used up.
-            inputs = stack_obj.choices + (stack_obj,)
-            return stack_obj.effect.do_it(game, *inputs)
+            # add stack_obj to the list of choices needed to perform the
+            # `effect`, so stack_obj will remain once choices are used up.
+            inputs = stack_obj.choices + [stack_obj]
+            return stack_obj.effect.do_it(game, player, source, inputs)
 
 
 class AddTriggeredAbility(UniversalCaster):
     def __str__(self):
         return "Trigger"
 
-    def do_it(self, state: GameState, obj: StackTrigger, *others):
+    def do_it(self, state: GameState, player, source,
+              other_inputs: List[StackTrigger]):
         """Put the StackObject onto the stack, paying any
         necessary costs. Bypass the stack if necessary."""
         # check to make sure the execution is legal
-        if not self.can_be_done(state, obj, *others):
+        if not self.can_be_done(state, player, source, other_inputs):
             return []
         # 601.2a: add the spell to the stack
+        trig: StackTrigger = other_inputs[0]
         targets = [()]
-        if obj.effect is not None:
-            controller = state.player_list[obj.player_index]
-            targets = obj.effect.get_input_options(state, controller,
-                                                   obj.card, obj.cause)
+        if trig.effect is not None:
+            targets = trig.effect.get_input_options(state, player,
+                                                    trig.source_card,
+                                                    trig.cause)
         # now have targets for the trigger, so can make StackAbility for it
         final_results = []
         for choices in targets:
-            new_obj = Stack.StackAbility(obj.ability, obj.card, choices,
-                                         NullVerb())
-            state2, [new_copy, obj] = state.copy_and_track([new_obj, obj])
-            state2.super_stack.remove(obj)
-            state2.stack.append(new_copy)
+            abil = Stack.StackAbility(trig.player_index, trig.source_card,
+                                      trig.obj, choices, NullVerb())
+            state2, [abil2, trig2] = state.copy_and_track([abil, trig])
+            state2.super_stack.remove(trig2)
+            state2.stack.append(abil)
             # if necessary, the object will now instantly resolve. We are
             # guaranteed that the object is be the latest item on the stack
             # since triggers go to SUPER-stack.
-            new_tuple_list = self._remove_if_needed(state2, new_copy)
+            new_tuple_list = self._remove_if_needed(state2, player,
+                                                    abil.source_card, [abil2])
             # 601.2i: ability has now "been activated".  Any abilities which
             # trigger from some aspect of paying the costs have already
             # been added to the superstack during ability.cost.pay. Now add
             # any trigger that trigger off of this activation/casting itself.
-            for g2, obj_as_input in new_tuple_list:
-                final_results += super().do_it(g2, *obj_as_input)
+            for results in new_tuple_list:
+                final_results += super().do_it(*results)
         return final_results
 
 
 class AddAsEntersAbility(AddTriggeredAbility):
     @staticmethod
-    def _remove_if_needed(game: GameState, obj: StackObject
-                          ) -> List[Tuple[GameState, Tuple[StackObject]]]:
+    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
+                          obj_as_input: List[StackObject]) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that."""
         stack_obj = game.stack.pop(-1)
-        assert stack_obj is obj
+        assert stack_obj is obj_as_input[0]
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.effect is None:
-            return [(game, (obj,))]
+            return [(game, player, source, obj_as_input)]
         else:
-            # add stack_obj so that it will remain once choices are used up.
-            inputs = stack_obj.choices + (stack_obj,)
-            return stack_obj.effect.do_it(game, *inputs)
+            # add stack_obj to the list of choices needed to perform the
+            # `effect`, so stack_obj will remain once choices are used up.
+            inputs = stack_obj.choices + [stack_obj]
+            return stack_obj.effect.do_it(game, player, source, inputs)
 
 
 # ----------
@@ -1046,8 +1087,8 @@ class PlayCardboard(UniversalCaster):
         """Mutate the GameState to put the given StackObject
         onto the stack. This includes removing it from other
         zones if necessary."""
-        zone = game.get_zone(obj.card.zone, obj.card.player_index)
-        zone.remove(obj.card)
+        zone = game.get_zone(obj.source_card.zone, obj.player_index)
+        zone.remove(obj.source_card)
         game.stack.append(obj)
 
 
@@ -1058,32 +1099,37 @@ class PlayLand(PlayCardboard):
         return "Play"
 
     @staticmethod
-    def _remove_if_needed(game: GameState, obj: StackObject
-                          ) -> List[Tuple[GameState, Tuple[StackObject]]]:
+    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
+                          obj_as_input: List[StackObject]) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that."""
         stack_obj = game.stack.pop(-1)
-        assert stack_obj is obj and stack_obj.card.zone == ZONE.FIELD
+        assert stack_obj is obj_as_input[0]
+        assert stack_obj.obj.zone == ZONE.STACK
         # move the land to the field instantly
-        MoveToZone(ZONE.FIELD).do_it(game, stack_obj.card)
+        MoveToZone(ZONE.FIELD).do_it(game, stack_obj.player_index,
+                                     stack_obj.obj, [])
         # add stack_obj so that it will remain once choices are used up.
-        inputs = stack_obj.choices + (stack_obj,)
-        return stack_obj.effect.do_it(game, *inputs)
+        inputs = stack_obj.choices + [stack_obj]
+        return stack_obj.effect.do_it(game, stack_obj.player_index,
+                                      stack_obj.obj, inputs)
 
 
 # ----------
 class PlaySorcery(PlayCardboard):
-    def can_be_done(self, state, subject: StackCardboard, *others) -> bool:
-        doable = super().can_be_done(state, subject, *others)
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        doable = super().can_be_done(state, player, source, other_inputs)
         stack_empty = len(state.stack) == 0
-        has_flash = Match.Keyword("flash").match(subject, state, subject)
+        card = other_inputs[0].obj
+        has_flash = Match.Keyword("flash").match(card, state, card)
         return doable and (stack_empty or has_flash)
 
 
 # ----------
 class PlayPermanent(PlayCardboard):
-    def can_be_done(self, state, subject: StackCardboard, *others) -> bool:
-        doable = super().can_be_done(state, subject, *others)
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        doable = super().can_be_done(state, player, source, other_inputs)
         stack_empty = len(state.stack) == 0
-        has_flash = Match.Keyword("flash").match(subject, state, subject)
+        card = other_inputs[0].obj
+        has_flash = Match.Keyword("flash").match(card, state, card)
         return doable and (stack_empty or has_flash)

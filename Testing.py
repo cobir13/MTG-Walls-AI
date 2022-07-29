@@ -55,7 +55,8 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, game_orig.active)
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, INT,
+                                                   game_orig.active)
     assert len(tuple_list) == 1
     mana_game, choices = tuple_list[0]
     assert len(choices) == 0
@@ -488,11 +489,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, game1.active.hand[0])[0][0]
-    game1B = mover.do_it(game1A, game1.active.hand[0])[0][0]
+    game1A = mover.do_it(game1, INT, game1.active.hand[0])[0][0]
+    game1B = mover.do_it(game1A, INT, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, game2.active.hand[1])[0][0]
-    game2B = mover.do_it(game2A, game2.active.hand[0])[0][0]
+    game2A = mover.do_it(game2, INT, game2.active.hand[1])[0][0]
+    game2B = mover.do_it(game2A, INT, game2.active.hand[0])[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -503,13 +504,13 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, game1.active.hand[0])[0][0]
+    game1A = mover.do_it(game1, INT, game1.active.hand[0])[0][0]
     game1A.step_untap()
-    game1B = mover.do_it(game1A, game1.active.hand[0])[0][0]
+    game1B = mover.do_it(game1A, INT, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, game2.active.hand[1])[0][0]
+    game2A = mover.do_it(game2, INT, game2.active.hand[1])[0][0]
     game2A.step_untap()
-    game2B = mover.do_it(game2A, game2.active.hand[0])[0][0]
+    game2B = mover.do_it(game2A, INT, game2.active.hand[0])[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.step_untap()
@@ -624,7 +625,7 @@ if __name__ == "__main__":
     #   is caretaker, other two tap in either order. If not, can tap the other
     #   and strand the caretaker, or tap both with caretaker. 3*(1*2+2*2)=18
     # 1st: Caretaker has 4 targets. If target is caretaker, then 6 ways to
-    #   sequence the other 3. 3 ways to not, leaving caretaker and 2 others.
+    #   sequence the other 3. 3 ways to not, leaving caretaker and 2 other_input.
     #   Either tap caretaker + one of 2 and then remainder, or tap one and then
     #   tap either caretaker or remainder. 1*6+3*(2+2*2)=24
     assert tree6.traverse_counter == 72  # 6+12+18+24=60

@@ -24,7 +24,7 @@ class Getter:
     def __init__(self):
         self.single_output: bool = True
 
-    def get(self, state: GameState, asker: INPUT):
+    def get(self, state: GameState, player: int, source: Cardboard):
         raise Exception
 
     def __str__(self):
@@ -54,7 +54,7 @@ class Const(Getter):
         super().__init__()
         self.value = value
 
-    def get(self, state: GameState, asker: INPUT):
+    def get(self, state: GameState, player: int, source: Cardboard):
         return self.value
 
     def __str__(self):
@@ -112,8 +112,9 @@ class ForEach(String):
         self.num_to_copy = num
         self.single_output = num.single_output
 
-    def get(self, state: GameState, asker: INPUT):
-        return self.string_to_copy * self.num_to_copy.get(state, asker)
+    def get(self, state: GameState, player: int, source: Cardboard):
+        return self.string_to_copy * self.num_to_copy.get(state, player,
+                                                          source)
 
 
 # ----------
@@ -129,9 +130,9 @@ class Count(Integer):
         self.pattern = pattern
         self.zone = zone
 
-    def get(self, state: GameState, asker: INPUT):
+    def get(self, state: GameState, player: int, source: Cardboard):
         zone = state.get_zone(self.zone, None)
-        return len([c for c in zone if self.pattern.match(c, state, asker)])
+        return len([c for c in zone if self.pattern.match(c, state, source)])
 
     def __str__(self):
         return super().__str__() + "(" + str(self.pattern) + ")"
@@ -148,9 +149,9 @@ class ListFromZone(CardList):
         self.pattern = pattern
         self.zone = zone
 
-    def get(self, state: GameState, asker: INPUT):
+    def get(self, state: GameState, player: int, source: Cardboard):
         zone = state.get_zone(self.zone, None)
-        return [c for c in zone if self.pattern.match(c, state, asker)]
+        return [c for c in zone if self.pattern.match(c, state, source)]
 
 
 # ----------
@@ -168,11 +169,11 @@ class ListTopOfDeck(CardList):
         self.player_index = player_index
         self.single_output = get_depth.single_output
 
-    def get(self, state: GameState, asker: INPUT) -> List[Cardboard]:
-        num_of_cards_deep = self.get_depth.get(state, asker)
+    def get(self, state: GameState, player: int, source: Cardboard) -> List[Cardboard]:
+        num_of_cards_deep = self.get_depth.get(state, player, source)
         deck = state.player_list[self.player_index].deck
         top_of_deck = deck[:num_of_cards_deep]
-        return [c for c in top_of_deck if self.pattern.match(c, state, asker)]
+        return [c for c in top_of_deck if self.pattern.match(c, state, source)]
 
     def __str__(self):
         return super().__str__() + "(%s|%s" % (str(self.get_depth),
@@ -182,70 +183,70 @@ class ListTopOfDeck(CardList):
 
 
 class Keywords(StringList):
-    def get(self, state: GameState, asker: INPUT) -> List[str]:
+    def get(self, state: GameState, player: int, source: Cardboard) -> List[str]:
         try:
-            return asker.rules_text.keywords
+            return source.rules_text.keywords
         except AttributeError:
             return []
 
 
 class CardName(String):
-    def get(self, state: GameState, asker: INPUT) -> str:
+    def get(self, state: GameState, player: int, source: Cardboard) -> str:
         try:
-            return asker.rules_text.name
+            return source.rules_text.name
         except AttributeError:
             return ""
 
 
 class Counters(StringList):
-    def get(self, state: GameState, asker: INPUT) -> List[str]:
+    def get(self, state: GameState, player: int, source: Cardboard) -> List[str]:
         try:
-            return asker.counters
+            return source.counters
         except AttributeError:
             return []
 
 
 class IsTapped(Bool):
-    def get(self, state: GameState, asker: INPUT) -> bool:
+    def get(self, state: GameState, player: int, source: Cardboard) -> bool:
         try:
-            return asker.tapped
+            return source.tapped
         except AttributeError:
             return False
 
 
 class IsUntapped(Bool):
-    def get(self, state: GameState, asker: INPUT) -> bool:
+    def get(self, state: GameState, player: int, source: Cardboard) -> bool:
         try:
-            return not asker.tapped
+            return not source.tapped
         except AttributeError:
             return False
 
 
 class Power(Integer):
-    def get(self, state: GameState, asker: INPUT) -> int:
+    def get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
             modifier = sum([int(v[:v.index("/")])
-                            for v in Counters().get(state, asker) if "/" in v])
-            return asker.rules_text.power + modifier
+                            for v in Counters().get(state, player, source) if "/" in v])
+            return source.rules_text.power + modifier
         except AttributeError:
             return 0
 
 
 class Toughness(Integer):
-    def get(self, state: GameState, asker: INPUT) -> int:
+    def get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
             modifier = sum([int(v[v.index("/") + 1:])
-                            for v in asker.counters if "/" in v])
-            return asker.rules_text.toughness + modifier
+                            for v in source.counters if "/" in v])
+            return source.rules_text.toughness + modifier
         except AttributeError:
             return 0
 
 
 class ManaValue(Integer):
     """ 'card comparator value' """
-    def get(self, state: GameState, asker: INPUT) -> int:
+    def get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
-            asker.rules_text.mana_value
+            source.rules_text.mana_value
         except AttributeError:
             return 0
 
@@ -266,12 +267,13 @@ class Chooser(Getter):
         self.can_be_less = can_be_fewer
         self.single_output = False
 
-    def get(self, state: GameState, asker: INPUT) -> List[tuple]:
+    def get(self, state: GameState, player: int, source: Cardboard) -> List[tuple]:
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
-        options = self.getter.get(state, asker)  # list of tuples of items
-        num = self.num_to_choose.get(state, asker)
+        options = self.getter.get(state, player,
+                                  source)  # list of tuples of items
+        num = self.num_to_choose.get(state, player, source)
         if self.can_be_less:
             return Choices.choose_n_or_fewer(options, num)
         else:

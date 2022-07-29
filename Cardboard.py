@@ -39,7 +39,7 @@ class Cardboard:
             str] = []  # sorted list of counters. Also other trackers
         # track where the card is: index (within a gamestate) of the player
         # who controls it, index of the player who ownes it, and its zone.
-        self.player_index = -1  # controller. duck-type to Player.player_index
+        self.player_index = -1  # controller. duck-type to Player.index
         self.owner_index = -1
         self.zone = ZONE.NEW
 
@@ -68,6 +68,29 @@ class Cardboard:
         # counters is a LIST so it needs to be copied without reference
         new_card.counters = self.counters.copy()
         return new_card
+
+    def copy_as_pointer(self, state_orig: GameState, state_new: GameState):
+        """A more careful version of copy. This one first
+        checks to see if the card is secretly a "pointer"
+        to a card which already exists in the new GameState.
+        If it is, returns the card in the new GameState. If
+        it is not, returns a fresh copy of the card.
+        Useful when copying spells on the stack."""
+        if self.zone == ZONE.STACK:
+            # TODO: on-cast trigger would have a source pointing to stack
+            return self.copy()  # if on stack, can't be a pointer.
+        try:
+            zone_orig = self.get_home_zone_list(state_orig)
+            zone_new = self.get_home_zone_list(state_new)
+            # look for true equality (not just equivalence) in old cards
+            indices = [ii for ii, c in enumerate(zone_orig) if c is self]
+            if len(indices) > 0:
+                return zone_new[indices[0]]
+            else:
+                return self.copy()  # couldn't find, so copy.
+        except ValueError:
+            # no zone. Maybe is new? Anyway, just make a fresh copy.
+            return self.copy()
 
     def add_counter(self, addition):
         self.counters = sorted(self.counters + [addition])
@@ -153,7 +176,8 @@ class Cardboard:
         payments = [ch for ch in payments if self.cost.can_afford(state, *ch)]
         # 601.2c: choose targets and modes
         targets = self.effect.get_input_options(state, player, self, None)
-        targets = [ch for ch in targets if self.effect.can_be_done(state, *ch)]
+        targets = [ch for ch in targets if
+                   self.effect.can_be_done(state, INT,, *ch]
         # combine all combinations of these
         obj_list = []
         for sub_pay in payments:
