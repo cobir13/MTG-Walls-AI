@@ -48,7 +48,7 @@ class GameState:
         self.super_stack: List[StackTrigger] = []
         self.player_list: List[Player] = []
         for _ in range(num_players):
-            Player(self)  # adds single new player to the player_list
+            Player(self)  # adds single new asking_player to the player_list
         self.active_player_index: int = 0
         self.priority_player_index: int = 0
         self.phase = 0
@@ -107,7 +107,7 @@ class GameState:
         returned"""
         # make new Gamestate and start copying attributes by value
         state = GameState(0)
-        # copy the player list. new players automatically added to state.
+        # copy the asking_player list. new players automatically added to state.
         [p.copy(state) for p in self.player_list]
         # copy history stuff
         state.is_tracking_history = self.is_tracking_history
@@ -173,9 +173,9 @@ class GameState:
         return opts + len(self.stack) > 0
 
     def get_zone(self, zone, player_index: int | None):
-        """Returns the zone belonging to the specified player.
-        If `index` is None and the zone is a private zone
-        that ought to belong to only a single player (HAND, DECk,
+        """Returns the zone belonging to the specified asking_player.
+        If `player_index` is None and the zone is a private zone
+        that ought to belong to only a single asking_player (HAND, DECk,
         FIELD, GRAVE), then returns a concatenated list of ALL
         of those zones. This latter functionality is useful for
         stuff like "find every creature in play, no matter who
@@ -225,9 +225,9 @@ class GameState:
             i = 0
             while i < len(player.field):
                 card = player.field[i]
-                toughness = Get.Toughness().get(self, player.index, card)
+                toughness = Get.Toughness().get(self, player.player_index, card)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, player.index, card)
+                    MoveToZone(ZONE.GRAVE).do_it(self, player.player_index, card)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -254,7 +254,7 @@ class GameState:
             for card in player.field:
                 # erase the invisible counters
                 card.counters = [c for c in card.counters if c[0] not in "@$"]
-        # things which happen only for the newly active player
+        # things which happen only for the newly active asking_player
         self.active.turn_count += 1
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
@@ -275,7 +275,7 @@ class GameState:
 
     def step_draw(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
-           Draws from index 0 of deck."""
+           Draws from player_index 0 of deck."""
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
             self.events_since_previous += "\nDraw step"
@@ -333,7 +333,7 @@ class GameState:
         for item in Choices.choose_exactly_one(
                 list(enumerate(self.super_stack)),
                 "Add to stack"):
-            ii = item[0]  # index first, then object second
+            ii = item[0]  # player_index first, then object second
             state2 = self.copy()
             obj = state2.super_stack.pop(ii)
             if not obj.caster_verb.can_be_done(state2, obj.player_index,
@@ -392,8 +392,8 @@ class Player:
         """Initializer also adds the new Player to the
         GameState's list of players"""
         self.gamestate: GameState = state
-        # duck-type to Cardboard.index
-        self.index: int = len(state.player_list)
+        # duck-type to Cardboard.player_index
+        self.player_index: int = len(state.player_list)
         state.player_list.append(self)
         self.turn_count: int = 0
         self.life: int = 20
@@ -408,18 +408,18 @@ class Player:
 
     @property
     def is_my_turn(self):
-        return self.index == self.gamestate.active_player_index
+        return self.player_index == self.gamestate.active_player_index
 
     @property
     def is_my_priority(self):
-        return self.index == self.gamestate.priority_player_index
+        return self.player_index == self.gamestate.priority_player_index
 
     @property
     def land_drops_left(self):
         return 1 - self.num_lands_played
 
     def __str__(self):
-        txt = "Player%i" % self.index
+        txt = "Player%i" % self.player_index
         txt += "(ACTIVE)" if self.is_my_turn else ""
         txt += "(PRIORITY)" if self.is_my_priority else ""
         txt += "  T:%2i" % self.turn_count
@@ -435,7 +435,7 @@ class Player:
         return txt
 
     def get_id(self):
-        index = "P%i" % self.index
+        index = "P%i" % self.player_index
         index += "A" if self.is_my_turn else ""
         index += "P" if self.is_my_priority else ""
         turn = "t%i" % self.turn_count
@@ -505,7 +505,7 @@ class Player:
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                can_do = ability.valid_stack_objects(game, self.index, source)
+                can_do = ability.valid_stack_objects(game, self.player_index, source)
                 if len(can_do) > 0:
                     add_object = True
                 activatables += can_do

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     # SOURCE = Cardboard | Player
     CAUSE = Cardboard | Player | None
-    INPUTS = List[Cardboard | Player | StackObject | int | tuple | None]
+    INPUTS = List[Tuple[Cardboard | Player | StackObject | int | None]]
     RESULT = Tuple[GameState, int, Cardboard | None, INPUTS]
 
 import ZONE
@@ -38,8 +38,10 @@ class LoseTheGameError(Exception):
 # ---------------------------------------------------------------------------
 
 class Verb:
-    def __init__(self, num_inputs: int, copies: bool):
-        self.num_inputs: int = num_inputs  # includes usual "subject" at [0].
+    def __init__(self, chooser: Match.Pattern,
+                 num_inputs: int, copies: bool):
+        self.chooser: Match.Pattern = target_pattern
+        self.num_inputs: int = num_inputs
         self.copies: bool = copies  # returns copies of GameStates, not mutate.
 
     def get_input_options(self, state: GameState, player: int,
@@ -67,7 +69,7 @@ class Verb:
          mutates it.
          """
         self.add_self_to_state_history(state, player, source, other_inputs)
-        # `trigger_source` is source of the trigger. Not to be confused
+        # `trigger_source` is asking_card of the trigger. Not to be confused
         # with `subject`, which is the cause of the Verb which is
         # potentially CAUSING the trigger.
         for trigger_source in state.get_all_public_cards():
@@ -119,7 +121,7 @@ class MultiVerb(Verb):
                 ii += 1
         # figure out number of inputs, etc, based on sub_verbs.
         super().__init__(sum([v.num_inputs for v in self.sub_verbs]),
-                         any([v.copies for v in self.sub_verbs]))
+                         any([v.copies for v in self.sub_verbs]), )
 
     def get_input_options(self, state, player, source, cause
                           ) -> List[INPUTS]:
@@ -170,8 +172,8 @@ class MultiVerb(Verb):
 
 class AffectController(Verb):
     def __init__(self):
-        """Subject is the player of the Verb"""
-        super().__init__(0, False)  # mutates, doesn't copy
+        """Subject is the asking_player of the Verb"""
+        super().__init__(0, False, )  # mutates, doesn't copy
 
     def get_input_options(self, state: GameState, player: int,
                           source=None, cause=None) -> List[INPUTS]:
@@ -192,12 +194,12 @@ class AffectController(Verb):
 
 class AffectSourceCard(Verb):
     def __init__(self):
-        """Subject is the source card of the Verb"""
-        super().__init__(0, False)  # mutates, doesn't copy
+        """Subject is the asking_card card of the Verb"""
+        super().__init__(0, False, )  # mutates, doesn't copy
 
     def get_input_options(self, state: GameState, player: int,
                           source: Cardboard | None, cause=None
-                          ) -> List[INPUTS]:
+                          ) -> List[tuple[Cardboard]]:
         """A list of possibly input lists that are meant to
         be plugged into can_be_done and do_it"""
         return [[]]  # this means "no inputs". "Cannot be done" would be [].
@@ -235,9 +237,9 @@ class ApplyToCard(Verb):
         one possible way to choose modes and/or targets for this
         Verb.  The sublists are intended to be passed into calls
         to `can_be_done` and `do_it` as the `choices` argument.
-        The `source` is the thing which is performing the verb,
+        The `asking_card` is the thing which is performing the verb,
         and the `cause` is the reason why the verb is being
-        performed (often identical to the source).
+        performed (often identical to the asking_card).
         In this particular case, the sublists are length 1 and
         contain a tuple of possible targets to apply the subverb
         to.
@@ -246,8 +248,8 @@ class ApplyToCard(Verb):
         # LIST of tuples of Cardboards, so wrap each tuple in a list
         choices = [[x] for x in self.chooser.get(state, player, source)]
         assert self.verb.num_inputs == 0
-        # verb_choices = self.verb.get_input_options(state, player,
-        #                                            source, cause)
+        # verb_choices = self.verb.get_input_options(state, asking_player,
+        #                                            asking_card, cause)
         # new_list = []
         # for sublist in choices:
         #     new_list += [sublist + ch for ch in verb_choices]
@@ -292,18 +294,18 @@ class ApplyToCard(Verb):
         else:
             if self.copies:
                 # make some extra choices to chew through. Should look like:
-                # [target1, ... targetN, otherX, ... otherZ, source].
+                # [target1, ... targetN, otherX, ... otherZ, asking_card].
                 # `targets` is technically a tuple, so cast to list first.
                 concat_choices = list(targets) + other_inputs[1:] + [source]
                 # concat_choices = []
                 # for target in targets:
                 #     concat_choices.append(target)
                 #     concat_choices += other_inputs[1:self.verb.num_inputs+1]
-                # concat_choices += [source]
+                # concat_choices += [asking_card]
                 # concat_choices += other_inputs[self.verb.num_inputs + 1:]
                 # copy gamestate (and these choices) and then start do_it loop
                 state2, concat2 = state.copy_and_track(concat_choices)
-                # standard "state, player, source, choices" format
+                # standard "state, asking_player, asking_card, choices" format
                 tuple_list = [(state2, player, concat2[0], concat2)]
                 for _ in range(len(targets)):
                     new_list = []
@@ -311,7 +313,7 @@ class ApplyToCard(Verb):
                         new_list += self.verb.do_it(g, plr, ins[0], ins[1:])
                     tuple_list = new_list
                 # at this point we've done all the work, but still need to
-                # extract the source to return!
+                # extract the asking_card to return!
                 return [(g, plr, ins[-1], ins[:-1])
                         for g, plr, trg, ins in tuple_list]
             else:
@@ -431,7 +433,7 @@ class Defer(Verb):
 #     def can_be_done(self, state: GameState, subject: Cardboard,
 #                     choices: list) -> bool:
 #         return (len(choices) >= 1
-#                 and self.sub_verbs[0].can_be_done(state, source,
+#                 and self.sub_verbs[0].can_be_done(state, asking_card,
 #                                                   choices[1:]))
 #
 #     def do_it(self, state: GameState, subject: Cardboard, choices):
@@ -441,15 +443,15 @@ class Defer(Verb):
 #             game2, things = state.copy_and_track([subject] + choices[1:])
 #             return [(game2, things[0], things[1:])]
 #         elif num_to_repeat == 1:
-#             return self.sub_verbs[0].do_it(state, source, choices[1:])
+#             return self.sub_verbs[0].do_it(state, asking_card, choices[1:])
 #         else:
 #             # do a MultiVerb containing this verb repeated a bunch of times
 #             multi_verb = MultiVerb([self.sub_verbs[0]] * num_to_repeat)
-#             return multi_verb.do_it(state, source, choices[1:])
+#             return multi_verb.do_it(state, asking_card, choices[1:])
 #
-#     def get_input_options(self, state: GameState, source: Cardboard = None,
+#     def get_input_options(self, state: GameState, asking_card: Cardboard = None,
 #                        cause=None):
-#         raw_choices = super().get_input_options(state, source, cause)
+#         raw_choices = super().get_input_options(state, asking_card, cause)
 #         # In each sublist in raw_choices, the first is the number of times to
 #         # repeat the Verb and the rest is one copy of the choices for that
 #         # Verb. I need to duplicate those other choices according to the
@@ -500,7 +502,7 @@ class Defer(Verb):
 #         all_options = self.chooser.getter.get(state, subject)
 #         act_on_chosen, act_on_non_chosen = self.sub_verbs
 #         # put all_options and also choices into tuple_list to track them
-#         tuple_list = [(state, source, all_options + choices)]
+#         tuple_list = [(state, asking_card, all_options + choices)]
 #         for ii in range(len(all_options)):
 #             new_tuples = []
 #             for g, s, concat in tuple_list:
@@ -527,9 +529,9 @@ class Defer(Verb):
 #         s = "%s on %s%i of %s else %s" % (act_yes, comp, num, get_str,act_no)
 #         return s
 #
-#     def get_input_options(self, state: GameState, source: Cardboard = None,
+#     def get_input_options(self, state: GameState, asking_card: Cardboard = None,
 #                        cause=None):
-#         list_of_chosen_tuples = self.chooser.get(state, source)
+#         list_of_chosen_tuples = self.chooser.get(state, asking_card)
 #         # I need to return a list of lists. Each sublist has one element: a
 #         # tuple of the chosen cards. Right now I have a list of tuples, not
 #         # a list of lists of tuples.
@@ -548,7 +550,7 @@ class Defer(Verb):
 #     def __init__(self, verb: Verb):
 #         self.verb = verb
 # 
-#     def get_input_options(self, state: GameState, source: SOURCE,
+#     def get_input_options(self, state: GameState, asking_card: SOURCE,
 #                           cause: CAUSE) -> List[INPUTS]:
 #         return [[[cause]]]
 
@@ -638,7 +640,7 @@ class AddMana(AffectController):
 
 class LoseLife(AffectController):
     def __init__(self, damage_getter: Get.Integer | int):
-        """The subject player loses the given amount of life"""
+        """The subject asking_player loses the given amount of life"""
         super().__init__()
         if isinstance(damage_getter, int):
             damage_getter = Get.ConstInteger(damage_getter)
@@ -658,7 +660,7 @@ class LoseLife(AffectController):
 
 
 class Tap(AffectSourceCard):
-    """taps `source` if it was not already tapped."""
+    """taps `asking_card` if it was not already tapped."""
 
     def can_be_done(self, state, player, source, other_inputs=[]):
         return (super().can_be_done(state, player, source, other_inputs)
@@ -732,7 +734,7 @@ class ActivateOncePerTurn(AffectSourceCard):
 
 
 class ActivateOnlyAsSorcery(Verb):
-    """Checks that the stack is empty and the player has
+    """Checks that the stack is empty and the asking_player has
      priority. Otherwise, can_be_done will return False."""
 
     def can_be_done(self, state, player, source, other_inputs) -> bool:
@@ -749,7 +751,7 @@ class ActivateOnlyAsSorcery(Verb):
 
 
 class Shuffle(AffectController):
-    """Shuffles the deck of the player of `subject`"""
+    """Shuffles the deck of the asking_player of `subject`"""
 
     def do_it(self, state, player, source, other_inputs=[]):
         # add triggers to super_stack, reduce length of input list
@@ -763,7 +765,7 @@ class Shuffle(AffectController):
 
 
 class MoveToZone(AffectSourceCard):
-    """Moves the subject card to its player's given zone.
+    """Moves the subject card to its asking_player's given zone.
     NOTE: cannot actually remove the subject card from the
     stack (because it's wrapped in a StackObject).
     NOTE: cannot actually add the subject card to the stack
@@ -810,14 +812,14 @@ class MoveToZone(AffectSourceCard):
             # these three zones must remain sorted at all times
             zone_list = state.get_zone(self.destination,
                                        source.player_index)
-            zone_list.append(source)  # can add to any index b/c about to sort
+            zone_list.append(source)  # can add to any player_index b/c about to sort
             state.player_list[source.player_index].re_sort(self.destination)
         elif self.destination == ZONE.DECK:
             deck = state.get_zone(ZONE.DECK, source.player_index)
-            deck.insert(0, source)  # add to top (index 0) of deck
+            deck.insert(0, source)  # add to top (player_index 0) of deck
         elif self.destination == ZONE.DECK_BOTTOM:
             deck = state.get_zone(ZONE.DECK, source.player_index)
-            deck.append(source)  # add to bottom (index -1) of deck
+            deck.append(source)  # add to bottom (player_index -1) of deck
         # any time you change zones, reset the cardboard parameters
         source.reset_to_default_cardboard()
         # add triggers to super_stack, reduce length of input list
@@ -842,7 +844,7 @@ class MoveToZone(AffectSourceCard):
 
 
 class DrawCard(AffectController):
-    """The player of `subject` draws from index 0 of deck"""
+    """The asking_player of `subject` draws from player_index 0 of deck"""
 
     def can_be_done(self, state, player, source, other_inputs=[]) -> bool:
         # Even if the deck is 0, you CAN draw. you'll just lose
@@ -861,7 +863,7 @@ class DrawCard(AffectController):
 
 class MarkAsPlayedLand(AffectController):
     """Doesn't actually move any cards, just toggles the
-    gamestate to say that the player of `subject` has
+    gamestate to say that the asking_player of `subject` has
     played a land this turn"""
 
     def can_be_done(self, state, player, source, other_inputs=[]) -> bool:

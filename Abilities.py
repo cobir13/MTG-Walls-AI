@@ -30,7 +30,7 @@ class Trigger:
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):
-        """`source` is source of possible trigger. `trigger_card` is the
+        """`asking_card` is asking_card of possible trigger. `trigger_card` is the
         thing which caused the trigger to be checked for viability."""
         return (isinstance(verb, self.verb_type)
                 and self.pattern.match(trigger_card, state,
@@ -166,7 +166,7 @@ class TriggeredAbility:
         MUTATES.
         Checks if the given Verb `verb` being performed on the
         card `trigger_card` meets this ability's trigger
-        condition. `source` is assumed to be the source of this
+        condition. `asking_card` is assumed to be the asking_card of this
         triggered ability. If the ability IS triggered, MUTATES
         the GameState `state` to add a StackTrigger object to
         the super_stack.

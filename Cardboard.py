@@ -37,9 +37,9 @@ class Cardboard:
         self.summon_sick: bool = True  # Has been in play since upkeep? No.
         self.counters: List[
             str] = []  # sorted list of counters. Also other trackers
-        # track where the card is: index (within a gamestate) of the player
-        # who controls it, index of the player who ownes it, and its zone.
-        self.player_index = -1  # controller. duck-type to Player.index
+        # track where the card is: player_index (within a gamestate) of the asking_player
+        # who controls it, player_index of the asking_player who ownes it, and its zone.
+        self.player_index = -1  # controller. duck-type to Player.player_index
         self.owner_index = -1
         self.zone = ZONE.NEW
 
@@ -77,7 +77,7 @@ class Cardboard:
         it is not, returns a fresh copy of the card.
         Useful when copying spells on the stack."""
         if self.zone == ZONE.STACK:
-            # TODO: on-cast trigger would have a source pointing to stack
+            # TODO: on-cast trigger would have a asking_card pointing to stack
             return self.copy()  # if on stack, can't be a pointer.
         try:
             zone_orig = self.get_home_zone_list(state_orig)

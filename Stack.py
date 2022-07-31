@@ -78,7 +78,7 @@ class StackObject:
                 return state_new.stack[index]
         # If reached here, we need to make a new StackObject ourselves
         controller: int = self.player_index  # copy int directly
-        # source card
+        # asking_card card
         if self.source_card is None:
             source = None
         else:
