@@ -35,11 +35,12 @@ class StackObject:
             return self.obj.effect
 
     def get_id(self):
-        source = "" if self.source_card is None else self.source_card.get_id()
-        obj = self.obj.get_id()
-        choices = ",".join([c.get_id() if hasattr(c, "get_id") else str(c)
-                            for c in self.choices])
-        return "Ob%i(%s-%s,%s)" % (self.player_index, source, obj, choices)
+        s_text = "" if self.source_card is None else self.source_card.get_id()
+        obj_text = self.obj.get_id()
+        list_text = ",".join([c.get_id() if hasattr(c, "get_id") else str(c)
+                              for c in self.choices])
+        return "Ob%i(%s-%s,%s)" % (self.player_index, s_text, obj_text,
+                                   list_text)
 
     def is_equiv_to(self, other: StackObject):
         return self.get_id() == other.get_id()
@@ -51,12 +52,15 @@ class StackObject:
     def __str__(self):
         return "Ob(%s)" % self.name
 
+    def __repr__(self):
+        return self.get_id()
+
     def put_on_stack(self, state: GameState) -> List[GameState]:
         """Returns a list of GameStates where this spell has
         been cast (put onto the stack) and all costs paid.
         GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
         # PlayAbility.do_it does not mutate
-        return [g for g, _ in self.caster_verb.do_it(state, self.player_index,
+        return [t[0] for t in self.caster_verb.do_it(state, self.player_index,
                                                      self.source_card, [self])]
 
     def copy(self, state_orig: GameState, state_new: GameState):
@@ -74,18 +78,24 @@ class StackObject:
                 return state_new.stack[index]
         # If reached here, we need to make a new StackObject ourselves
         controller: int = self.player_index  # copy int directly
+        # source card
         if self.source_card is None:
             source = None
         else:
             source = self.source_card.copy_as_pointer(state_orig, state_new)
-        # Abilities and Cardboards all have copy method. Safe to copy
-        # Cardboard like this because the card CAN'T be a pointer.
-        obj = self.obj.copy()
+        # object card or object ability
+        if hasattr(self.obj, "copy_as_pointer"):  # it's a Cardboard
+            obj = self.obj.copy_as_pointer(state_orig, state_new)
+        else:
+            obj = self.obj.copy()
+        # copy options
         options = state_orig.copy_arbitrary_list(state_orig, state_new,
                                                  self.choices)
         verb = self.caster_verb
-        # use initializer of same subclass
-        return self.__class__(controller, source, obj, options, verb)
+        # initialize into a StackObject, then cast it to the correct subclass
+        new_obj = StackObject(controller, source, obj, options, verb)
+        new_obj.__class__ = self.__class__  # set the class type directly
+        return new_obj
 
 
 class StackAbility(StackObject):
@@ -119,6 +129,10 @@ class StackTrigger(StackAbility):
 
 
 class StackCardboard(StackObject):
+
+    def __init__(self, controller: int, source_card: None,
+                 obj: Cardboard, chosen_options: INPUTS, caster_verb: Verb):
+        super().__init__(controller, obj, obj, chosen_options, caster_verb)
 
     def __str__(self):
         return "Spell: " + self.name

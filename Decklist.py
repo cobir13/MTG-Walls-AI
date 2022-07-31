@@ -58,10 +58,12 @@ class Caretaker(Creature):
         self.set_power_toughness(0, 3)
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
-                                Verbs.Tap().on(Match.Another()
-                                               & Match.Untapped()
-                                               & Match.CardType(Creature)
-                                               & Match.YouControl())),
+                                Verbs.Tap().on(Get.Chooser(
+                                    Get.ListFromZone(ZONE.FIELD,
+                                        Match.Another() & Match.Untapped()
+                                        & Match.CardType(Creature)
+                                        & Match.YouControl()),
+                                    1, False))),
                            Verbs.AddMana("A"))
 
 

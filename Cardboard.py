@@ -170,14 +170,15 @@ class Cardboard:
         StackObjects accordingly. If the card cannot be
         cast, the empty list is returned."""
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-        player = state.player_list[self.player_index]
+        player = self.player_index
         payments = self.cost.get_options(state, player, self, None)
         # keep only the valid ones
-        payments = [ch for ch in payments if self.cost.can_afford(state, *ch)]
+        payments = [ch for ch in payments
+                    if self.cost.can_afford(state, player, self, ch)]
         # 601.2c: choose targets and modes
         targets = self.effect.get_input_options(state, player, self, None)
         targets = [ch for ch in targets if
-                   self.effect.can_be_done(state, INT,, *ch]
+                   self.effect.can_be_done(state, player, self, ch)]
         # combine all combinations of these
         obj_list = []
         for sub_pay in payments:
@@ -185,8 +186,8 @@ class Cardboard:
                 # concatenate sub-lists
                 inputs = sub_pay + sub_target
                 # figure out which verb can be used to cast this object
-                caster_verb = self.rules_text.caster_verb
-                obj = Stack.StackCardboard(None, self, inputs, caster_verb)
+                caster = self.rules_text.caster_verb
+                obj = Stack.StackCardboard(player, None, self, inputs, caster)
                 obj_list.append(obj)
         return obj_list
 

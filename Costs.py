@@ -5,7 +5,7 @@ from ManaHandler import ManaCost
 from Verbs import Verb, PayMana, MultiVerb, NullVerb
 
 if TYPE_CHECKING:
-    from GameState import GameState, Player
+    from GameState import GameState
     from Cardboard import Cardboard
     from Verbs import INPUTS, RESULT
 
@@ -50,8 +50,8 @@ class Cost:
         if self.mana_cost is None:
             afford_mana = True
         else:
-            player = state.player_list[player]
-            afford_mana = player.pool.can_afford_mana_cost(self.mana_cost)
+            afford_mana = state.player_list[player].pool.can_afford_mana_cost(
+                self.mana_cost)
         afford_other = all([v.can_be_done(state, player, subject, other_inputs)
                             for v in self.additional])
         return afford_mana and afford_other

@@ -250,7 +250,7 @@ if __name__ == "__main__":
 
     Choices.AUTOMATION = False
 
-    game = GameState(int)
+    game = GameState(1)
     game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.FIELD)
     game.give_to(Cardboard.Cardboard(Decklist.Caretaker()), ZONE.FIELD)
 

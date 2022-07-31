@@ -14,7 +14,7 @@ import Verbs
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
-    from Verbs import INPUT
+    from Verbs import INPUTS
 
 from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
     AlwaysTrigger
@@ -142,12 +142,13 @@ class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
     def can_be_done(self, state: GameState, controller, source: Cardboard,
-                    *other_input: INPUT) -> bool:
-        return (super().can_be_done(state, INT, source, *other_input)
+                    other_input: INPUTS = []) -> bool:
+        return (super().can_be_done(state, controller, source, other_input)
                 and not (Match.CardType(Creature).match(source, state,
-                                                        source)
+                                                        controller, source)
                          and source.summon_sick
                          and not Match.Keyword("haste").match(source, state,
+                                                              controller,
                                                               source)))
 
     def __str__(self):
@@ -157,17 +158,14 @@ class TapSymbol(Tap):
 # ----------
 
 class Revert(Verbs.AffectSourceCard):
-    def can_be_done(self, state: GameState, controller, source: INPUT) -> bool:
+    def can_be_done(self, state: GameState, controller, source: Cardboard,
+                    other_input: INPUTS = []) -> bool:
         return True
 
-    def do_it(self, state, controller, source: Cardboard, *other_input):
+    def do_it(self, state, controller, source: Cardboard, other_input=[]):
         while hasattr(source.rules_text, "former"):
             source.rules_text = getattr(source.rules_text, "former")
-        return [(state, inputs)]
-
-    @property
-    def mutates(self):
-        return True
+        return [(state, controller, source, other_input)]
 
 
 class Animate(Verbs.AffectSourceCard):
@@ -176,10 +174,10 @@ class Animate(Verbs.AffectSourceCard):
         self.creature_type = creature_type
 
     def can_be_done(self, state, controller, source: Cardboard,
-                    *other_input: INPUT) -> bool:
+                    other_input: INPUTS = []) -> bool:
         return source.zone == ZONE.FIELD
 
-    def do_it(self, state, controller, source: Cardboard, *other_input):
+    def do_it(self, state, controller, source: Cardboard, other_input=[]):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name
@@ -197,7 +195,7 @@ class Animate(Verbs.AffectSourceCard):
                                                    AlwaysTrigger(), Revert()))
         # overwrite with new RulesText
         source.rules_text = rules
-        return super().do_it(state, INT, source, *other_input)
+        return super().do_it(state, controller, source, other_input)
 
     @property
     def mutates(self):

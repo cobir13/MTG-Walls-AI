@@ -5,7 +5,7 @@ Created on Tue Dec 29 22:15:57 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import Tuple, List
+from typing import List
 
 from Abilities import ActivatedAbility
 import ZONE
@@ -22,22 +22,50 @@ import time
 
 if __name__ == "__main__":
 
-    def cast_thing(state,
-                   tup: Tuple[ActivatedAbility, Cardboard, list] |
-                   Tuple[Cardboard, list]
-                   ) -> List[GameState]:
-        if len(tup) == 3:
-            ab, s, ch = tup
-            return ab.activate(state, s, ch)
-        elif len(tup) == 2:
-            c, ch = tup
-            return c.cast(state, ch)
-
-
-    # -----------------------------------------------------------------------
-
     print("Testing Wall of Roots and basic GameState...")
     start_clock = time.perf_counter()
+
+    # let's do a full copy test, since copying is rather critical
+    game1 = GameState()
+    caryatid_in_play = Cardboard(Decklist.Caryatid())
+    caryatid_in_play.zone = ZONE.FIELD
+    game1.active.field.append(caryatid_in_play)
+    roots_on_stack = Cardboard(Decklist.Roots())
+    roots_on_stack.zone = ZONE.STACK
+    stack_cardboard = Stack.StackCardboard(0, None, roots_on_stack,
+                                           [1, "a", caryatid_in_play],
+                                           Verbs.PlayCardboard())
+    game1.stack.append(stack_cardboard)
+    fake_ability = ActivatedAbility("fake", Costs.Cost(), Verbs.NullVerb())
+    stack_ability = Stack.StackAbility(0, caryatid_in_play, fake_ability,
+                                       [(stack_cardboard, caryatid_in_play)],
+                                       Verbs.PlayAbility())
+    game1.stack.append(stack_ability)
+    # test game has: caryatid in play, roots on stack pointing at random stuff,
+    # and an ability on stack pointing at roots and also random stuff.
+    # try a copy_and_track
+    game2, [card2, obj2] = game1.copy_and_track([caryatid_in_play,
+                                                 stack_ability])
+    assert game2 == game1
+    assert obj2 is not stack_ability
+    assert card2 is not caryatid_in_play
+    assert caryatid_in_play in caryatid_in_play.get_home_zone_list(game1)
+    assert card2 in card2.get_home_zone_list(game2)
+    assert obj2.source_card in obj2.source_card.get_home_zone_list(game2)
+    assert game1.stack[0].obj.is_equiv_to(game2.stack[0].obj)
+    assert game1.stack[0].obj is not game2.stack[0].obj
+    assert game1.stack[0].source_card.is_equiv_to(game2.stack[0].source_card)
+    assert game1.stack[0].source_card is not game2.stack[0].source_card
+    assert game1.stack[1].source_card.is_equiv_to(
+        game2.stack[1].source_card)
+    assert game1.stack[1].source_card is not game2.stack[1].source_card
+    assert game1.stack[1].source_card is game1.active.field[0]
+    assert game2.stack[1].source_card is game2.active.field[0]
+    assert game2.stack[1].choices[0][0] is game2.stack[0]
+    assert game2.stack[1].choices[0][1] is game2.active.field[0]
+    assert game2.stack[1].choices[0][1] is not game1.active.field[0]
+    assert game2.stack[1].choices[0][1] is game2.stack[1].source_card
+    assert game2.stack[0].choices[:2] == [1, "a"]
 
     game_orig = GameState(1)
     game_orig.is_tracking_history = False  # True
@@ -55,10 +83,11 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, INT,
-                                                   game_orig.active)
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, 0, None)
     assert len(tuple_list) == 1
-    mana_game, choices = tuple_list[0]
+    mana_game, player, source, choices = tuple_list[0]
+    assert player == 0
+    assert source is None
     assert len(choices) == 0
     assert mana_game.active.pool == ManaHandler.ManaPool("R")
     # because AddMana mutates, returned game IS original game
@@ -69,9 +98,7 @@ if __name__ == "__main__":
     roots = game_orig.active.hand[0]
     assert len(roots.get_activated()) == 1
     roots_abil = roots.get_activated()[0]
-    choices = roots_abil.activation_options(game_orig, game_orig.active, roots)
-    assert len(choices[0]) == 1  # all the ability needs is the target Roots
-    assert not roots_abil.can_be_activated(game_orig, choices)
+    assert len(roots_abil.valid_stack_objects(game_orig, 0, roots)) == 0
 
     # move a Wall of Roots to field and try again
     game_orig.give_to(game_orig.active.hand[0], ZONE.FIELD)
@@ -81,28 +108,28 @@ if __name__ == "__main__":
     assert len(roots.get_activated()) == 1
     assert len(roots.counters) == 0  # no counters on it yet
     roots_abil = roots.get_activated()[0]
-    choices = roots_abil.activation_options(game_orig, game_orig.active, roots)
-    assert roots_abil.can_be_activated(game_orig, choices)
+    valid = roots_abil.valid_stack_objects(game_orig, 0, roots)
+    assert len(valid) == 1
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
     cost_roots = cost_game.active.field[0]
-    assert roots_abil.cost.can_afford(cost_game, cost_roots, [])
-    tuple_list = roots_abil.cost.pay_cost(cost_game, cost_roots, [])
+    assert roots_abil.cost.can_afford(cost_game, 0, cost_roots, [])
+    tuple_list = roots_abil.cost.pay_cost(cost_game, 0, cost_roots, [])
     assert len(tuple_list) == 1
     assert cost_game is tuple_list[0][0]  # so output is same as original
     assert len(cost_roots.counters) == 2
     for value in cost_roots.counters:
         assert "-0/-1" == value or "@" in value
     # should no longer be possible to do
-    assert not roots_abil.cost.can_afford(cost_game, cost_roots, [])
+    assert not roots_abil.cost.can_afford(cost_game, 0, cost_roots, [])
     assert len(cost_game.active.get_valid_activations()) == 0
 
     # untap to reset things, then try to activate the ability "properly"
     game_orig.step_untap()
-    assert len(game_orig.active.get_valid_activations()) == 1
-    game_list = cast_thing(game_orig,
-                           game_orig.active.get_valid_activations()[0])
+    activations = game_orig.active.get_valid_activations()
+    assert len(activations) == 1
+    game_list = activations[0].put_on_stack(game_orig)
     assert len(game_list) == 1
     activ_game = game_list[0]
     assert activ_game is not game_orig
@@ -125,9 +152,9 @@ if __name__ == "__main__":
     assert (len(copygame.active.get_valid_castables()) == 1)
     # cast the newly castable spell
     castable = copygame.active.get_valid_castables()[0]
-    card = castable[0]
-    assert [o is card for o in copygame.active.hand] == [True, False, False]
-    [copygame3] = cast_thing(copygame, castable)  # puts it on the stack
+    assert ([o is castable.obj for o in copygame.active.hand]
+            == [True, False, False])
+    [copygame3] = castable.put_on_stack(copygame)
     assert (copygame3.active.pool == ManaHandler.ManaPool(""))  # no mana left
     assert (len(copygame3.stack) == 1)  # one spell on the stack
     assert (len(copygame3.active.hand) == 2)  # two cards in hand
@@ -135,12 +162,15 @@ if __name__ == "__main__":
     # make sure that all the copying worked out correctly
     assert copygame3 is not copygame
     for c in copygame.active.hand:
-        assert c is not copygame3.stack[0].card
+        assert c is not copygame3.stack[0].obj
+        assert c is not copygame3.stack[0].source_card
         for c3 in copygame3.active.hand:
             assert c is not c3
     further_copy = copygame3.copy()
     assert further_copy.stack[0] is not copygame3.stack[0]
-    assert further_copy.stack[0].card is not copygame3.stack[0].card
+    assert further_copy.stack[0].obj is not copygame3.stack[0].obj
+    assert further_copy.stack[0].obj is not copygame3.stack[0].source_card
+    assert further_copy.stack[0].source_card is not copygame3.stack[0].obj
 
     # resolve the spell from the stack
     [copygame4] = copygame3.resolve_top_of_stack()
@@ -165,36 +195,6 @@ if __name__ == "__main__":
     assert activ_game.previous_state is None
     assert activ_game.events_since_previous == ""
 
-    # let's do a full copy test, since copying is rather critical
-    test_game = GameState()
-    caryatid_in_play = Cardboard(Decklist.Caryatid())
-    caryatid_in_play.zone = ZONE.FIELD
-    test_game.active.field.append(caryatid_in_play)
-    roots_on_stack = Cardboard(Decklist.Roots())
-    roots_on_stack.zone = ZONE.STACK
-    stack_cardboard = Stack.StackCardboard(None, roots_on_stack,
-                                           [1, "a", caryatid_in_play])
-    test_game.stack.append(stack_cardboard)
-    fake_ability = ActivatedAbility("fake", Costs.Cost(), Verbs.NullVerb())
-    stack_ability = Stack.StackAbility(fake_ability, caryatid_in_play,
-                                       [(stack_cardboard, caryatid_in_play)])
-    test_game.stack.append(stack_ability)
-    # test game has: caryatid in play, roots on stack pointing at random stuff,
-    # and an ability on stack pointing at roots and also random stuff.
-    test_copy = test_game.copy()
-    assert test_copy == test_game
-    assert test_game.stack[0].card.is_equiv_to(test_copy.stack[0].card)
-    assert test_game.stack[0].card is not test_copy.stack[0].card
-    assert test_game.stack[1].card.is_equiv_to(test_copy.stack[1].card)
-    assert test_game.stack[1].card is not test_copy.stack[1].card
-    assert test_game.stack[1].card is test_game.active.field[0]
-    assert test_copy.stack[1].card is test_copy.active.field[0]
-    assert test_copy.stack[1].choices[0][0] is test_copy.stack[0]
-    assert test_copy.stack[1].choices[0][1] is test_copy.active.field[0]
-    assert test_copy.stack[1].choices[0][1] is not test_game.active.field[0]
-    assert test_copy.stack[1].choices[0][1] is test_copy.stack[1].card
-    assert test_copy.stack[0].choices[:2] == [1, "a"]
-
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
@@ -215,16 +215,14 @@ if __name__ == "__main__":
     carygame1.step_upkeep()
     assert len(carygame1.active.get_valid_castables()) == 0  # no castables
     gameN = carygame1
-    # noinspection PyTypeChecker
-    options: List[tuple] = (gameN.active.get_valid_activations()
-                            + gameN.active.get_valid_castables())
+    options: List[Stack.StackObject] = (gameN.active.get_valid_activations()
+                                        + gameN.active.get_valid_castables())
     assert len(options) == 2
     # as long as there are things to do, do them! auto-choose 1st option
     while len(options) > 0:
-        gameN = cast_thing(gameN, options[0])[0]
+        gameN = options[0].put_on_stack(gameN)[0]
         while len(gameN.stack) > 0:
             gameN = gameN.resolve_top_of_stack()[0]
-        # noinspection PyTypeChecker
         options = (gameN.active.get_valid_activations()
                    + gameN.active.get_valid_castables())
     # result should be Caryatid and two Roots in play
@@ -382,7 +380,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_castables()) == 1  # play fetch
     matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
     assert len([c for c in game.active.deck if
-                matcher.match(c, game, game.active.hand[0])]) == 5
+                matcher.match(c, game, player, game.active.hand[0])]) == 5
 
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -468,10 +466,12 @@ if __name__ == "__main__":
     assert forest is not forest2
     assert (game == cp)
     # tap both of these forests for mana
-    cp3 = forest.get_activated()[0].activate(game, forest, [])[0]
+    obj = forest.get_activated()[0].valid_stack_objects(game, 0, forest)[0]
+    cp3 = obj.put_on_stack(game)[0]
     assert (game != cp3)
     assert (cp != cp3)
-    cp4 = forest2.get_activated()[0].activate(cp, forest2, [])[0]
+    obj2 = forest2.get_activated()[0].valid_stack_objects(cp, 0, forest2)[0]
+    cp4 = obj2.put_on_stack(cp)[0]
     assert (game != cp4)
     assert (cp3 == cp4)
     assert (not (cp3 is cp4))
@@ -489,11 +489,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, INT, game1.active.hand[0])[0][0]
-    game1B = mover.do_it(game1A, INT, game1.active.hand[0])[0][0]
+    game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
+    game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, INT, game2.active.hand[1])[0][0]
-    game2B = mover.do_it(game2A, INT, game2.active.hand[0])[0][0]
+    game2A = mover.do_it(game2, 0, game2.active.hand[1])[0][0]
+    game2B = mover.do_it(game2A, 0, game2.active.hand[0])[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -504,13 +504,13 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(ZONE.FIELD)
-    game1A = mover.do_it(game1, INT, game1.active.hand[0])[0][0]
+    game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
     game1A.step_untap()
-    game1B = mover.do_it(game1A, INT, game1.active.hand[0])[0][0]
+    game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, INT, game2.active.hand[1])[0][0]
+    game2A = mover.do_it(game2, 0, game2.active.hand[1])[0][0]
     game2A.step_untap()
-    game2B = mover.do_it(game2A, INT, game2.active.hand[0])[0][0]
+    game2B = mover.do_it(game2A, 0, game2.active.hand[0])[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.step_untap()
@@ -558,11 +558,13 @@ if __name__ == "__main__":
     # Rewind to before casting 2nd Caretaker. Give 1st TWO things to tap.
     game.give_to(game.active.hand[0], ZONE.FIELD)
     # only one ability, but two options to activate it
-    ability_tuples = game.active.get_valid_activations()
-    assert len(ability_tuples) == 2
-    assert ability_tuples[0][0] == ability_tuples[1][0]
-    assert ability_tuples[0][1] == ability_tuples[1][1]
-    assert ability_tuples[0][2] != ability_tuples[1][2]
+    stack_abilities = game.active.get_valid_activations()
+    assert len(stack_abilities) == 2
+    assert stack_abilities[0].player_index == stack_abilities[1].player_index
+    assert stack_abilities[0].source_card is stack_abilities[1].source_card
+    assert stack_abilities[0].obj is stack_abilities[1].obj
+    assert stack_abilities[0].caster_verb is stack_abilities[1].caster_verb
+    assert stack_abilities[0].choices != stack_abilities[1].choices
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     [univ2, univ3] = tree.get_states_no_options()
@@ -581,7 +583,8 @@ if __name__ == "__main__":
     # equivalent so we only see 3 options. Good.
     game3_abils = game3.active.get_valid_activations()
     assert len(game3_abils) == 3
-    care3_abils = [tup for tup in game3_abils if tup[1].name == "Caretaker"]
+    care3_abils = [obj for obj in game3_abils
+                   if obj.source_card.name == "Caretaker"]
     universes = []
     for ability, source, choice_list in care3_abils:
         for g in ability.activate(game3, source, choice_list):
@@ -625,7 +628,7 @@ if __name__ == "__main__":
     #   is caretaker, other two tap in either order. If not, can tap the other
     #   and strand the caretaker, or tap both with caretaker. 3*(1*2+2*2)=18
     # 1st: Caretaker has 4 targets. If target is caretaker, then 6 ways to
-    #   sequence the other 3. 3 ways to not, leaving caretaker and 2 other_input.
+    #   sequence the other 3. 3 ways to not, leaving caretaker and 2 others.
     #   Either tap caretaker + one of 2 and then remainder, or tap one and then
     #   tap either caretaker or remainder. 1*6+3*(2+2*2)=24
     assert tree6.traverse_counter == 72  # 6+12+18+24=60

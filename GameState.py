@@ -206,13 +206,13 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        if cardboard.index < 0:
-            cardboard.index = player_index
+        if cardboard.player_index < 0:
+            cardboard.player_index = player_index
         if cardboard.owner_index < 0:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination)
         mover.add_self_to_state_history = lambda *args: None  # silent
-        mover.do_it(self, player_index, cardboard, [])
+        mover.do_it(self, player_index, cardboard)
 
     # -------------------------------------------------------------------------
 
@@ -224,11 +224,10 @@ class GameState:
         for player in self.player_list:
             i = 0
             while i < len(player.field):
-                cardboard = player.field[i]
-                toughness = Get.Toughness().get(self, player.index, cardboard)
+                card = player.field[i]
+                toughness = Get.Toughness().get(self, player.index, card)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, player.index,
-                                                 cardboard, [])
+                    MoveToZone(ZONE.GRAVE).do_it(self, player.index, card)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -241,7 +240,8 @@ class GameState:
         if self.is_tracking_history:
             turn = self.active.turn_count
             ii = self.active_player_index
-            self.events_since_previous += "\nUntap step: P%i T%i" % (turn, ii)
+            text = "\nUntap step: Player%i Turn%i" % (turn, ii)
+            self.events_since_previous += text
         self.phase = GameState.PHASES.index("untap")
         # make sure that the stack is empty
         self.stack = []
@@ -311,12 +311,13 @@ class GameState:
         # if card is on stack (not just a pointer), move it to destination zone
         if isinstance(obj.obj, Cardboard):
             mover = MoveToZone(obj.obj.rules_text.cast_destination)
-            for g, ch in tuple_list:
-                mover.do_it(g, obj.player_index, obj.obj, obj.choices)
+            for tup in tuple_list:
+                g: GameState = tup[0]
+                mover.do_it(g, obj.player_index, obj.obj, [])
         # clear the superstack and return!
         results = []
-        for state2, _, _ in tuple_list:
-            results += state2.clear_super_stack()
+        for tup in tuple_list:
+            results += tup[0].clear_super_stack()
         return results
 
     def clear_super_stack(self) -> List[GameState]:
@@ -342,7 +343,7 @@ class GameState:
                 # removes the trigger from the super_stack.
                 results += [state2]
             else:
-                results += [g for g, _ in
+                results += [tup[0] for tup in
                             obj.caster_verb.do_it(state2, obj.player_index,
                                                   obj.source_card, [obj])]
         # recurse
@@ -362,7 +363,8 @@ class GameState:
     #         if self.is_tracking_history:
     #             print("discard:", [str(c) for c in discard_list])
     #         for card in discard_list:
-    #             MoveToZone(ZONE.GRAVE).do_it(self, card, [])
+    #             MoveToZone(ZONE.GRAVE).do_it(self, self.active_player_index,
+    #                                          card,)
     #     # clear any floating mana
     #     if self.is_tracking_history and self.pool.cmc() > 0:
     #         print("end with %s" % (str(self.pool)))
@@ -503,7 +505,7 @@ class Player:
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                can_do = ability.valid_stack_objects(game, self, source)
+                can_do = ability.valid_stack_objects(game, self.index, source)
                 if len(can_do) > 0:
                     add_object = True
                 activatables += can_do

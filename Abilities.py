@@ -15,7 +15,7 @@ import Match
 import Stack
 
 if TYPE_CHECKING:
-    from GameState import GameState, Player
+    from GameState import GameState
     from Cardboard import Cardboard
 
 # ---------------------------------------------------------------------------
@@ -33,7 +33,8 @@ class Trigger:
         """`source` is source of possible trigger. `trigger_card` is the
         thing which caused the trigger to be checked for viability."""
         return (isinstance(verb, self.verb_type)
-                and self.pattern.match(trigger_card, state, source))
+                and self.pattern.match(trigger_card, state,
+                                       trigger_card.player_index, source))
 
     def __str__(self):
         return "Trigger(%s,%s)" % (self.verb_type.__name__, str(self.pattern))
@@ -106,7 +107,7 @@ class ActivatedAbility:
         self.cost: Costs.Cost = cost
         self.effect: Verbs.Verb = effect
 
-    def valid_stack_objects(self, state: GameState, player: Player,
+    def valid_stack_objects(self, state: GameState, player: int,
                             source: Cardboard) -> List[Stack.StackAbility]:
         """Create as many valid StackAbilities as possible,
         one for each valid way to activate this ability.
@@ -118,11 +119,12 @@ class ActivatedAbility:
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
         payments = self.cost.get_options(state, player, source, None)
         # keep only the valid ones
-        payments = [ch for ch in payments if self.cost.can_afford(state, *ch)]
+        payments = [ch for ch in payments
+                    if self.cost.can_afford(state, player, source, ch)]
         # 601.2c: choose targets and modes
         targets = self.effect.get_input_options(state, player, source, None)
         targets = [ch for ch in targets if
-                   self.effect.can_be_done(state, INT,, *ch]
+                   self.effect.can_be_done(state, player, source, ch)]
         # combine all combinations of these
         obj_list = []
         for sub_pay in payments:
@@ -130,10 +132,10 @@ class ActivatedAbility:
                 # concatenate sub-lists
                 inputs = sub_pay + sub_target
                 # figure out which verb can be used to cast this object
-                caster_verb: Verbs.UniversalCaster = Verbs.PlayAbility()
+                caster: Verbs.UniversalCaster = Verbs.PlayAbility()
                 if self.effect.is_type(Verbs.AddMana):
-                    caster_verb = Verbs.PlayManaAbility()
-                obj = Stack.StackAbility(self, source, inputs, caster_verb)
+                    caster = Verbs.PlayManaAbility()
+                obj = Stack.StackAbility(player, source, self, inputs, caster)
                 obj_list.append(obj)
         return obj_list
 
@@ -158,7 +160,8 @@ class TriggeredAbility:
         self.num_inputs = effect.num_inputs
 
     def add_any_to_super(self, verb: Verbs.Verb, state: GameState,
-                         source: Cardboard, trigger_card: Cardboard | None):
+                         player: int, source: Cardboard,
+                         trigger_card: Cardboard | None):
         """
         MUTATES.
         Checks if the given Verb `verb` being performed on the
@@ -169,11 +172,11 @@ class TriggeredAbility:
         the super_stack.
         """
         if self.trigger.is_triggered(verb, state, source, trigger_card):
-            caster_verb = Verbs.AddTriggeredAbility()
+            caster = Verbs.AddTriggeredAbility()
             if isinstance(self.trigger, AsEnterEffect):
-                caster_verb = Verbs.AddAsEntersAbility()
-            stack_obj = Stack.StackTrigger(self, source, [trigger_card],
-                                           caster_verb)
+                caster = Verbs.AddAsEntersAbility()
+            stack_obj = Stack.StackTrigger(player, source, self, trigger_card,
+                                           [], caster)
             state.super_stack.append(stack_obj)
 
     def __str__(self):
