@@ -107,7 +107,7 @@ class GameState:
         returned"""
         # make new Gamestate and start copying attributes by value
         state = GameState(0)
-        # copy the asking_player list. new players automatically added to state.
+        # copy the player list. new players automatically added to state.
         [p.copy(state) for p in self.player_list]
         # copy history stuff
         state.is_tracking_history = self.is_tracking_history
@@ -225,9 +225,11 @@ class GameState:
             i = 0
             while i < len(player.field):
                 card = player.field[i]
-                toughness = Get.Toughness().get(self, player.player_index, card)
+                toughness = Get.Toughness().get(self, player.player_index,
+                                                card)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, player.player_index, card)
+                    MoveToZone(ZONE.GRAVE).do_it(self, player.player_index,
+                                                 card)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -505,7 +507,8 @@ class Player:
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                can_do = ability.valid_stack_objects(game, self.player_index, source)
+                can_do = ability.valid_stack_objects(game, self.player_index,
+                                                     source)
                 if len(can_do) > 0:
                     add_object = True
                 activatables += can_do

@@ -16,7 +16,8 @@ if TYPE_CHECKING:
 
     # SOURCE = Cardboard | Player
     CAUSE = Cardboard | Player | None
-    INPUTS = List[Tuple[Cardboard | Player | StackObject | int | None]]
+    INPUTS = List[int | Cardboard | StackObject | None |
+                  Tuple[int | Cardboard | StackObject | None]]
     RESULT = Tuple[GameState, int, Cardboard | None, INPUTS]
 
 import ZONE
@@ -24,6 +25,7 @@ import Match as Match
 import Getters as Get
 import ManaHandler
 import Stack
+import Choices
 
 
 class WinTheGameError(Exception):
@@ -38,9 +40,7 @@ class LoseTheGameError(Exception):
 # ---------------------------------------------------------------------------
 
 class Verb:
-    def __init__(self, chooser: Match.Pattern,
-                 num_inputs: int, copies: bool):
-        self.chooser: Match.Pattern = target_pattern
+    def __init__(self, num_inputs: int, copies: bool):
         self.num_inputs: int = num_inputs
         self.copies: bool = copies  # returns copies of GameStates, not mutate.
 
@@ -53,11 +53,20 @@ class Verb:
 
     def can_be_done(self, state: GameState, player: int,
                     source: Cardboard | None, other_inputs: INPUTS) -> bool:
-        """GameState; subject to apply the Verb to; any
-        additional inputs needed. The specific type of
-        `subject` and of the other inputs is specified
-        by `input_signature`"""
-        return 1 + len(other_inputs) >= self.num_inputs
+        """
+        Returns whether this Verb can be done, given
+        the current gamestate and list of inputs.
+        Arguments are:
+            GameState
+            controlling player (or at least their
+                player_index)
+            card that is causing this Verb to be done,
+                if any
+            list of any additional inputs needed to
+                perform the verb. The number of other
+                inputs is specified by `num_inputs`
+        """
+        return len(other_inputs) >= self.num_inputs
 
     def do_it(self, state: GameState, player: int,
               source: Cardboard | None, other_inputs: INPUTS) -> List[RESULT]:
@@ -179,7 +188,7 @@ class AffectController(Verb):
                           source=None, cause=None) -> List[INPUTS]:
         """A list of possibly input lists that are meant to
         be plugged into can_be_done and do_it"""
-        return [[]]  # this means "no inputs". "Cannot be done" would be [].
+        return [[]]  # means "no other inputs". "Cannot be done" would be [].
 
     def can_be_done(self, state: GameState, player: int,
                     source: Cardboard | None, other_inputs: INPUTS = []
@@ -199,10 +208,10 @@ class AffectSourceCard(Verb):
 
     def get_input_options(self, state: GameState, player: int,
                           source: Cardboard | None, cause=None
-                          ) -> List[tuple[Cardboard]]:
+                          ) -> List[INPUTS]:
         """A list of possibly input lists that are meant to
         be plugged into can_be_done and do_it"""
-        return [[]]  # this means "no inputs". "Cannot be done" would be [].
+        return [[]]  # means "no other inputs". "Cannot be done" would be [].
 
     def can_be_done(self, state: GameState, player: int,
                     source: Cardboard, other_inputs: INPUTS = []
@@ -217,7 +226,7 @@ class AffectSourceCard(Verb):
 
 class ApplyToCard(Verb):
     """Chooses targets and then passes those targets along
-    to the sub-verb AS THOUGH THEY WERE THE SOURCE OF THE
+    to the sub-verb AS THOUGH THEY WERE THE `SOURCE` FOR THE
     SUB-VERB.
     If the chooser returns a list longer than length 1, then
     the sub-verb is applied to all the targets in turn.
@@ -246,39 +255,39 @@ class ApplyToCard(Verb):
         """
         # chooser returns a list of tuples of Cardboards. An input is a
         # LIST of tuples of Cardboards, so wrap each tuple in a list
-        choices = [[x] for x in self.chooser.get(state, player, source)]
+        choices: List[Tuple[int | Cardboard | StackObject]]
+        choices = self.chooser.get(state, player, source)
         assert self.verb.num_inputs == 0
-        # verb_choices = self.verb.get_input_options(state, asking_player,
-        #                                            asking_card, cause)
-        # new_list = []
-        # for sublist in choices:
-        #     new_list += [sublist + ch for ch in verb_choices]
-        # choices = new_list
-        print(choices)
-        return choices
+        return [[x] for x in choices]
 
     def can_be_done(self, state, player, source, other_inputs) -> bool:
         """
-        The first element of `other_inputs` is a tuple of length 0
-        or 1 containing the single target of the given Verb.
-        If empty, the chooser "failed to find" a target. The
-        Verb will not be applied to anything. Still may be ok.
+        The first element of `other_inputs` is a tuple containing
+        targets to use as the single target of the given Verb. If
+        the tuple is empty, the chooser "failed to find" a target.
+        The Verb will not be applied to anything. Still may be ok.
+        If the tuple has many elements, the Verb must be able to
+        be performed on ALL of them.
         """
         if not super().can_be_done(state, player, source, other_inputs):
             return False  # confirms other_inputs is long enough
-        targets = other_inputs[0]
+        targets: Tuple[int | Cardboard | StackObject | None] = other_inputs[0]
         if len(targets) == 0:
             # chooser failed to find a target. ok only if "allowed" to fail.
             return self.allowed_to_fail
-        return any([self.verb.can_be_done(state, player, t, other_inputs[1:])
+        # must be able to perform the verb on ALL given targets
+        return all([self.verb.can_be_done(state, player, t, other_inputs[1:])
                     for t in targets])
 
     def do_it(self, state: GameState, player, source, other_inputs):
-        """Expects the first element of `other_inputs` to be a
-        tuple of subjects that the Verb should be applied to.
-        The first element of `other_inputs` is also allowed to
-        be empty. This is the "fail to find" mode. The Verb
-        will not be applied to anything, but this is ok."""
+        """
+        The first element of `other_inputs` is a tuple containing
+        targets to use as the single target of the given Verb. If
+        the tuple is empty, the chooser "failed to find" a target.
+        The Verb will not be applied to anything. If the tuple has
+        any elements, the Verb will attempt to perform itself on
+        ALL of them.
+        """
         targets = other_inputs[0]
         if len(targets) == 0:
             # Failed to find target. If got this far, presumably failing is ok.
@@ -325,7 +334,7 @@ class ApplyToCard(Verb):
         return self.verb.is_type(verb_type)
 
     def __str__(self):
-        return "%s(%s)" % (str(self.verb), str(self.chooser.getter))
+        return "%s(%s)" % (str(self.verb), str(self.chooser))
 
 
 #
@@ -335,29 +344,41 @@ class Modal(Verb):
     the same number of inputs. Mode is chosen at cast-time,
     not on resolution."""
 
-    def __init__(self, list_of_verbs: List[Verb], num_to_choose: int = 1):
+    def __init__(self, list_of_verbs: List[Verb],
+                 num_to_choose: Get.Integer | int = 1, can_be_less=False):
         super().__init__(1 + num_to_choose * list_of_verbs[0].num_inputs,
                          any([v.copies for v in list_of_verbs]))
         assert (len(list_of_verbs) > 1)
         assert all([v.num_inputs == list_of_verbs[0].num_inputs
                     for v in list_of_verbs])
         self.sub_verbs = list_of_verbs
-        options = [(ii, str(v)) for ii, v in enumerate(self.sub_verbs)]
-        self.chooser = Get.Chooser(Get.Const(options), num_to_choose, False)
+        if isinstance(num_to_choose, int):
+            num_to_choose = Get.ConstInteger(num_to_choose)
+        self.num_to_choose: Get.Integer = num_to_choose
+        self.can_be_less: bool = can_be_less
 
     def get_input_options(self, state, player, source, cause
                           ) -> List[INPUTS]:
-        # choices are: the verbs I choose, together with THEIR choices
-        modes: List[Tuple[Tuple[int, str]]] = self.chooser.get(state, player,
-                                                               source)
+        # step 1: choose a verb or set of verbs
+        possible = [(ii, str(v)) for ii, v in enumerate(self.sub_verbs)]
+        num: int = self.num_to_choose.get(state, player, source)
+        modes: List[Tuple[Tuple[int, str]]]
+        if self.can_be_less:
+            modes = Choices.choose_n_or_fewer(possible, num)
+        else:
+            if num == 1:
+                modes = [(c,) for c in Choices.choose_exactly_one(possible)]
+            else:
+                modes = Choices.choose_exactly_n(possible, num)
+        # step 2: for each chosen verb, return verb plus ITS required inputs
         choices: List[INPUTS] = []
-        for set_of_verbs in modes:
-            verb_indices = [index for index, name in set_of_verbs]
+        for set_of_verbs in modes:  # Tuple[Tuple[int, str]]
+            verb_indices: Tuple[int] = tuple([ii for ii, ss in set_of_verbs])
+            # use MultiVerb to figure out the actual inputs
             multi = MultiVerb([self.sub_verbs[ii] for ii in verb_indices])
             for sub_choice in multi.get_input_options(state, player,
                                                       source, cause):
-                # noinspection PyTypeChecker
-                choices.append([verb_indices] + sub_choice)
+                choices.append([tuple(verb_indices)] + sub_choice)
         return choices
 
     def can_be_done(self, state, player, source, other_inputs) -> bool:
@@ -377,95 +398,95 @@ class Modal(Verb):
         return all([v.is_type(verb_type) for v in self.sub_verbs])
 
 
-class Defer(Verb):
-    """
-    Defers any cast-time choices of the given verb to instead
-    be chosen only on resolution.
-    """
-
-    def __init__(self, verb: Verb):
-        super().__init__(1, copies=True)
-        self.verb = verb
-
-    def get_input_options(self, state, player, source, cause
-                          ) -> List[INPUTS]:
-        """Saves the cause so that the sub-verb can run
-        its own get_input_options function later on."""
-        return [[cause]]
-
-    def do_it(self, state: GameState, player, source, other_inputs):
-        cause = other_inputs[0]
-        results = []
-        if self.verb.copies:
-            choices = self.verb.get_input_options(state, player,
-                                                  source, cause)
-            for choice in choices:
-                results += self.verb.do_it(state, player, source, choice)
-        else:
-            choices = self.verb.get_input_options(state, player,
-                                                  source, cause)
-            for choice in choices:
-                state2, things = state.copy_and_track([source] + choice)
-                source2 = things[0]
-                ch2 = things[1:]
-                results += self.verb.do_it(state2, player, source2, ch2)
-        return results
-
-    def is_type(self, verb_type: type):
-        return self.verb.is_type(verb_type)
-
-    def __str__(self):
-        return str(self.verb)
-
-
-# ----------
-
-
-# ----------
-# class VerbManyTimes(Verb):
-#     def __init__(self, verb: Verb, getter: Get.Integer | int):
-#         super().__init__()
-#         self.sub_verbs = [verb]
-#         if isinstance(getter, int):
-#             getter = Get.ConstInteger(getter)
-#         self.getter_list = [getter]
+# class Defer(Verb):
+#     """
+#     Defers any cast-time choices of the given verb to instead
+#     be chosen only on resolution.
+#     """
 #
-#     def can_be_done(self, state: GameState, subject: Cardboard,
-#                     choices: list) -> bool:
-#         return (len(choices) >= 1
-#                 and self.sub_verbs[0].can_be_done(state, asking_card,
-#                                                   choices[1:]))
+#     def __init__(self, verb: Verb):
+#         super().__init__(1, copies=True)
+#         self.verb = verb
 #
-#     def do_it(self, state: GameState, subject: Cardboard, choices):
-#         """mutates!"""
-#         num_to_repeat = choices[0]
-#         if num_to_repeat == 0:
-#             game2, things = state.copy_and_track([subject] + choices[1:])
-#             return [(game2, things[0], things[1:])]
-#         elif num_to_repeat == 1:
-#             return self.sub_verbs[0].do_it(state, asking_card, choices[1:])
+#     def get_input_options(self, state, player, source, cause
+#                           ) -> List[INPUTS]:
+#         """Saves the cause so that the sub-verb can run
+#         its own get_input_options function later on."""
+#         return [[cause]]
+#
+#     def do_it(self, state: GameState, player, source, other_inputs):
+#         cause = other_inputs[0]
+#         results = []
+#         if self.verb.copies:
+#             choices = self.verb.get_input_options(state, player,
+#                                                   source, cause)
+#             for choice in choices:
+#                 results += self.verb.do_it(state, player, source, choice)
 #         else:
-#             # do a MultiVerb containing this verb repeated a bunch of times
-#             multi_verb = MultiVerb([self.sub_verbs[0]] * num_to_repeat)
-#             return multi_verb.do_it(state, asking_card, choices[1:])
+#             choices = self.verb.get_input_options(state, player,
+#                                                   source, cause)
+#             for choice in choices:
+#                 state2, things = state.copy_and_track([source] + choice)
+#                 source2 = things[0]
+#                 ch2 = things[1:]
+#                 results += self.verb.do_it(state2, player, source2, ch2)
+#         return results
 #
-#     def get_input_options(self, state: GameState, asking_card: Cardboard = None,
-#                        cause=None):
-#         raw_choices = super().get_input_options(state, asking_card, cause)
-#         # In each sublist in raw_choices, the first is the number of times to
-#         # repeat the Verb and the rest is one copy of the choices for that
-#         # Verb. I need to duplicate those other choices according to the
-#         # number of times we'll be repeating it.
-#         return [[sub[0]] + (sub[1:] * sub[0]) for sub in raw_choices]
+#     def is_type(self, verb_type: type):
+#         return self.verb.is_type(verb_type)
 #
 #     def __str__(self):
-#         return str(self.sub_verbs[0]) + "(" + str(self.getter_list[0]) + ")"
+#         return str(self.verb)
+
+
+# ----------
+
+class VerbManyTimes(Verb):
+    def __init__(self, verb: Verb, num_to_repeat: Get.Integer | int):
+        """The number of times to repeat the verb is chosen on resolution"""
+        super().__init__(verb.num_inputs, verb.copies)
+        self.verb = verb
+        if isinstance(num_to_repeat, int):
+            num_to_repeat = Get.ConstInteger(num_to_repeat)
+        self.num_to_repeat = num_to_repeat
+
+    def get_input_options(self, state: GameState, player: int,
+                          source: Cardboard | None, cause: Cardboard | None
+                          ) -> List[INPUTS]:
+        # No inputs on VerbManyTime's behalf. Just need a single copy of
+        # the sub-verb's inputs.
+        return self.verb.get_input_options(state, player, source, cause)
+
+    def can_be_done(self, state: GameState, player: int,
+                    source: Cardboard | None, other_inputs: INPUTS) -> bool:
+        return self.verb.can_be_done(state, player, source, other_inputs)
+
+    def do_it(self, state: GameState, player: int,
+              source: Cardboard | None, other_inputs: INPUTS) -> List[RESULT]:
+        num_to_repeat = self.num_to_repeat.get(state, player, source)
+        if num_to_repeat == 0:
+            if self.copies:
+                game2, things = state.copy_and_track([source] + other_inputs)
+                return [(game2, player, things[0], things[1:])]
+            else:
+                return [(state, player, source, other_inputs)]
+        elif num_to_repeat == 1:
+            return self.verb.do_it(state, player, source, other_inputs)
+        else:
+            # do a MultiVerb containing this verb repeated a bunch of times
+            multi_verb = MultiVerb([self.verb] * num_to_repeat)
+            new_inputs = other_inputs[:self.verb.num_inputs] * num_to_repeat
+            new_inputs += other_inputs[self.verb.num_inputs:]
+            return multi_verb.do_it(state, player, source, new_inputs)
+
+    def __str__(self):
+        return str(self.verb) + " x " + str(self.num_to_repeat)
 
 
 # # ----------
 # class VerbOnSplitList(Verb):
-#     def __init__(self, act_on_chosen: VerbOnSubjectCard,
-#                  act_on_non_chosen: VerbOnSubjectCard | None,
+#     def __init__(self, act_on_chosen: AffectSourceCard,
+#                  act_on_non_chosen: AffectSourceCard | None,
 #                  chooser: Get.Chooser):
 #         super().__init__()
 #         assert act_on_non_chosen.num_inputs == 0
@@ -529,8 +550,8 @@ class Defer(Verb):
 #         s = "%s on %s%i of %s else %s" % (act_yes, comp, num, get_str,act_no)
 #         return s
 #
-#     def get_input_options(self, state: GameState, asking_card: Cardboard = None,
-#                        cause=None):
+#     def get_input_options(self, state: GameState,
+#                           asking_card: Cardboard = None, cause=None):
 #         list_of_chosen_tuples = self.chooser.get(state, asking_card)
 #         # I need to return a list of lists. Each sublist has one element: a
 #         # tuple of the chosen cards. Right now I have a list of tuples, not
@@ -812,7 +833,7 @@ class MoveToZone(AffectSourceCard):
             # these three zones must remain sorted at all times
             zone_list = state.get_zone(self.destination,
                                        source.player_index)
-            zone_list.append(source)  # can add to any player_index b/c about to sort
+            zone_list.append(source)  # can add to any index b/c about to sort
             state.player_list[source.player_index].re_sort(self.destination)
         elif self.destination == ZONE.DECK:
             deck = state.get_zone(ZONE.DECK, source.player_index)
@@ -910,10 +931,10 @@ class Destroy(AffectSourceCard):
 class Tutor(ApplyToCard):
     def __init__(self, zone_to_move_to, num_to_find: int,
                  pattern: Match.Pattern):
-        getter = Get.Chooser(Get.ListFromZone(ZONE.DECK, pattern),
-                             num_to_find, can_be_fewer=True)
+        chooser = Get.Chooser(Get.FromZones(ZONE.DECK, pattern, True, False),
+                              num_to_find, can_be_fewer=True)
         verb = MultiVerb([MoveToZone(zone_to_move_to), Shuffle()])
-        super().__init__(getter, verb)
+        super().__init__(chooser, verb)
 
 
 # ----------

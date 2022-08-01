@@ -37,8 +37,8 @@ class Cardboard:
         self.summon_sick: bool = True  # Has been in play since upkeep? No.
         self.counters: List[
             str] = []  # sorted list of counters. Also other trackers
-        # track where the card is: player_index (within a gamestate) of the asking_player
-        # who controls it, player_index of the asking_player who ownes it, and its zone.
+        # track where the card is: index (within a gamestate) of the player
+        # who controls it, index of the player who ownes it, and its zone.
         self.player_index = -1  # controller. duck-type to Player.player_index
         self.owner_index = -1
         self.zone = ZONE.NEW

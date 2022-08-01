@@ -88,8 +88,7 @@ def choose_n_or_fewer(options: list, num_to_choose: int,
     Either way, returns a list of selections, each of which
         is a tuple containing N or fewer options from the
         list of options.
-    NOTE: if each option is a tuple, the entire tuple will
-        be returned as a selection. However, in user
+    NOTE: if each option is a tuple, in user
         controlled mode, only the last element of the tuple
         will be shown to the user. This allows the code to
         pass a tuple of (backend info, user-viewable info).

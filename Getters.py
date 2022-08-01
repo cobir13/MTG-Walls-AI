@@ -222,7 +222,8 @@ class GetMatches:
         self.pattern: Match.Pattern = pattern
 
     def get_options(self, state: GameState, asking_player: int,
-                    asking_card: Cardboard | None) -> List[TARGET]:
+                    asking_card: Cardboard | None
+                    ) -> List[int | Cardboard | StackObject]:
         # get all players and cards which might possibly match
         options: List[TARGET] = []
         if self.pattern.has_type(Match.PlayerPattern):
@@ -310,23 +311,26 @@ class TopOfDeck(FromZones):
 
 class Chooser:
 
-    def __init__(self, options: GetMatches | list,
+    def __init__(self,
+                 options: GetMatches | List[TARGET],
                  num_to_choose: Integer | int, can_be_fewer: bool):
-        self.options: list | GetMatches = options
+        self.options: GetMatches | List[TARGET] = options
         if isinstance(num_to_choose, int):
             num_to_choose = ConstInteger(num_to_choose)
-        self.num_to_choose = num_to_choose
+        self.num_to_choose: Integer = num_to_choose
         self.can_be_less = can_be_fewer
 
-    def get(self, state: GameState, asking_player: int,
-            asking_card: Cardboard) -> List[tuple]:
+    def get(self, state: GameState, asking_player: int, asking_card: Cardboard
+            ) -> List[Tuple[TARGET]]:
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
-        options = self.options
         if isinstance(self.options, GetMatches):
-            options = self.options.get_options(state, asking_player,
-                                               asking_card)
+            options: List[TARGET] = self.options.get_options(state,
+                                                             asking_player,
+                                                             asking_card)
+        else:
+            options: List[TARGET] = self.options
         num = self.num_to_choose.get(state, asking_player, asking_card)
         if self.can_be_less:
             return Choices.choose_n_or_fewer(options, num)
@@ -351,25 +355,25 @@ class Choose(Chooser):
     pass
 
 
-class You(Chooser):
-    def __init__(self):
-        super().__init__([], 1, False)
-
-    def get(self, state: GameState, asking_player: int,
-            asking_card: Cardboard) -> List[tuple]:
-        return [(asking_player,)]
-
-    def __str__(self):
-        return "You"
-
-
-class Itself(Chooser):
-    def __init__(self):
-        super().__init__([], 1, False)
-
-    def get(self, state: GameState, asking_player: int,
-            asking_card: Cardboard) -> List[tuple]:
-        return [(asking_card,)]
-
-    def __str__(self):
-        return "Self"
+# class You(Chooser):
+#     def __init__(self):
+#         super().__init__([], 1, False)
+#
+#     def get(self, state: GameState, asking_player: int,
+#             asking_card: Cardboard) -> List[tuple]:
+#         return [(asking_player,)]
+#
+#     def __str__(self):
+#         return "You"
+#
+#
+# class Itself(Chooser):
+#     def __init__(self):
+#         super().__init__([], 1, False)
+#
+#     def get(self, state: GameState, asking_player: int,
+#             asking_card: Cardboard) -> List[tuple]:
+#         return [(asking_card,)]
+#
+#     def __str__(self):
+#         return "Self"
