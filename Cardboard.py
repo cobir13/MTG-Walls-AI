@@ -39,7 +39,7 @@ class Cardboard:
             str] = []  # sorted list of counters. Also other trackers
         # track where the card is: index (within a gamestate) of the player
         # who controls it, index of the player who ownes it, and its zone.
-        self.owner_index = -1
+        self.owner_index = -1  # None?
         self.zone = Zone.Unknown()
 
     def __str__(self):
@@ -51,7 +51,16 @@ class Cardboard:
         return s
 
     def __repr__(self):
-        return "Card " + self.get_id()
+        s = "Card_"
+        s += type(self.rules_text).__name__  # MtG type (creature, land, etc)
+        if self.tapped:
+            s += "T"
+        if self.summon_sick:
+            s += "S"
+        s += "_%s[%s]" % (str(self.zone), str(self.zone.location))
+        if len(self.counters) > 0:
+            s += "[" + ",".join(self.counters) + "]"
+        return s
 
     def copy(self):
         new_card = Cardboard(self.rules_text)
@@ -81,7 +90,7 @@ class Cardboard:
         else:
             assert self.zone.location is not None  # for debug
             new_place = self.zone.get(state_new)
-            if len(new_place) == 1 and new_place[0] == self:
+            if len(new_place) == 1 and new_place[0].is_equiv_to(self):
                 # there is an identical card in the new game at the location
                 # where this card expects to be. Return the new card
                 return new_place[0]
@@ -92,7 +101,7 @@ class Cardboard:
         self.counters = sorted(self.counters + [addition])
 
     @property
-    def player_index(self):
+    def player_index(self) -> int | None:
         """controller. duck-type to Player.player_index"""
         return self.zone.player
 
@@ -119,7 +128,7 @@ class Cardboard:
             s += "T"
         if self.summon_sick:
             s += "S"
-        s += "_P%iz%s" % (self.player_index, str(self.zone))
+        s += "_" + str(self.zone)
         if len(self.counters) > 0:
             s += "[" + ",".join(self.counters) + "]"
         return s

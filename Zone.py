@@ -61,11 +61,12 @@ class Zone:
             # single player. grab it and return it
             pl = state.player_list[self.player]
             whole_zone = self._get_whole_zone_list(pl)
-            if self.location is None:
+            if self.location is None or len(whole_zone) == 0:
                 return whole_zone
             elif isinstance(self.location, int):
                 # slice to ensure we return a list. also avoids index errors.
-                return whole_zone[self.location:self.location+1]
+                loc = self.location % len(whole_zone)  # avoid issues with -1.
+                return whole_zone[loc:loc+1]
             else:  # slice
                 return whole_zone[self.location]
         elif self.player is None:  # look at all players
@@ -77,7 +78,9 @@ class Zone:
             return acc
 
     def __str__(self):
-        return type(self).__name__
+        text = type(self).__name__
+        text += str(self.player) if self.player is not None else ""
+        return text
 
     def copy(self):
         new_zone = Zone(self.player, self.location)
@@ -102,7 +105,7 @@ class Zone:
                 zone_list.append(new_zone)
             return zone_list
 
-    def add_to_zone(self, state: GameState, obj: Cardboard | StackObject):
+    def add_to_zone(self, state: GameState, card: Cardboard):
         """Add the given object to the given zone. Raises a
         NotSpecificPlayerError is the player is not uniquely
         specified as an int.
@@ -114,7 +117,7 @@ class Zone:
         else:
             raise Exception  # not implemented
 
-    def remove_from_zone(self, state: GameState, obj: Cardboard | StackObject):
+    def remove_from_zone(self, state: GameState, card: Cardboard):
         """Remove the given object from the given zone. Raises
         a RelativeError if self is not absolute. Does not check
         whether obj is the correct type.
@@ -139,16 +142,16 @@ class Deck(Zone):
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
         return player.deck
 
-    def add_to_zone(self, state: GameState, obj: Cardboard):
+    def add_to_zone(self, state: GameState, card: Cardboard):
         if not self.is_single:
             raise Zone.NotSpecificPlayerError
         elif isinstance(self.player, int):
             dist_from_bottom = self.location
             if dist_from_bottom is None:
                 dist_from_bottom = -1  # add to top of deck by default
-            state.player_list[self.player].add_to_deck(obj, dist_from_bottom)
+            state.player_list[self.player].add_to_deck(card, dist_from_bottom)
 
-    def remove_from_zone(self, state: GameState, obj: Cardboard):
+    def remove_from_zone(self, state: GameState, card: Cardboard):
         """Remove the given object from the given zone. Raises
         a RelativeError if self is not absolute. Does not check
         whether obj is the correct type.
@@ -157,12 +160,12 @@ class Deck(Zone):
         if not self.is_fixed:
             raise Zone.RelativeError
         elif isinstance(self.player, int):
-            state.player_list[self.player].remove_from_deck(obj)
+            state.player_list[self.player].remove_from_deck(card)
         elif self.player is None:  # look at all players
             for ii in range(len(state.player_list)):
                 # "recurse" by defining a new temporary Zone object
                 temp_zone = self.__class__(ii, self.location)
-                temp_zone.remove_from_zone(state, obj)
+                temp_zone.remove_from_zone(state, card)
 
 
 class DeckBottom(Deck):
@@ -184,13 +187,13 @@ class Hand(Zone):
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
         return player.hand
 
-    def add_to_zone(self, state: GameState, obj: Cardboard):
+    def add_to_zone(self, state: GameState, card: Cardboard):
         if not self.is_single:
             raise Zone.NotSpecificPlayerError
         elif isinstance(self.player, int):
-            state.player_list[self.player].add_to_hand(obj)
+            state.player_list[self.player].add_to_hand(card)
 
-    def remove_from_zone(self, state: GameState, obj: Cardboard):
+    def remove_from_zone(self, state: GameState, card: Cardboard):
         """Remove the given object from the given zone. Raises
         a RelativeError if self is not absolute. Does not check
         whether obj is the correct type.
@@ -199,11 +202,11 @@ class Hand(Zone):
         if not self.is_fixed:
             raise Zone.RelativeError
         elif isinstance(self.player, int):
-            state.player_list[self.player].remove_from_hand(obj)
+            state.player_list[self.player].remove_from_hand(card)
         elif self.player is None:  # look at all players
             for ii in range(len(state.player_list)):
                 # "recurse" by defining a new temporary Zone object
-                self.__class__(ii).remove_from_zone(state, obj)
+                self.__class__(ii).remove_from_zone(state, card)
 
 
 class Field(Zone):
@@ -213,13 +216,13 @@ class Field(Zone):
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
         return player.field
 
-    def add_to_zone(self, state: GameState, obj: Cardboard):
+    def add_to_zone(self, state: GameState, card: Cardboard):
         if not self.is_single:
             raise Zone.NotSpecificPlayerError
         elif isinstance(self.player, int):
-            state.player_list[self.player].add_to_field(obj)
+            state.player_list[self.player].add_to_field(card)
 
-    def remove_from_zone(self, state: GameState, obj: Cardboard):
+    def remove_from_zone(self, state: GameState, card: Cardboard):
         """Remove the given object from the given zone. Raises
         a RelativeError if self is not absolute. Does not check
         whether obj is the correct type.
@@ -228,11 +231,11 @@ class Field(Zone):
         if not self.is_fixed:
             raise Zone.RelativeError
         elif isinstance(self.player, int):
-            state.player_list[self.player].remove_from_field(obj)
+            state.player_list[self.player].remove_from_field(card)
         elif self.player is None:  # look at all players
             for ii in range(len(state.player_list)):
                 # "recurse" by defining a new temporary Zone object
-                self.__class__(ii).remove_from_zone(state, obj)
+                self.__class__(ii).remove_from_zone(state, card)
 
 
 class Grave(Zone):
@@ -242,13 +245,13 @@ class Grave(Zone):
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
         return player.grave
 
-    def add_to_zone(self, state: GameState, obj: Cardboard):
+    def add_to_zone(self, state: GameState, card: Cardboard):
         if not self.is_single:
             raise Zone.NotSpecificPlayerError
         elif isinstance(self.player, int):
-            state.player_list[self.player].add_to_grave(obj)
+            state.player_list[self.player].add_to_grave(card)
 
-    def remove_from_zone(self, state: GameState, obj: Cardboard):
+    def remove_from_zone(self, state: GameState, card: Cardboard):
         """Remove the given object from the given zone. Raises
         a RelativeError if self is not absolute. Does not check
         whether obj is the correct type.
@@ -257,11 +260,11 @@ class Grave(Zone):
         if not self.is_fixed:
             raise Zone.RelativeError
         elif isinstance(self.player, int):
-            state.player_list[self.player].remove_from_grave(obj)
+            state.player_list[self.player].remove_from_grave(card)
         elif self.player is None:  # look at all players
             for ii in range(len(state.player_list)):
                 # "recurse" by defining a new temporary Zone object
-                self.__class__(ii).remove_from_zone(state, obj)
+                self.__class__(ii).remove_from_zone(state, card)
 
 
 class Stack(Zone):
@@ -279,17 +282,16 @@ class Stack(Zone):
     def _get_whole_zone_list(self, player: Player) -> List[StackObject]:
         return player.gamestate.stack
 
-    def add_to_zone(self, state: GameState, obj: StackObject):
-        state.add_to_stack(obj)
+    def add_to_zone(self, state: GameState, card: Cardboard):
+        """Cardboard doesn't live on the stack, so just change
+        the Cardboard's Zone without actually adding anything
+        to any list."""
+        card.zone = Stack()
 
-    def remove_from_zone(self, state: GameState, obj: StackObject):
-        """Remove the given object from the given zone. Raises
-        a RelativeError if self is not absolute. Does not check
-        whether obj is the correct type.
-        MUTATES THE GIVEN GAMESTATE.
-        """
-        if obj in state.stack:
-            state.stack.remove(obj)
+    def remove_from_zone(self, state: GameState, card: Cardboard):
+        """Cardboard doesn't live on the stack, so removing it
+         from the stack doesn't actually change anything."""
+        return
 
 
 class Unknown(Zone):
@@ -305,14 +307,14 @@ class Unknown(Zone):
     def is_single(self):
         return True
 
-    def _get_whole_zone_list(self, player: Player) -> List[StackObject]:
+    def _get_whole_zone_list(self, player: Player):
         return []
 
     def get(self, state: GameState) -> List[StackObject | Cardboard]:
         return []
 
-    def add_to_zone(self, state: GameState, obj: Cardboard | StackObject):
+    def add_to_zone(self, state: GameState, card: Cardboard):
         return  # does nothing
 
-    def remove_from_zone(self, state: GameState, obj: Cardboard | StackObject):
+    def remove_from_zone(self, state: GameState, card: Cardboard):
         return  # does nothing

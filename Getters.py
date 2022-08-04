@@ -36,7 +36,7 @@ class Getter:
 class Const(Getter):
     """Returns a constant value, defined at initialization"""
     def __init__(self, value):
-        super().__init__(gives_single_output=True)
+        Getter.__init__(self, gives_single_output=True)
         self.value = value
 
     def get(self, state: GameState, player: int, source: Cardboard):
@@ -51,7 +51,7 @@ class GetTrait(Getter):
     etc.
     """
     def __init__(self):
-        super().__init__(gives_single_output=True)
+        Getter.__init__(self, gives_single_output=True)
 
 
 class GetCards(Getter):
@@ -132,7 +132,6 @@ class Integer(GetTrait):
 
 class ConstInteger(Const, Integer):
     pass
-
 
 class StringList(GetTrait):
     """Return type of the trait is a list of strings"""

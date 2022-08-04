@@ -17,7 +17,7 @@ from PlayTree import PlayTree
 import Verbs
 import Stack
 import Costs
-import Match as Match
+import Match
 import time
 
 if __name__ == "__main__":
@@ -28,12 +28,13 @@ if __name__ == "__main__":
     # let's do a full copy test, since copying is rather critical
     game1 = GameState()
     caryatid_in_play = Cardboard(Decklist.Caryatid())
-    caryatid_in_play.zone = Zone.Field(1,0)
+    caryatid_in_play.zone = Zone.Field(1)
     game1.active.add_to_field(caryatid_in_play)
-
+    assert game1.active.field[0].zone.player == 0
+    assert game1.active.field[0].zone.location == 0
 
     roots_on_stack = Cardboard(Decklist.Roots())
-    roots_on_stack.zone = ZONE.STACK
+    roots_on_stack.zone = Zone.Stack()
     stack_cardboard = Stack.StackCardboard(0, None, roots_on_stack,
                                            [1, "a", caryatid_in_play],
                                            Verbs.PlayCardboard())
@@ -43,6 +44,7 @@ if __name__ == "__main__":
                                        [(stack_cardboard, caryatid_in_play)],
                                        Verbs.PlayAbility())
     game1.stack.append(stack_ability)
+
     # test game has: caryatid in play, roots on stack pointing at random stuff,
     # and an ability on stack pointing at roots and also random stuff.
     # try a copy_and_track
@@ -51,9 +53,11 @@ if __name__ == "__main__":
     assert game2 == game1
     assert obj2 is not stack_ability
     assert card2 is not caryatid_in_play
-    assert caryatid_in_play in caryatid_in_play.get_home_zone_list(game1)
-    assert card2 in card2.get_home_zone_list(game2)
-    assert obj2.source_card in obj2.source_card.get_home_zone_list(game2)
+    assert caryatid_in_play.copy_as_pointer(game2) is game2.active.field[0]
+
+    assert caryatid_in_play in caryatid_in_play.zone.get(game1)
+    assert card2 in card2.zone.get(game2)
+    assert obj2.source_card in obj2.source_card.zone.get(game2)
     assert game1.stack[0].obj.is_equiv_to(game2.stack[0].obj)
     assert game1.stack[0].obj is not game2.stack[0].obj
     assert game1.stack[0].source_card.is_equiv_to(game2.stack[0].source_card)
@@ -271,7 +275,7 @@ if __name__ == "__main__":
     # Life: 20 vs 20, Deck: 0, Mana: ()
     tree_game.is_tracking_history = True
     for x in range(5):
-        tree_game.give_to(Cardboard(Decklist.Caryatid()), ZONE.DECK)
+        tree_game.give_to(Cardboard(Decklist.Caryatid()), Zone.DeckTop)
     tree2 = PlayTree([tree_game], 5)
     assert len(tree2.get_active()) == 1
     assert len(tree2.get_intermediate()) == 1
@@ -370,13 +374,13 @@ if __name__ == "__main__":
 
     # test a fetch land with many valid targets
     game = GameState(1)
-    game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.Plains()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.Swamp()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.HallowedFountain()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.BreedingPool()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.Plains()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.Swamp()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.HallowedFountain()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.BreedingPool()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.MistyRainforest()), Zone.Hand)
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 1  # play fetch
@@ -409,9 +413,9 @@ if __name__ == "__main__":
 
     # what about a fetch with no valid targets
     game = GameState(1)
-    game.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.Roots()), ZONE.DECK)
-    game.give_to(Cardboard(Decklist.Swamp()), ZONE.DECK)
+    game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.Roots()), Zone.DeckTop)
+    game.give_to(Cardboard(Decklist.Swamp()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -461,7 +465,7 @@ if __name__ == "__main__":
     assert (game != cp)
     # add a copy of the forst to the other
     forest2 = forest.copy()
-    forest2.zone = ZONE.NEW
+    forest2.zone = Zone.Unknown()
     cp.give_to(forest2, Zone.Field)
     # Cardboard uses "is" for eq  (or else "in list" breaks)
     assert forest != forest2
@@ -490,7 +494,7 @@ if __name__ == "__main__":
     game1.give_to(Cardboard(Decklist.Plains()), Zone.Hand)
     game2 = game1.copy()
     # game 1: [0] into play, then the other
-    mover = Verbs.MoveToZone(Zone.Field)
+    mover = Verbs.MoveToZone(Zone.Field(0))
     game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
     game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
@@ -505,7 +509,7 @@ if __name__ == "__main__":
     game1.give_to(Cardboard(Decklist.Plains()), Zone.Hand)
     game2 = game1.copy()
     # game 1: [0] into play, then the other
-    mover = Verbs.MoveToZone(Zone.Field)
+    mover = Verbs.MoveToZone(Zone.Field(0))
     game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
     game1A.step_untap()
     game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
@@ -545,7 +549,7 @@ if __name__ == "__main__":
     assert (len(game.active.get_valid_activations()) == 0)  # nothing to tap
 
     # give it something to tap
-    caryatid.zone = ZONE.NEW
+    caryatid.zone = Zone.Unknown()
     game.give_to(caryatid, Zone.Field)
     assert len(game.active.field) == 2
     assert len(game.active.get_valid_activations()) == 1
@@ -653,7 +657,7 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.Battlement()), Zone.Hand)
     # deck
     for x in range(10):
-        game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+        game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     # tree. Turn 1.
     tree = PlayTree([game], 5)
     tree.main_phase_for_all_active_states(1)
@@ -701,7 +705,7 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
     # deck
     for x in range(10):
-        game.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+        game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
 
     tree = PlayTree([game], 5)
     # only option is play Forest, play Blossoms, draw Island
@@ -740,7 +744,7 @@ if __name__ == "__main__":
     gameA = GameState(1)
     # deck
     for x in range(10):
-        gameA.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+        gameA.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
     gameA.give_to(Cardboard(Decklist.Arcades()), Zone.Field)
     assert (len(gameA.super_stack) == 0)  # Arcades doesn't trigger itself
     # add Blossoms to field and hopefully draw 2
@@ -802,12 +806,12 @@ if __name__ == "__main__":
     #
     # game = GameState()
     # # deck of 6 cards
-    # game.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Axebane()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Battlement()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Axebane()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Battlement()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game)
     # assert (len(universes) == 4)
@@ -826,9 +830,9 @@ if __name__ == "__main__":
     # # deck of 6 forests on top, then 10 islands
     # gameF = GameState()
     # for _ in range(6):
-    #     gameF.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    #     gameF.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
     # for _ in range(10):
-    #     gameF.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+    #     gameF.give_to(Cardboard(Decklist.Island()), Zone.Deck)
     # # should be forests on top
     # assert all([c.has_type(Decklist.Forest) for c in gameF.deck[:6]])
     # # cast Collected Company
@@ -844,10 +848,10 @@ if __name__ == "__main__":
     # # deck of 5 forests on top, one Caretaker, then 10 islands
     # game1 = GameState()
     # for _ in range(5):
-    #     game1.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
-    # game1.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    #     game1.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
+    # game1.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
     # for _ in range(10):
-    #     game1.give_to(Cardboard(Decklist.Island()), ZONE.DECK)
+    #     game1.give_to(Cardboard(Decklist.Island()), Zone.Deck)
     # assert (len(game1.deck) == 16)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game1)
@@ -863,7 +867,7 @@ if __name__ == "__main__":
     # # deck of only 4 cards total, all Caretakers
     # game4 = GameState()
     # for _ in range(4):
-    #     game4.give_to(Cardboard(Decklist.Caretaker()), ZONE.DECK)
+    #     game4.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
     # # should be forests on top
     # assert (len(game4.deck) == 4)
     # # cast Collected Company
@@ -876,10 +880,10 @@ if __name__ == "__main__":
     #
     # # Does Blossoms trigger correctly? start with 12 cards in deck
     # game = GameState()
-    # game.give_to(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Omens()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Blossoms()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Omens()), Zone.Deck)
     # for _ in range(10):
-    #     game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    #     game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game)
     # assert len(universes) == 2  # two draws could be on stack in either order
@@ -896,10 +900,10 @@ if __name__ == "__main__":
     # # will get two GameStates even though they are identical! And that's ok.
     # # it's not worth the effort to optimize this out, right now.
     # game = GameState()
-    # game.give_to(Cardboard(Decklist.Blossoms()), ZONE.DECK)
-    # game.give_to(Cardboard(Decklist.Blossoms()), ZONE.DECK)
+    # game.give_to(Cardboard(Decklist.Blossoms()), Zone.Deck)
+    # game.give_to(Cardboard(Decklist.Blossoms()), Zone.Deck)
     # for _ in range(10):
-    #     game.give_to(Cardboard(Decklist.Forest()), ZONE.DECK)
+    #     game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
     # # cast Collected Company
     # universes = cast_and_resolve_company(game)
     # assert len(universes) == 2  # two draws could be on stack in either order

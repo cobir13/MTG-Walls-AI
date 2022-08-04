@@ -843,11 +843,11 @@ class DrawCard(AffectController):
         return super().can_be_done(state, player, source, other_inputs)
 
     def do_it(self, state, player: int, source, other_inputs=[]):
-        if len(state.player_list[player].deck) > 0:
+        top_card_list = Zone.DeckTop(player).get(state)
+        if len(top_card_list) > 0:
             mover = MoveToZone(Zone.Hand(player))
-            card = Zone.DeckTop(player).get(state)[0]
             # move the card using MoveToZone, so as to trigger move triggers
-            mover.do_it(state, player, card, [])
+            mover.do_it(state, player, top_card_list[0], [])
             # add triggers to super_stack, reduce length of input list
             return super().do_it(state, player, source, other_inputs)
         else:

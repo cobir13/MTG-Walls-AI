@@ -194,8 +194,6 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        if cardboard.player_index < 0:
-            cardboard.player_index = player_index
         if cardboard.owner_index < 0:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination(player_index))
