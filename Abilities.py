@@ -6,7 +6,7 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
+from typing import List, Type, TYPE_CHECKING
 
 import Verbs
 import Costs
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 class Trigger:
 
-    def __init__(self, verb_type: type,
+    def __init__(self, verb_type: Type[Verbs.Verb],
                  pattern_for_subject: Match.Pattern):
         self.verb_type = verb_type
         self.pattern = pattern_for_subject
@@ -65,9 +65,10 @@ class TriggerOnMove(Trigger):
         return (super().is_triggered(verb, state, source, trigger_card)
                 and isinstance(verb, Verbs.MoveToZone)
                 and (self.origin is None
-                     or any([verb.origin == z for z in origins]))
+                     or any([verb.origin.is_contained_in(z) for z in origins]))
                 and (self.destination is None
-                     or any([self.destination == z for z in dests]))
+                     or any([verb.destination.is_contained_in(z)
+                             for z in dests]))
                 )
 
 
@@ -178,10 +179,10 @@ class TriggeredAbility:
         MUTATES.
         Checks if the given Verb `verb` being performed on the
         card `trigger_card` meets this ability's trigger
-        condition. `asking_card` is assumed to be the asking_card of this
+        condition. `asking_card` is assumed to be the source of this
         triggered ability. If the ability IS triggered, MUTATES
         the GameState `state` to add a StackTrigger object to
-        the super_stack.
+        the super_stack.  Control of the ability is `player`.
         """
         if self.trigger.is_triggered(verb, state, source, trigger_card):
             caster = Verbs.AddTriggeredAbility()

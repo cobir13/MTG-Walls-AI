@@ -300,7 +300,7 @@ class MistyRainforest(Land):
                            + Verbs.Tutor(Zone.Field(Get.You()),
                                          1,
                                          Match.CardType(Forest)
-                                         | Match.CardType(Plains))
+                                         | Match.CardType(Island))
                            )
 
 
@@ -316,7 +316,7 @@ class FloodedStrand(Land):
                            + Verbs.Sacrifice()
                            + Verbs.Tutor(Zone.Field(Get.You()),
                                          1,
-                                         Match.CardType(Forest)
+                                         Match.CardType(Island)
                                          | Match.CardType(Plains))
                            )
 

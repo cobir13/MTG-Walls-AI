@@ -160,7 +160,7 @@ class CardType(CardPattern):
             return False
 
     def __str__(self):
-        return super().__str__() + "(" + self.type_to_match.__name__ + ")"
+        return "is-" + self.type_to_match.__name__
 
 
 class Keyword(CardPattern):
@@ -175,7 +175,7 @@ class Keyword(CardPattern):
             return False
 
     def __str__(self):
-        return super().__str__() + "(" + self.keyword_to_match + ")"
+        return "has-" + self.keyword_to_match
 
 
 class Name(CardPattern):
@@ -190,7 +190,7 @@ class Name(CardPattern):
             return False
 
     def __str__(self):
-        return super().__str__() + "(" + self.name_to_match + ")"
+        return "named-" + self.name_to_match
 
 
 class Counter(CardPattern):
@@ -254,23 +254,19 @@ class Another(CardPattern):
 class YouControl(CardPattern):
     """The asking player controls the given Cardboard"""
     def match(self, subject: Cardboard, state, player, source):
-        if player is not None:
-            return subject.player_index == player
-        elif source is not None:
-            return subject.player_index == source.player_index
-        else:
-            return False
+        return subject.player_index == player
+
+
+class ControllerControls(CardPattern):
+    """The controller of the source also controls the given Cardboard"""
+    def match(self, subject: Cardboard, state, player, source):
+        return subject.player_index == source.player_index
 
 
 class OppControls(CardPattern):
     """The asking player does not control the given Cardboard"""
     def match(self, subject: Cardboard, state, player, source):
-        if player is not None:
-            return subject.player_index != player
-        elif source is not None:
-            return subject.player_index != source.player_index
-        else:
-            return False
+        return subject.player_index != player
 
 
 # ----------
@@ -290,13 +286,13 @@ class Opponent(PlayerPattern):
 class Owner(PlayerPattern):
     """The given Player owns the asking Cardboard."""
     def match(self, subject: Player, state, player, source) -> bool:
-        return subject.player_index != source.owner_index
+        return subject.player_index == source.owner_index
 
 
 class Controller(PlayerPattern):
     """The given Player controls the asking Cardboard."""
     def match(self, subject: Player, state, player, source) -> bool:
-        return subject.player_index != source.player_index
+        return subject.player_index == source.player_index
 
 
 # ----------

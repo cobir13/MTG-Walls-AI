@@ -73,7 +73,8 @@ class Zone:
             acc = []  # return concatenated zones of all players
             for ii in range(len(state.player_list)):
                 # "recurse" by defining a new temporary Zone object
-                temp_zone = self.__class__(ii, self.location)
+                temp_zone = self.copy()
+                temp_zone.player = ii
                 acc += temp_zone.get(state)
             return acc
 
@@ -127,6 +128,24 @@ class Zone:
             raise Zone.NotSpecificPlayerError
         else:
             raise Exception  # not implemented
+
+    def is_contained_in(self, other: Zone) -> bool:
+        """Describes whether this Zone is "smaller" (or equal)
+        to the other zone. Essentially, "<=". For example,
+        Field for a single player is smaller than Field for
+        ANY player, and Top Of Deck is smaller than anywhere
+        in Deck.  But Deck is not contained in Field.
+        """
+        if type(self) != type(other):
+            return False
+        elif not self.is_fixed or not other.is_fixed:
+            return False  # shifting, so no idea which is contained where
+        elif self.player != other.player and other.player is not None:
+            return False  # non-equal player only ok if other is global
+        elif self.location != other.location and other.location is not None:
+            return False  # non-equal location only ok if other is global
+        else:
+            return True
 
     def __eq__(self, other):
         return (type(self) == type(other)

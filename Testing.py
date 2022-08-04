@@ -7,7 +7,8 @@ Created on Tue Dec 29 22:15:57 2020
 from __future__ import annotations
 from typing import List
 
-from Abilities import ActivatedAbility
+import Getters
+import Abilities
 import Zone
 from GameState import GameState
 import ManaHandler
@@ -16,11 +17,277 @@ from Cardboard import Cardboard
 from PlayTree import PlayTree
 import Verbs
 import Stack
-import Costs
 import Match
 import time
+import RulesText
+import Costs
 
 if __name__ == "__main__":
+
+    print("Basic structure: Cardboard, GameState, Getters,")
+    print("    Matchers, Verbs, Triggers...")
+    start_clock = time.perf_counter()
+
+
+    class Vanil(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "Vanilla"
+            self.cost = Costs.Cost("1U")
+            self.set_power_toughness(1, 2)
+
+
+    class Choc(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "Chocolate"
+            self.cost = Costs.Cost("B")
+            self.set_power_toughness(1, 1)
+
+
+    vanil0 = Cardboard(Vanil())
+    vanil1 = Cardboard(Vanil())
+    assert vanil0 is not vanil1
+    assert not (vanil0 == vanil1)
+    assert not (vanil0.rules_text == vanil1.rules_text)
+    assert vanil0.zone == vanil1.zone
+    assert vanil0.zone is not vanil1.zone
+    # try a basic copy
+    vanil1A = vanil0.copy()
+    assert vanil1A.rules_text is vanil0.rules_text  # rulestext is pointer
+    assert vanil1A.is_equiv_to(vanil0)
+    assert vanil1A is not vanil0
+
+    # build boardstate
+    choc0 = Cardboard(Choc())
+    game1 = GameState(2)
+    game1.give_to(vanil0, Zone.Field, 0)  # to player 0
+    game1.give_to(choc0, Zone.Field, 0)  # to player 0
+    game1.give_to(vanil1, Zone.Field, 1)  # to player 1
+    assert game1.active.player_index == 0
+    # check player0, confirm it has the correct everything
+    assert len(game1.player_list[0].hand) == 0
+    assert len(game1.player_list[0].grave) == 0
+    assert len(game1.player_list[0].deck) == 0
+    assert len(game1.player_list[0].field) == 2
+    assert game1.player_list[0].field[0] is choc0
+    assert game1.player_list[0].field[1] is vanil0
+    assert choc0.zone.player == 0 and choc0.zone.location == 0
+    assert vanil0.zone.player == 0 and vanil0.zone.location == 1
+    assert choc0.summon_sick and vanil0.summon_sick
+    assert not choc0.tapped and not vanil0.tapped
+    # check player1, confirm it has the correct everything
+    assert len(game1.player_list[1].hand) == 0
+    assert len(game1.player_list[1].grave) == 0
+    assert len(game1.player_list[1].deck) == 0
+    assert len(game1.player_list[1].field) == 1
+    assert game1.player_list[1].field[0] is vanil1
+    assert vanil1.zone.player == 1 and vanil1.zone.location == 0
+
+    # test that Zone is working the way I expect
+    assert len(vanil0.zone.get(game1)) == 1  # because zone has location
+    assert vanil0 in vanil0.zone.get(game1)
+    assert vanil0 is vanil0.zone.get(game1)[0]
+    assert Zone.Field(0).get(game1) is game1.player_list[0].field
+    assert Zone.Grave(0).get(game1) is game1.player_list[0].grave
+    assert len(Zone.Field(None).get(game1)) == 3
+    try:
+        Zone.Field(Getters.Controllers()).get(game1)
+        assert False
+    except Zone.Zone.RelativeError:
+        assert True
+
+    # test some getters
+    assert Match.Power("=", 1).match(vanil0, game1, 0, vanil0)
+    assert Match.YouControl().match(vanil0, game1, 0, vanil0)
+    assert not Match.YouControl().match(vanil1, game1, 0, vanil0)
+    assert Match.OppControls().match(vanil1, game1, 0, vanil0)
+    assert Zone.Field(Getters.Controllers()
+                      ).get_absolute_zones(game1, 1, vanil0)[0].player == 0
+    assert Zone.Field(Getters.Controllers()
+                      ).get_absolute_zones(game1, 1, vanil1)[0].player == 1
+    # test matchers and GetCards
+    assert len(Getters.GetCards(Match.Toughness(">", 1), Zone.Field(0)
+                                ).get(game1, 0, vanil0)) == 1
+    assert Getters.GetCards(Match.Toughness(">", 1), Zone.Field(0)
+                            ).get(game1, 0, vanil0)[0] is vanil0
+    assert len(Getters.GetCards(Match.Toughness(">", 1), Zone.Field(0)
+                                ).get(game1, 1, vanil0)) == 1  # still player0
+    assert len(Getters.GetCards(Match.Toughness(">", 1), Zone.Field(None)
+                                ).get(game1, 1, choc0)) == 2  # all players
+    assert len(Getters.GetCards(Match.Toughness(">", 1),
+                                Zone.Field(Getters.You())
+                                ).get(game1, 0, vanil0)) == 1  # you=player0
+    assert len(Getters.GetCards(Match.Toughness(">", 1),
+                                Zone.Field(Getters.You())
+                                ).get(game1, 1, choc0)) == 1  # you=player1
+    assert len(Getters.GetCards(Match.YouControl(), Zone.Field(Getters.You())
+                                ).get(game1, 0, vanil0)) == 2  # you=player0
+    assert len(Getters.GetCards(Match.YouControl(), Zone.Field(Getters.You())
+                                ).get(game1, 1, choc0)) == 1  # you=player1
+    assert len(Getters.GetCards(Match.YouControl(),
+                                Zone.Field(Getters.Controllers())
+                                ).get(game1, 0, choc0)) == 2  # controller=0
+    assert len(Getters.GetCards(Match.CardType(RulesText.Creature),
+                                Zone.Field(None)
+                                ).get(game1, 1, choc0)) == 3
+
+    # test copying
+    gameB, [chocB] = game1.copy_and_track([choc0])
+    assert gameB == game1
+    assert gameB is not game1
+    assert gameB.active.player_index == 0
+    # check player0, confirm it has the correct everything
+    assert len(gameB.player_list[0].hand) == 0
+    assert len(gameB.player_list[0].grave) == 0
+    assert len(gameB.player_list[0].deck) == 0
+    assert len(gameB.player_list[0].field) == 2
+    assert gameB.player_list[0].field[0] is not choc0
+    assert gameB.player_list[0].field[0].is_equiv_to(choc0)
+    assert gameB.player_list[0].field[1].is_equiv_to(vanil0)
+    assert [c.zone.location for c in gameB.player_list[0].field] == [0, 1]
+    assert all([c.summon_sick for c in gameB.player_list[0].field])
+    assert not any([c.tapped for c in gameB.player_list[0].field])
+    # check player1, confirm it has the correct everything
+    assert len(gameB.player_list[1].hand) == 0
+    assert len(gameB.player_list[1].grave) == 0
+    assert len(gameB.player_list[1].deck) == 0
+    assert len(gameB.player_list[1].field) == 1
+    assert gameB.player_list[1].field[0] is not vanil1
+    assert gameB.player_list[1].field[0].is_equiv_to(vanil1)
+    # make sure chocB copied correctly
+    assert chocB is not choc0
+    assert chocB.is_equiv_to(choc0)
+    assert chocB is chocB.zone.get(gameB)[0]
+    assert chocB is gameB.player_list[0].field[0]
+    assert choc0 is chocB.zone.get(game1)[0]
+    assert chocB is choc0.zone.get(gameB)[0]
+
+    # -----------------------------------------------------------------------
+
+    # define two cards which can "listen" for triggers. One cares about
+    # tapping creatures, the other about moving them from field
+    class WeirdOrb(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "WeirdOrb"
+            self.cost = Costs.Cost("5")
+            self.set_power_toughness(8, 8)
+            self.add_triggered("Orb see tap adds R",
+                               Abilities.Trigger(
+                                   Verbs.Tap,
+                                   Match.ControllerControls()
+                               ),
+                               Verbs.AddMana("R")
+                               )
+
+    class BloodArtist(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "BloodArtist"
+            self.cost = Costs.Cost("1B")
+            self.set_power_toughness(0, 1)
+            self.add_triggered("Artist drains when dies",
+                               Abilities.TriggerOnMove(
+                                   Match.CardType(RulesText.Creature),
+                                   Zone.Field(None),
+                                   Zone.Grave(None)
+                               ),
+                               Verbs.GainLife(1)
+                               + Verbs.LoseLife(1).on(
+                                   Getters.Each(Getters.Opponents()))
+                               )
+
+    # give both of these creatures to player1
+    orb1 = Cardboard(WeirdOrb())
+    game1.give_to(orb1, Zone.Field, 1)
+    artist1 = Cardboard(BloodArtist())
+    game1.give_to(artist1, Zone.Field, 1)
+    assert len(game1.player_list[1].field) == 3
+    assert artist1.zone.location == 0  # BloodArtist comes 1st alphabetically
+
+    # copy the game and start doing verbs and see what happens!
+    gameC = game1.copy()
+    chocC = gameC.player_list[0].field[0]
+    assert chocC.is_equiv_to(choc0)
+    Verbs.Tap().do_it(gameC, 0, chocC, [])
+    assert chocC.tapped
+    assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 1
+    assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
+    assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
+    # even if player1 taps player0's creature, Orb won't see it
+    Verbs.Tap().do_it(gameC, 1, gameC.player_list[0].field[1], [])
+    assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 2
+    assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
+    assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
+    # now try to tap one of player1's creatures
+    Verbs.Tap().do_it(gameC, 1, gameC.player_list[1].field[0], [])
+    assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 3
+    game_list = gameC.clear_super_stack()
+    assert len(game_list) == 1  # only one way to clear the superstack
+    gameD = game_list[0]
+    # note: mana only bypasses the stack if the ability was created using a
+    # the appropriate verb. This was just me calling Tap on stuff.
+    game_list = gameD.resolve_top_of_stack()
+    assert len(game_list) == 1  # only one way to clear the stack here
+    gameE = game_list[0]
+    assert [len(g.super_stack) for g in [gameC, gameD, gameE]] == [1, 0, 0]
+    assert [len(g.stack) for g in [gameC, gameD, gameE]] == [0, 1, 0]
+    assert [str(g.player_list[1].pool)
+            for g in [gameC, gameD, gameE]] == ["", "", "R"]
+    assert all([sum([c.tapped for c in Zone.Field(None).get(g)]) == 3
+                for g in [gameC, gameD, gameE]])
+    # going to kill player0's chocolate
+    chocE = gameE.player_list[0].field[0]
+    assert chocE.player_index == 0
+    artist = gameE.player_list[1].field[0]
+    s = artist.rules_text.trig_verb[0].trigger
+    assert s.pattern.match(chocE, gameE, 0, artist)
+    Verbs.Destroy().do_it(gameE, 0, chocE, [])
+    assert not chocE.tapped  # not tapped, because dead and in grave
+    assert len(Zone.Field(None).get(gameE)) == 4
+    game_list = gameE.clear_super_stack()
+    assert len(game_list) == 1
+    gameF = game_list[0]
+    game_list = gameF.resolve_top_of_stack()
+    assert len(game_list) == 1
+    gameG = game_list[0]
+    assert [len(g.super_stack) for g in [gameE, gameF, gameG]] == [1, 0, 0]
+    assert [len(g.stack) for g in [gameE, gameF, gameG]] == [0, 1, 0]
+    assert [g.player_list[0].life
+            for g in [gameE, gameF, gameG]] == [20, 20, 19]
+    assert [g.player_list[1].life
+            for g in [gameE, gameF, gameG]] == [20, 20, 21]
+
+    # try to destroy the world!
+    wrath = Verbs.Defer(Verbs.Destroy().on(Getters.Each(Getters.GetCards(
+        Match.CardType(RulesText.Creature), Zone.Field(None)))))
+    assert wrath.copies
+    gameH = wrath.do_it(gameG, 0, None, [None])[0][0]
+    assert len(gameH.super_stack) == 4
+    assert len(Zone.Field(None).get(gameH)) == 0
+    assert len(Zone.Grave(None).get(gameH)) == 5
+    outcomes = gameH.clear_super_stack()
+    assert len(outcomes) == 4 * 3 * 2 * 1  # actually distinct on the stack!
+    assert all([len(g.stack) == 4 and len(g.super_stack) == 0
+                for g in outcomes])
+    # trigger doesn't track "cause" on stack, so these aren't distinct!
+    assert len(set(outcomes)) == 1
+    final_game = outcomes[0]
+    while len(final_game.stack) > 0:
+        next_steps = final_game.resolve_top_of_stack()
+        assert len(next_steps) == 1
+        final_game = next_steps[0]
+    assert final_game.player_list[0].life == 19 - 4
+    assert final_game.player_list[1].life == 21 + 4
+    assert len(final_game.stack) == 0
+    assert len(final_game.super_stack) == 0
+    assert len(Zone.Field(None).get(final_game)) == 0
+    assert len(Zone.Grave(None).get(final_game)) == 5
+
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+
+    # -----------------------------------------------------------------------
 
     print("Testing Wall of Roots and basic GameState...")
     start_clock = time.perf_counter()
@@ -39,7 +306,8 @@ if __name__ == "__main__":
                                            [1, "a", caryatid_in_play],
                                            Verbs.PlayCardboard())
     game1.stack.append(stack_cardboard)
-    fake_ability = ActivatedAbility("fake", Costs.Cost(), Verbs.NullVerb())
+    fake_ability = Abilities.ActivatedAbility("fake", Costs.Cost(),
+                                              Verbs.NullVerb())
     stack_ability = Stack.StackAbility(0, caryatid_in_play, fake_ability,
                                        [(stack_cardboard, caryatid_in_play)],
                                        Verbs.PlayAbility())
@@ -437,7 +705,7 @@ if __name__ == "__main__":
     assert len(result.active.deck) == 0
     assert len(result.active.hand) == 0
     assert len(result.active.grave) == 1
-    
+
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
@@ -553,6 +821,7 @@ if __name__ == "__main__":
     game.give_to(caryatid, Zone.Field)
     assert len(game.active.field) == 2
     assert len(game.active.get_valid_activations()) == 1
+    activ = game.active.get_valid_activations()[0]  # for debug
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     [univ1] = tree.get_states_no_options()
@@ -569,7 +838,6 @@ if __name__ == "__main__":
     assert stack_abilities[0].player_index == stack_abilities[1].player_index
     assert stack_abilities[0].source_card is stack_abilities[1].source_card
     assert stack_abilities[0].obj is stack_abilities[1].obj
-    assert stack_abilities[0].caster_verb is stack_abilities[1].caster_verb
     assert stack_abilities[0].choices != stack_abilities[1].choices
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -592,8 +860,8 @@ if __name__ == "__main__":
     care3_abils = [obj for obj in game3_abils
                    if obj.source_card.name == "Caretaker"]
     universes = []
-    for ability, source, choice_list in care3_abils:
-        for g in ability.activate(game3, source, choice_list):
+    for stack_ability in care3_abils:
+        for g in stack_ability.put_on_stack(game3):
             universes += g.clear_super_stack()
     assert (len(universes) == 2)
     [univ4, univ5] = universes
@@ -623,7 +891,7 @@ if __name__ == "__main__":
         collector.add(str(g.active.pool))
     assert collector == {"GGGGGAAAAAAA", "GGGGGAAAAAA", "AAAAAAA", "GGGGGAA",
                          "AAA"}
-    assert len(tree6.get_states_no_options()) == 1+1+2+2+1
+    assert len(tree6.get_states_no_options()) == 1 + 1 + 2 + 2 + 1
     assert len(tree6.get_active()) == 0
     # Math: count based on when the first caretaker is tapped (which action).
     # 5th: impossible
@@ -660,32 +928,32 @@ if __name__ == "__main__":
         game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     # tree. Turn 1.
     tree = PlayTree([game], 5)
-    tree.main_phase_for_all_active_states(1)
+    tree.main_phase_for_all_active_states(0)
     # start, Forest, tap, Caretaker, resolve
-    assert len(tree.get_intermediate(1)) == 5
-    assert len(tree.get_states_no_options(1)) == 1
+    assert len(tree.get_intermediate(0)) == 5
+    assert len(tree.get_states_no_options(0)) == 1
     assert tree.traverse_counter == 5
 
     # Turn 2.
     tree.beginning_phase_for_all_valid_states()
-    assert len(tree.get_active(2)) == 3  # played nothing, forest, or caretaker
-    tree.main_phase_for_all_active_states(2)
-    assert len(tree.get_intermediate(2)) == 53
-    assert len(tree.get_states_no_options(2)) == 7
-    assert tree.traverse_counter == 74
+    assert len(tree.get_active(1)) == 3  # played nothing, forest, or caretaker
+    tree.main_phase_for_all_active_states(1)
+    assert len(tree.get_intermediate(1)) == 42  # 53
+    assert len(tree.get_states_no_options(1)) == 6  # 7
+    assert tree.traverse_counter == 59  # 74
 
     # Turn 3.
     tree.beginning_phase_for_all_valid_states()
-    assert len(tree.get_active(3)) == 12
-    tree.main_phase_for_all_active_states(3)
+    assert len(tree.get_active(2)) == 12
+    tree.main_phase_for_all_active_states(2)
     print("      ...done running, %0.2f sec. (~0.63 2022-07-22)"
           % (time.perf_counter() - start_clock))
-    intermed = tree.get_intermediate(3)
-    no_opts = tree.get_states_no_options(3)
-    assert len(intermed) == 1638
+    intermed = tree.get_intermediate(2)
+    no_opts = tree.get_states_no_options(2)
+    assert len(intermed) == 980  # 1638
     assert len(intermed) == len(set(intermed))
-    assert len(no_opts) == 62
-    assert tree.traverse_counter == 3716
+    assert len(no_opts) == 30  # 62
+    assert tree.traverse_counter == 2338  # 3716
     assert max([g.active.pool.cmc() for g in no_opts]) == 8
     print("      ...done checking, %0.2f sec. (~0.70 2022-07-22)"
           % (time.perf_counter() - start_clock))
@@ -712,11 +980,11 @@ if __name__ == "__main__":
     tree.main_phase_for_all_active_states()
     assert len(tree.get_states_no_options()) == 1
     [final] = tree.get_states_no_options()
-    assert len(final.hand) == 2
-    assert len(final.field) == 3
-    assert len(final.deck) == 9
-    assert any([c.has_type(Decklist.Island) for c in final.hand])
-    assert not any([c.has_type(Decklist.Island) for c in final.field])
+    assert len(final.active.hand) == 2
+    assert len(final.active.field) == 3
+    assert len(final.active.deck) == 9
+    assert any([c.has_type(Decklist.Island) for c in final.active.hand])
+    assert not any([c.has_type(Decklist.Island) for c in final.active.field])
 
     # play next turn: draw Island, play Island, play Blossoms, draw Island
     tree2 = PlayTree([final], 5)
@@ -724,11 +992,11 @@ if __name__ == "__main__":
     tree2.main_phase_for_all_active_states()
     assert len(tree2.get_states_no_options()) == 2  # floating W or U
     [final2, _] = tree2.get_states_no_options()
-    assert len(final2.hand) == 2
-    assert len(final2.field) == 5
-    assert len(final2.deck) == 7
-    assert (any([c.has_type(Decklist.Island) for c in final2.hand]))
-    assert (any([c.has_type(Decklist.Island) for c in final2.field]))
+    assert len(final2.active.hand) == 2
+    assert len(final2.active.field) == 5
+    assert len(final2.active.deck) == 7
+    assert (any([c.has_type(Decklist.Island) for c in final2.active.hand]))
+    assert (any([c.has_type(Decklist.Island) for c in final2.active.field]))
 
     # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
     final2.give_to(Cardboard(Decklist.Caryatid()), Zone.Hand)
@@ -736,9 +1004,9 @@ if __name__ == "__main__":
     tree3.beginning_phase_for_all_valid_states()
     tree3.main_phase_for_all_active_states()
     for g in tree3.get_states_no_options():
-        assert len(g.hand) == 2
-        assert len(g.field) == 7
-        assert len(g.deck) == 6
+        assert len(g.active.hand) == 2
+        assert len(g.active.field) == 7
+        assert len(g.active.deck) == 6
 
     # but what if there was an Arcades in play?
     gameA = GameState(1)
@@ -767,21 +1035,21 @@ if __name__ == "__main__":
     assert gameA == gameA1
     assert len(gameA.super_stack) == 0
     # should have drawn 2 cards
-    assert len(gameA.hand) == 2
-    assert len(gameA.deck) == 8
+    assert len(gameA.active.hand) == 2
+    assert len(gameA.active.deck) == 8
     # now let's try to add a Caryatid to field and hopefully draw 1
     gameA.give_to(Cardboard(Decklist.Caryatid()), Zone.Field)
     assert len(gameA.super_stack) == 1
-    assert len(gameA.hand) == 2  # haven't draw or put triggers on stack
-    assert len(gameA.deck) == 8  # haven't draw or put triggers on stack
+    assert len(gameA.active.hand) == 2  # haven't draw or put triggers on stack
+    assert len(gameA.active.deck) == 8  # haven't draw or put triggers on stack
     [gameA] = gameA.clear_super_stack()
     while len(gameA.stack) > 0:
         universes = gameA.resolve_top_of_stack()
         assert (len(universes) == 1)
         gameA = universes[0]
     # should have drawn 2 cards
-    assert (len(gameA.hand) == 3)
-    assert (len(gameA.deck) == 7)
+    assert (len(gameA.active.hand) == 3)
+    assert (len(gameA.active.deck) == 7)
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 

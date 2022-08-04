@@ -89,11 +89,11 @@ class Cardboard:
             return self.copy()  # if on stack, can't be a pointer.
         else:
             assert self.zone.location is not None  # for debug
-            new_place = self.zone.get(state_new)
-            if len(new_place) == 1 and new_place[0].is_equiv_to(self):
+            new_home = self.zone.get(state_new)
+            if len(new_home) == 1 and new_home[0].is_equiv_to(self):
                 # there is an identical card in the new game at the location
                 # where this card expects to be. Return the new card
-                return new_place[0]
+                return new_home[0]
             else:  # empty list, or card doesn't match...
                 return self.copy()  # couldn't find, so copy.
 

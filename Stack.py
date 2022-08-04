@@ -41,8 +41,8 @@ class StackObject:
         obj_text = self.obj.get_id()
         list_text = ",".join([c.get_id() if hasattr(c, "get_id") else str(c)
                               for c in self.choices])
-        return "Ob%i(%s-%s,%s)" % (self.player_index, s_text, obj_text,
-                                   list_text)
+        return "Ob%i(%s - %s,%s)" % (self.player_index, s_text, obj_text,
+                                     list_text)
 
     def is_equiv_to(self, other: StackObject):
         return self.get_id() == other.get_id()

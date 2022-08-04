@@ -84,7 +84,8 @@ class Verb:
         for trigger_source in state.get_all_public_cards():
             for ability in trigger_source.rules_text.trig_verb:
                 # add any abilities that trigger to the super_stack
-                ability.add_any_to_super(self, state, player,
+                ability.add_any_to_super(self, state,
+                                         trigger_source.player_index,
                                          trigger_source, source)
         return [(state, player, source, other_inputs[self.num_inputs:])]
 
@@ -109,9 +110,6 @@ class Verb:
         if state.is_tracking_history:
             record = "\n%s %s" % (str(self), source.name)
             state.events_since_previous += record
-
-    def on(self, subject_chooser: Get.Chooser) -> ApplyToCard:
-        return ApplyToCard(subject_chooser, self)
 
 
 class MultiVerb(Verb):
@@ -200,6 +198,9 @@ class AffectController(Verb):
               ) -> List[RESULT]:
         return super().do_it(state, player, source, other_inputs)
 
+    def on(self, subject_chooser: Get.Chooser) -> ApplyToPlayer:
+        return ApplyToPlayer(subject_chooser, self)
+
 
 class AffectSourceCard(Verb):
     def __init__(self):
@@ -222,6 +223,9 @@ class AffectSourceCard(Verb):
               source: Cardboard, other_inputs: INPUTS = []
               ) -> List[RESULT]:
         return super().do_it(state, player, source, other_inputs)
+
+    def on(self, subject_chooser: Get.Chooser) -> ApplyToCard:
+        return ApplyToCard(subject_chooser, self)
 
 
 class ApplyToCard(Verb):
@@ -337,8 +341,107 @@ class ApplyToCard(Verb):
         return "%s(%s)" % (str(self.verb), str(self.chooser))
 
 
-#
-# 
+class ApplyToPlayer(Verb):
+    """Chooses targets and then passes those targets along
+    to the player AS THOUGH IT WAS THE `PLAYER` FOR THE
+    SUB-VERB.
+    If the chooser returns a list longer than length 1, then
+    the sub-verb is applied to all the players in turn.
+    """
+
+    def __init__(self, subject_chooser: Get.Chooser, verb: Verb):
+        super().__init__(1, copies=True)
+        self.chooser = subject_chooser
+        self.verb = verb
+        assert verb.num_inputs == 0
+        self.allowed_to_fail = self.chooser.can_be_less
+
+    def get_input_options(self, state, player, source, cause
+                          ) -> List[INPUTS]:
+        """
+        In this particular case, the sublists are length 1 and
+        contain a tuple of possible targets to apply the subverb
+        to.
+        """
+        # chooser returns a list of tuples of player indices. An input is a
+        # LIST of tuples of player indices, so wrap each tuple in a list
+        choices = self.chooser.get(state, player, source)
+        assert self.verb.num_inputs == 0
+        return [[x] for x in choices]
+
+    def can_be_done(self, state, player, source, other_inputs) -> bool:
+        """
+        The first element of `other_inputs` is a tuple containing
+        targets to use as the `player` of the given Verb. If
+        the tuple is empty, the chooser "failed to find" a target.
+        The Verb will not be applied to anything. Still may be ok.
+        If the tuple has many elements, the Verb must be able to
+        be performed on ALL of those players.
+        """
+        if not super().can_be_done(state, player, source, other_inputs):
+            return False  # confirms other_inputs is long enough
+        targets: Tuple[int] = other_inputs[0]
+        if len(targets) == 0:
+            # chooser failed to find a target. ok only if "allowed" to fail.
+            return self.allowed_to_fail
+        # must be able to perform the verb on ALL given targets
+        return all([self.verb.can_be_done(state, t, source, other_inputs[1:])
+                    for t in targets])
+
+    def do_it(self, state: GameState, player, source, other_inputs):
+        """
+        The first element of `other_inputs` is a tuple containing
+        targets to use as the `player` of the given Verb. If
+        the tuple is empty, the chooser "failed to find" a target.
+        The Verb will not be applied to anything. If the tuple has
+        any elements, the Verb will attempt to perform itself on
+        ALL of those players.
+        """
+        targets = other_inputs[0]
+        if len(targets) == 0:
+            # Failed to find target. If got this far, presumably failing is ok.
+            # So do nothing and trigger nothing. Do snip the inputs though.
+            if not self.copies:
+                state2, things = state.copy_and_track(
+                    [source] + other_inputs[1:])
+                source2 = things[0]
+                inputs2 = things[1:]
+                return [(state2, player, source2, inputs2)]
+            else:
+                return [(state, player, source, other_inputs[1:])]
+        else:
+            if self.copies:
+                # make some extra choices to chew through. Should look like:
+                # [target1, ... targetN, otherX, ... otherZ, source_card].
+                # `targets` is technically a tuple, so cast to list first.
+                concat_choices = list(targets) + other_inputs[1:] + [source]
+                # copy gamestate (and these choices) and then start do_it loop
+                state2, concat2 = state.copy_and_track(concat_choices)
+                source2 = concat2[-1]
+                # standard "state, asking_player, asking_card, choices" format
+                tuple_list = [(state2, player, source2, concat2[:-1])]
+                for _ in range(len(targets)):
+                    new_list = []
+                    for g, _, source, ins in tuple_list:
+                        # ins[1:] because trim off the target-player each time
+                        new_list += self.verb.do_it(g, ins[0], source, ins[1:])
+                    tuple_list = new_list
+                # at this point we've done all the work, but still need to
+                # extract the asking_card to return!
+                return [(g, player, source, ins)
+                        for g, _, source, ins in tuple_list]
+            else:
+                for target in targets:
+                    self.verb.do_it(state, target, source, other_inputs[1:])
+                return [(state, player, source, other_inputs[1:])]
+
+    def is_type(self, verb_type: type):
+        return self.verb.is_type(verb_type)
+
+    def __str__(self):
+        return "%s(%s)" % (str(self.verb), str(self.chooser))
+
+
 class Modal(Verb):
     """Choose between various Verbs. All options should require
     the same number of inputs. Mode is chosen at cast-time,
@@ -680,6 +783,27 @@ class LoseLife(AffectController):
             state.events_since_previous += text
 
 
+class GainLife(AffectController):
+    def __init__(self, amount_getter: Get.Integer | int):
+        """The subject asking_player gains the given amount of life"""
+        super().__init__()
+        if isinstance(amount_getter, int):
+            amount_getter = Get.ConstInteger(amount_getter)
+        self.amount_getter: Get.Integer = amount_getter
+
+    def do_it(self, state, player, source, other_inputs=[]):
+        pl = state.player_list[player]
+        pl.life += self.amount_getter.get(state, player, source)
+        # add triggers to super_stack, reduce length of input list
+        return super().do_it(state, player, source, other_inputs)
+
+    def add_self_to_state_history(self, state, player, source, other_inputs):
+        if state.is_tracking_history:
+            text = "\nLose %i life" % self.amount_getter.get(state, player,
+                                                             source)
+            state.events_since_previous += text
+
+
 class Tap(AffectSourceCard):
     """taps the source card if it was not already tapped."""
 
@@ -966,12 +1090,14 @@ class UniversalCaster(Verb):
         """
         if not super().can_be_done(state, player, source, other_inputs):
             return False
-        obj: StackObject = other_inputs[0]
+        obj: StackObject = other_inputs[0]  # other_inputs should be len 1
         num_payments = 0
         if obj.cost is not None:
             num_payments = obj.cost.num_inputs
-        pay_choices = obj.choices[1:num_payments + 1]
-        target_choices = obj.choices[1 + num_payments:]
+        # pay_choices = obj.choices[1:num_payments + 1]
+        # target_choices = obj.choices[1 + num_payments:]
+        pay_choices = obj.choices[:num_payments]
+        target_choices = obj.choices[num_payments:]
         return ((obj.cost is None
                  or obj.cost.can_afford(state, player, source, pay_choices))
                 and (source.effect is None
@@ -995,7 +1121,7 @@ class UniversalCaster(Verb):
         # 601.2g: activate mana abilities -- I don't actually permit this.
         # 601.2h: pay costs
         if source.cost is not None:
-            num_payments = source.cost.num_inputs
+            num_payments = obj2.cost.num_inputs
             pay_choices = obj2.choices[:num_payments] + [obj2]
             # keep only the targets.
             obj2.choices = obj2.choices[num_payments:]

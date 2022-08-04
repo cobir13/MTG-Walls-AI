@@ -42,6 +42,9 @@ class Const(Getter):
     def get(self, state: GameState, player: int, source: Cardboard):
         return self.value
 
+    def __str__(self):
+        return str(self.value)
+
 
 class GetTrait(Getter):
     """Return the value of a specified trait, usually
@@ -76,6 +79,10 @@ class GetCards(Getter):
             cards += [c for c in z.get(state)
                       if self.pattern.match(c, state, player, source)]
         return cards
+
+    def __str__(self):
+        return str(self.pattern) + " in " + ",".join([str(z)
+                                                      for z in self.zones])
 
 
 class GetPlayers(Getter):
@@ -133,6 +140,7 @@ class Integer(GetTrait):
 class ConstInteger(Const, Integer):
     pass
 
+
 class StringList(GetTrait):
     """Return type of the trait is a list of strings"""
     pass
@@ -169,7 +177,7 @@ class Repeat(Getter):
     Useful for repeating a string, list, etc. Or
     multiplying a number, I guess."""
     def __init__(self, thing_to_repeat, num: Integer | int):
-        super().__init__(gives_single_output=num.single_output)
+        Getter.__init__(self, gives_single_output=num.single_output)
         self.thing_to_repeat = thing_to_repeat
         if isinstance(num, int):
             num = ConstInteger(num)
@@ -285,10 +293,10 @@ class ManaValue(Integer):
 class Chooser(Getter):
 
     def __init__(self,
-                 options: GetCards | List[TARGET],
+                 options: GetCards | GetPlayers | List[TARGET],
                  num_to_choose: Integer | int, can_be_fewer: bool):
         super().__init__(False)
-        self.options: GetCards | List[TARGET] = options
+        self.options: GetCards | GetPlayers | List[TARGET] = options
         if isinstance(num_to_choose, int):
             num_to_choose = ConstInteger(num_to_choose)
         self.num_to_choose: Integer = num_to_choose
@@ -299,7 +307,7 @@ class Chooser(Getter):
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
-        if isinstance(self.options, GetCards):
+        if isinstance(self.options, (GetCards, GetPlayers)):
             options: List[TARGET] = self.options.get(state, asking_player,
                                                      asking_card)
         else:
@@ -326,12 +334,12 @@ class Target(Chooser):
 
 class Any(Chooser):
     """choose any one single option. Exactly one."""
-    def __init__(self, options: GetCards | List[TARGET]):
+    def __init__(self, options: GetCards | GetPlayers | List[TARGET]):
         super().__init__(options, num_to_choose=1, can_be_fewer=False)
 
 
 class Each(Chooser):
-    def __init__(self, options: GetCards):
+    def __init__(self, options: GetCards | GetPlayers):
         super().__init__(options, -1, False)
 
     def get(self, state: GameState, asking_player: int, asking_card: Cardboard
@@ -339,7 +347,7 @@ class Each(Chooser):
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
-        if isinstance(self.options, GetCards):
+        if isinstance(self.options, (GetCards, GetPlayers)):
             options: List[TARGET] = self.options.get(state, asking_player,
                                                      asking_card)
         else:
