@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
+import Zone
+
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility
     from Cardboard import Cardboard
@@ -82,10 +84,10 @@ class StackObject:
         if self.source_card is None:
             source = None
         else:
-            source = self.source_card.copy_as_pointer(state_orig, state_new)
+            source = self.source_card.copy_as_pointer(state_new)
         # object card or object ability
         if hasattr(self.obj, "copy_as_pointer"):  # it's a Cardboard
-            obj = self.obj.copy_as_pointer(state_orig, state_new)
+            obj = self.obj.copy_as_pointer(state_new)
         else:
             obj = self.obj.copy()
         # copy options
@@ -96,6 +98,13 @@ class StackObject:
         new_obj = StackObject(controller, source, obj, options, verb)
         new_obj.__class__ = self.__class__  # set the class type directly
         return new_obj
+
+    @property
+    def zone(self):
+        if hasattr(self.obj, "zone"):
+            return self.obj.zone
+        else:
+            return Zone.Stack()
 
 
 class StackAbility(StackObject):

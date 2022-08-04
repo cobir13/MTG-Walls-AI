@@ -20,7 +20,7 @@ from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
     AlwaysTrigger
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlayPermanent
-import ZONE
+import Zone
 
 
 # ------------------------------------------------------------------------------
@@ -41,7 +41,8 @@ class RulesText:
         self.trig_endstep = []
         # I don't actually USE these, but in theory I could in the future
         # self.static = []     #static effects
-        self.cast_destination = ZONE.UNKNOWN
+        # NOTE: cast_destination.player=None, as don't know which player yet
+        self.cast_destination: Zone.Zone = Zone.Unknown()
         self.effect: Verb = NullVerb()
 
     @property
@@ -70,7 +71,7 @@ class Permanent(RulesText):
 
     def __init__(self):
         super().__init__()
-        self.cast_destination = ZONE.FIELD
+        self.cast_destination = Zone.Field(player=None)
 
 
 class Creature(Permanent):
@@ -121,7 +122,7 @@ class Spell(RulesText):
                              after resolution.
         """
         super().__init__()
-        self.cast_destination = ZONE.GRAVE
+        self.cast_destination = Zone.Grave(player=None)
         self.effect: Verb = NullVerb()
 
 
@@ -175,7 +176,7 @@ class Animate(Verbs.AffectSourceCard):
 
     def can_be_done(self, state, controller, source: Cardboard,
                     other_input: INPUTS = []) -> bool:
-        return source.zone == ZONE.FIELD
+        return source.is_in(Zone.Field)
 
     def do_it(self, state, controller, source: Cardboard, other_input=[]):
         # make the new RulesText

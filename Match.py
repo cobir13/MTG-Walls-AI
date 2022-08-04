@@ -6,15 +6,15 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
-
-import ZONE
+from typing import TYPE_CHECKING, List, Type
 
 if TYPE_CHECKING:
     from Cardboard import Cardboard
     from GameState import GameState, Player
     SUBJECT = Cardboard | Player  # | StackObject
+    from RulesText import RulesText
 import Getters as Get
+# import Zone
 
 
 # #------------------------------------------------------------------------------
@@ -150,8 +150,8 @@ class PlayerPattern(Pattern):
 # ----------
 
 class CardType(CardPattern):
-    def __init__(self, card_type: type):
-        self.type_to_match: type = card_type
+    def __init__(self, card_type: Type[RulesText]):
+        self.type_to_match: Type[RulesText] = card_type
 
     def match(self, subject: Cardboard, state, player, source):
         try:
@@ -223,42 +223,36 @@ class Untapped(CardPattern):
             return False
 
 
-class Zone(CardPattern):
-    def __init__(self, zone: int):
-        self.zone = zone
-
-    def match(self, subject: Cardboard, state, player, source):
-        try:
-            return subject.zone == self.zone
-        except AttributeError:
-            return False
-
-    def __str__(self):
-        if self.zone == ZONE.DECK or self.zone == ZONE.DECK_BOTTOM:
-            return "InDeck"
-        elif self.zone == ZONE.HAND:
-            return "InHand"
-        elif self.zone == ZONE.FIELD:
-            return "OnField"
-        elif self.zone == ZONE.GRAVE:
-            return "InGrave"
-        else:
-            return "InZone%i" % self.zone
+# class Zone(CardPattern):
+#     def __init__(self, zone: Type[Zone.Zone]):
+#         self.zone: Type[Zone.Zone] = zone
+#
+#     def match(self, subject: Cardboard, state, player, source):
+#         try:
+#             return subject.is_in(self.zone)
+#         except AttributeError:
+#             return False
+#
+#     def __str__(self):
+#         return self.zone.__name__
 
 
 # ----------
 
 class IsSelf(CardPattern):
+    """The given Cardboard is the asking Cardboard"""
     def match(self, subject: Cardboard, state, player, source) -> bool:
         return subject is source
 
 
 class Another(CardPattern):
+    """The given Cardboard is not the asking Cardboard"""
     def match(self, subject: Cardboard, state, player, source) -> bool:
         return subject is not source
 
 
 class YouControl(CardPattern):
+    """The asking player controls the given Cardboard"""
     def match(self, subject: Cardboard, state, player, source):
         if player is not None:
             return subject.player_index == player
@@ -269,6 +263,7 @@ class YouControl(CardPattern):
 
 
 class OppControls(CardPattern):
+    """The asking player does not control the given Cardboard"""
     def match(self, subject: Cardboard, state, player, source):
         if player is not None:
             return subject.player_index != player
@@ -278,14 +273,30 @@ class OppControls(CardPattern):
             return False
 
 
+# ----------
+
 class You(PlayerPattern):
+    """The given Player is the asking Player."""
     def match(self, subject: Player, state, player, source) -> bool:
         return subject.player_index == player
 
 
 class Opponent(PlayerPattern):
+    """The given Player is not the asking Player."""
     def match(self, subject: Player, state, player, source) -> bool:
         return subject.player_index != player
+
+
+class Owner(PlayerPattern):
+    """The given Player owns the asking Cardboard."""
+    def match(self, subject: Player, state, player, source) -> bool:
+        return subject.player_index != source.owner_index
+
+
+class Controller(PlayerPattern):
+    """The given Player controls the asking Cardboard."""
+    def match(self, subject: Player, state, player, source) -> bool:
+        return subject.player_index != source.player_index
 
 
 # ----------

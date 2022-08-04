@@ -10,8 +10,9 @@ from typing import List, TYPE_CHECKING
 
 import Verbs
 import Costs
-import ZONE
+import Zone
 import Match
+import Getters as Get
 import Stack
 
 if TYPE_CHECKING:
@@ -30,8 +31,9 @@ class Trigger:
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):
-        """`asking_card` is asking_card of possible trigger. `trigger_card` is the
-        thing which caused the trigger to be checked for viability."""
+        """`asking_card` is asking_card of possible trigger.
+        `trigger_card` is the thing which caused the trigger
+        to be checked for viability."""
         return (isinstance(verb, self.verb_type)
                 and self.pattern.match(trigger_card, state,
                                        trigger_card.player_index, source))
@@ -44,19 +46,28 @@ class Trigger:
 
 class TriggerOnMove(Trigger):
 
-    def __init__(self, pattern_for_subject: Match.Pattern, origin,
-                 destination):
+    def __init__(self, pattern_for_subject: Match.Pattern,
+                 origin: Zone.Zone | None,
+                 destination: Zone.Zone | None):
         super().__init__(Verbs.MoveToZone, pattern_for_subject)
-        self.origin = origin
-        self.destination = destination
+        self.origin: Zone.Zone | None = origin
+        self.destination: Zone.Zone | None = destination
 
     def is_triggered(self, verb: Verbs.Verb, state: GameState,
                      source: Cardboard, trigger_card: Cardboard):
+        pl = source.player_index
+        origins: List[Zone] = [self.origin]
+        if self.origin is not None and not self.origin.is_fixed:
+            origins = self.origin.get_absolute_zones(state, pl, source)
+        dests: List[Zone] = [self.destination]
+        if self.destination is not None and not self.destination.is_fixed:
+            dests = self.destination.get_absolute_zones(state, pl, source)
         return (super().is_triggered(verb, state, source, trigger_card)
                 and isinstance(verb, Verbs.MoveToZone)
-                and (self.origin == verb.origin or self.origin is None)
-                and (self.destination == trigger_card.zone
-                     or self.destination is None)
+                and (self.origin is None
+                     or any([verb.origin == z for z in origins]))
+                and (self.destination is None
+                     or any([self.destination == z for z in dests]))
                 )
 
 
@@ -82,7 +93,7 @@ class AlwaysTrigger(Trigger):
 
 class TriggerOnSelfEnter(TriggerOnMove):
     def __init__(self):
-        super().__init__(Match.IsSelf(), None, ZONE.FIELD)
+        super().__init__(Match.IsSelf(), None, Zone.Field(Get.Controllers()))
 
     def __str__(self):
         return "Self ETB"
@@ -96,7 +107,8 @@ class AsEnterEffect(TriggerOnMove):
     type bypass the stack and are handled IMMEDIATELY when the super_stack is
     cleared. This can be seen in `GameState.clear_super_stack`.
     """
-    pass
+    def __init__(self):
+        super().__init__(Match.IsSelf(), None, Zone.Field(Get.Controllers()))
 
 
 # ----------

@@ -8,9 +8,9 @@ Created on Mon Dec 28 21:13:28 2020
 from __future__ import annotations
 
 import Stack
-import ZONE
+import Zone
 import tkinter as tk
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -39,13 +39,12 @@ class Cardboard:
             str] = []  # sorted list of counters. Also other trackers
         # track where the card is: index (within a gamestate) of the player
         # who controls it, index of the player who ownes it, and its zone.
-        self.player_index = -1  # controller. duck-type to Player.player_index
         self.owner_index = -1
-        self.zone = ZONE.NEW
+        self.zone = Zone.Unknown()
 
     def __str__(self):
         s = self.rules_text.name
-        if self.zone == ZONE.FIELD and self.tapped:
+        if self.is_in(Zone.Field) and self.tapped:
             s += "(T)"
         if len(self.counters) > 0:
             s += "[%s]" % ",".join(self.counters)
@@ -62,38 +61,40 @@ class Cardboard:
         # safe to copy by reference since they're all ints, str, etc
         new_card.tapped = self.tapped
         new_card.summon_sick = self.summon_sick
-        new_card.player_index = self.player_index
         new_card.owner_index = self.owner_index
-        new_card.zone = self.zone
         # counters is a LIST so it needs to be copied without reference
         new_card.counters = self.counters.copy()
+        # zone can mutate, I think? Rare but possible. safer to copy not refer
+        new_card.zone = self.zone.copy()
         return new_card
 
-    def copy_as_pointer(self, state_orig: GameState, state_new: GameState):
+    def copy_as_pointer(self, state_new: GameState):
         """A more careful version of copy. This one first
         checks to see if the card is secretly a "pointer"
         to a card which already exists in the new GameState.
         If it is, returns the card in the new GameState. If
         it is not, returns a fresh copy of the card.
         Useful when copying spells on the stack."""
-        if self.zone == ZONE.STACK:
+        if self.is_in(Zone.Stack):
             # TODO: on-cast trigger would have a asking_card pointing to stack
             return self.copy()  # if on stack, can't be a pointer.
-        try:
-            zone_orig = self.get_home_zone_list(state_orig)
-            zone_new = self.get_home_zone_list(state_new)
-            # look for true equality (not just equivalence) in old cards
-            indices = [ii for ii, c in enumerate(zone_orig) if c is self]
-            if len(indices) > 0:
-                return zone_new[indices[0]]
-            else:
+        else:
+            assert self.zone.location is not None  # for debug
+            new_place = self.zone.get(state_new)
+            if len(new_place) == 1 and new_place[0] == self:
+                # there is an identical card in the new game at the location
+                # where this card expects to be. Return the new card
+                return new_place[0]
+            else:  # empty list, or card doesn't match...
                 return self.copy()  # couldn't find, so copy.
-        except ValueError:
-            # no zone. Maybe is new? Anyway, just make a fresh copy.
-            return self.copy()
 
     def add_counter(self, addition):
         self.counters = sorted(self.counters + [addition])
+
+    @property
+    def player_index(self):
+        """controller. duck-type to Player.player_index"""
+        return self.zone.player
 
     @property
     def name(self) -> str:
@@ -106,14 +107,6 @@ class Cardboard:
     @property
     def effect(self) -> Verb:
         return self.rules_text.effect
-
-    def get_home_zone_list(self, state: GameState):
-        if self.zone in [ZONE.NEW, ZONE.UNKNOWN]:
-            raise ValueError("Can't be in Zone because has no owner!")
-        elif self.zone == ZONE.STACK:
-            return state.stack
-        else:
-            return state.player_list[self.player_index].get_zone(self.zone)
 
     def get_activated(self):
         return self.rules_text.activated
@@ -144,10 +137,13 @@ class Cardboard:
         # equivalent or not. I defined EquivTo as a more intuitive, descriptive
         # definition of equality that I use for comparing two GameStates.
 
-    def has_type(self, card_type: type) -> bool:
+    def has_type(self, card_type: Type[RulesText]) -> bool:
         """Returns bool: "this Cardboard refers to a card which is the given
         RulesText type (in addition to possibly other types as well)" """
         return isinstance(self.rules_text, card_type)
+
+    def is_in(self, zone: Type[Zone]):
+        return isinstance(self.zone, zone)
 
     # def has_keyword(self, keyword:str):
     #     return keyword in self.rules_text.keywords
@@ -257,7 +253,7 @@ class CardNull(Cardboard):
         self.tapped: bool = False
         self.summon_sick: bool = True
         self.counters = []
-        self.zone = ZONE.NEW
+        self.zone = Zone.Unknown()
 
     def __str__(self):
         return "Null"

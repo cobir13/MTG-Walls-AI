@@ -5,13 +5,13 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, Tuple
+from typing import List, Tuple, Type
 # if TYPE_CHECKING:
 #     from Abilities import ActivatedAbility
 
 from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
-import ZONE
+import Zone
 from ManaHandler import ManaPool
 from Stack import StackCardboard, StackTrigger, StackObject
 from Verbs import MoveToZone, DrawCard, Untap
@@ -140,7 +140,7 @@ class GameState:
         new_list = []
         for item in list_to_copy:
             if isinstance(item, Cardboard):
-                new_list.append(item.copy_as_pointer(state_orig, state_new))
+                new_list.append(item.copy_as_pointer(state_new))
             elif isinstance(item, StackObject):
                 new_list.append(item.copy(state_orig, state_new))
             elif isinstance(item, list) or isinstance(item, tuple):
@@ -172,25 +172,10 @@ class GameState:
              for p in self.player_list])
         return opts + len(self.stack) > 0
 
-    def get_zone(self, zone, player_index: int | None):
-        """Returns the zone belonging to the specified asking_player.
-        If `player_index` is None and the zone is a private zone
-        that ought to belong to only a single asking_player (HAND, DECk,
-        FIELD, GRAVE), then returns a concatenated list of ALL
-        of those zones. This latter functionality is useful for
-        stuff like "find every creature in play, no matter who
-        controls it." """
-        if zone in [ZONE.NEW, ZONE.UNKNOWN]:
-            raise ValueError("These zones don't actually exist!")
-        elif zone == ZONE.STACK:
-            return self.stack
-        elif player_index is not None:
-            return self.player_list[player_index].get_zone(zone)
-        else:
-            new_list = []
-            for player in self.player_list:
-                new_list += player.get_zone(zone)
-            return new_list
+    def add_to_stack(self, obj: StackObject):
+        if hasattr(obj.obj, "zone"):
+            obj.obj.zone = Zone.Stack()
+        self.stack.append(obj)
 
     def get_all_public_cards(self):
         faceup = []
@@ -198,7 +183,10 @@ class GameState:
             faceup += player.field + player.grave
         return faceup
 
-    def give_to(self, cardboard, destination, player_index=0):
+    def give_to(self, cardboard,
+                destination: Type[Zone.DeckTop | Zone.DeckBottom | Zone.Hand
+                                  | Zone.Field],
+                player_index=0):
         """Move the specified piece of cardboard from the zone
         it is currently in to the specified destination zone.
         Raises IndexError if the cardboard is not in the zone
@@ -210,7 +198,7 @@ class GameState:
             cardboard.player_index = player_index
         if cardboard.owner_index < 0:
             cardboard.owner_index = player_index
-        mover = MoveToZone(destination)
+        mover = MoveToZone(destination(player_index))
         mover.add_self_to_state_history = lambda *args: None  # silent
         mover.do_it(self, player_index, cardboard)
 
@@ -228,11 +216,12 @@ class GameState:
                 toughness = Get.Toughness().get(self, player.player_index,
                                                 card)
                 if toughness is not None and toughness <= 0:
-                    MoveToZone(ZONE.GRAVE).do_it(self, player.player_index,
-                                                 card)
+                    mover = MoveToZone(Zone.Grave(player.player_index))
+                    mover.do_it(self, player.player_index, card)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
+            # Sacrifice().do_it(self, player.player_index, card)
 
     def step_untap(self):
         """MUTATES. Adds any triggered StackAbilities to the
@@ -312,10 +301,11 @@ class GameState:
                                           obj.source_card, obj.choices)
         # if card is on stack (not just a pointer), move it to destination zone
         if isinstance(obj.obj, Cardboard):
-            mover = MoveToZone(obj.obj.rules_text.cast_destination)
+            dest = obj.obj.rules_text.cast_destination.copy()
+            dest.player = obj.player_index  # update to give to correct player
             for tup in tuple_list:
                 g: GameState = tup[0]
-                mover.do_it(g, obj.player_index, obj.obj, [])
+                MoveToZone(dest).do_it(g, obj.player_index, obj.obj, [])
         # clear the superstack and return!
         results = []
         for tup in tuple_list:
@@ -452,18 +442,18 @@ class Player:
         return "|".join([index, turn, life, land, storm, pool,
                          deck, hand, field, grave])
 
-    def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
-        if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
-            zone = self.deck
-        elif zone_name == ZONE.HAND:
-            zone = self.hand
-        elif zone_name == ZONE.FIELD:
-            zone = self.field
-        elif zone_name == ZONE.GRAVE:
-            zone = self.grave
-        else:
-            raise IndexError
-        return zone
+    # def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
+    #     if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
+    #         zone = self.deck
+    #     elif zone_name == ZONE.HAND:
+    #         zone = self.hand
+    #     elif zone_name == ZONE.FIELD:
+    #         zone = self.field
+    #     elif zone_name == ZONE.GRAVE:
+    #         zone = self.grave
+    #     else:
+    #         raise IndexError
+    #     return zone
 
     def has_type(self, some_type):
         """duck-typed with Cardboard so SOURCE is valid type hint"""
@@ -533,13 +523,70 @@ class Player:
                 castables += can_do
         return castables
 
-    def re_sort(self, zone_name):
-        """sort the specified zone, if it is a zone that is supposed
-        to be sorted"""
-        if zone_name == ZONE.HAND:
-            self.hand.sort(key=Cardboard.get_id)
-        elif zone_name == ZONE.FIELD:
-            self.field.sort(key=Cardboard.get_id)
-        elif zone_name == ZONE.GRAVE:
-            self.grave.sort(key=Cardboard.get_id)
-        # no other zones are sorted, so we're done.
+    def add_to_hand(self, card: Cardboard):
+        """Hand is sorted and tracks Zone.location."""
+        card.zone = Zone.Hand(self.player_index)
+        self.hand.append(card)
+        self.hand.sort(key=Cardboard.get_id)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(len(self.hand)):
+            self.hand[ii].zone.location = ii
+
+    def remove_from_hand(self, card: Cardboard):
+        """Field is sorted and tracks Zone.location."""
+        index = card.zone.location
+        self.hand.pop(index)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(index, len(self.hand)):
+            self.hand[ii].zone.location = ii
+
+    def add_to_field(self, card: Cardboard):
+        """Field is sorted and tracks Zone.location."""
+        card.zone = Zone.Field(self.player_index)
+        self.field.append(card)
+        self.field.sort(key=Cardboard.get_id)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(len(self.field)):
+            self.field[ii].zone.location = ii
+
+    def remove_from_field(self, card: Cardboard):
+        """Field is sorted and tracks Zone.location."""
+        index = card.zone.location
+        self.field.pop(index)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(index, len(self.field)):
+            self.field[ii].zone.location = ii
+
+    def add_to_grave(self, card: Cardboard):
+        """Grave is sorted and tracks Zone.location."""
+        card.zone = Zone.Grave(self.player_index)
+        self.grave.append(card)
+        self.grave.sort(key=Cardboard.get_id)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(len(self.grave)):
+            self.grave[ii].zone.location = ii
+
+    def remove_from_grave(self, card: Cardboard):
+        """Grave is sorted and tracks Zone.location."""
+        index = card.zone.location
+        self.grave.pop(index)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(index, len(self.grave)):
+            self.grave[ii].zone.location = ii
+
+    def add_to_deck(self, card: Cardboard, dist_from_bottom: int):
+        """Deck is not sorted but DOES track Zone.location."""
+        # deck[0] is bottom, deck[-1] is top
+        card.zone = Zone.Deck(self.player_index, dist_from_bottom)
+        self.deck.insert(dist_from_bottom, card)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(dist_from_bottom, len(self.deck)):
+            self.deck[ii].zone.location = ii
+
+    def remove_from_deck(self, card: Cardboard):
+        """Deck is not sorted but DOES track Zone.location."""
+        index = card.zone.location
+        self.deck.pop(index)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(index, len(self.deck)):
+            self.deck[ii].zone.location = ii

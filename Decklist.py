@@ -5,7 +5,7 @@ Created on Tue Dec 29 11:50:12 2020
 @author: Cobi
 """
 from RulesText import Creature, Land, TapSymbol  # , Instant, Sorcery
-import ZONE
+import Zone
 import Match as Match
 import Verbs
 from Costs import Cost
@@ -58,11 +58,14 @@ class Caretaker(Creature):
         self.set_power_toughness(0, 3)
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
-                                Verbs.Tap(Get.FromZones([ZONE.FIELD],
-                                    & Match.Another()
-                                    & Match.Untapped()
-                                    & Match.CardType(Creature)
-                                    & Match.YouControl()))),
+                                Verbs.Tap().on(
+                                    Get.Any(
+                                        Get.GetCards(
+                                            Match.Another()
+                                            & Match.Untapped()
+                                            & Match.CardType(Creature),
+                                            Zone.Field(Get.You())))),
+                                ),
                            Verbs.AddMana("A"))
 
 
@@ -79,9 +82,11 @@ class Battlement(Creature):
         self.add_activated(
             "Battlement add G",
             Cost(TapSymbol()),
-            Verbs.AddMana(Get.ForEach("G", Get.Count(ZONE.FIELD,
-                                                     Match.Keyword("defender")
-                                                     & Match.YouControl())))
+            Verbs.AddMana(
+                Get.RepeatString(
+                    "G",
+                    Get.Count(Match.Keyword("defender"),
+                              Zone.Field(Get.You()))))
             )
 
 
@@ -98,9 +103,11 @@ class Axebane(Creature):
         self.add_activated(
             "Axebane add Au",
             Cost(TapSymbol()),
-            Verbs.AddMana(Get.ForEach("A", Get.Count(ZONE.FIELD,
-                                                     Match.Keyword("defender")
-                                                     & Match.YouControl())))
+            Verbs.AddMana(
+                Get.RepeatString(
+                    "A",
+                    Get.Count(Match.Keyword("defender"),
+                              Zone.Field(Get.You()))))
             )
 
 
@@ -144,7 +151,7 @@ class Arcades(Creature):
         self.set_power_toughness(3, 5)
         self.add_triggered("Arcades draw trigger",
                            TriggerOnMove(Match.Keyword("defender"), None,
-                                         ZONE.FIELD),
+                                         Zone.Field(Get.Controllers())),
                            Verbs.DrawCard())
 
 
@@ -229,7 +236,7 @@ class TempleGarden(Forest, Plains):
         self.name = "TempleGarden"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
+                           AsEnterEffect(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.LoseLife(2)]))
                            )
@@ -242,7 +249,7 @@ class BreedingPool(Forest, Island):
         self.name = "BreedingPool"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
+                           AsEnterEffect(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.LoseLife(2)]))
                            )
@@ -255,7 +262,7 @@ class HallowedFountain(Plains, Island):
         self.name = "HallowedFountain"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           AsEnterEffect(Match.IsSelf(), None, ZONE.FIELD),
+                           AsEnterEffect(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.LoseLife(2)]))
                            )
@@ -273,7 +280,8 @@ class WindsweptHeath(Land):
                            TriggerOnSelfEnter(),
                            Verbs.LoseLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.Tutor(ZONE.FIELD, 1,
+                           + Verbs.Tutor(Zone.Field(Get.You()),
+                                         1,
                                          Match.CardType(Forest)
                                          | Match.CardType(Plains))
                            )
@@ -289,9 +297,10 @@ class MistyRainforest(Land):
                            TriggerOnSelfEnter(),
                            Verbs.LoseLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.Tutor(ZONE.FIELD, 1,
+                           + Verbs.Tutor(Zone.Field(Get.You()),
+                                         1,
                                          Match.CardType(Forest)
-                                         | Match.CardType(Island))
+                                         | Match.CardType(Plains))
                            )
 
 
@@ -305,8 +314,9 @@ class FloodedStrand(Land):
                            TriggerOnSelfEnter(),
                            Verbs.LoseLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.Tutor(ZONE.FIELD, 1,
-                                         Match.CardType(Island)
+                           + Verbs.Tutor(Zone.Field(Get.You()),
+                                         1,
+                                         Match.CardType(Forest)
                                          | Match.CardType(Plains))
                            )
 

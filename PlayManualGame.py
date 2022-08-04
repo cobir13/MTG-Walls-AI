@@ -246,7 +246,7 @@ if __name__ == "__main__":
     import Decklist
     import Choices
     import Cardboard
-    import ZONE
+    import Zone
 
     Choices.AUTOMATION = False
 

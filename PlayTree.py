@@ -24,8 +24,8 @@ class PlayTree:
         #       active_states: states which have options (moves to explore)
         #       loss_states: states where the game has ended in a loss
         #       win_states: states where the game has ended in a win
-        # The i-th player_index within the list gives the set of states for the i-th
-        # total turn of the game (sum of turns that any asking_player has taken).
+        # The i-th index within the list gives the set of states for the i-th
+        # total turn of the game (sum of turns that any player has taken).
         # NOTE: for all of these sets of GameStates, the super_stack is
         # guaranteed to be empty. But the normal stack may have things!
         self.turn_limit = turn_limit  # max number of turns this will test
