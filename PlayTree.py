@@ -21,7 +21,7 @@ class PlayTree:
         # GameStates from the same turn of the game (so identical turnclocks).
         # There are four lists:
         #       intermediate_states: every state reached during the turn
-        #       active_states: states which have options (moves to explore)
+        #       active_states: states which have _options (moves to explore)
         #       loss_states: states where the game has ended in a loss
         #       win_states: states where the game has ended in a win
         # The i-th index within the list gives the set of states for the i-th
@@ -76,7 +76,7 @@ class PlayTree:
         while len(self.get_active(turn)) > 0:
             # remove a random GameState from the active list and explore it
             state: GameState = self.get_active(turn).pop()
-            # options are: cast spell, activate ability, let stack resolve
+            # _options are: cast spell, activate ability, let stack resolve
             activables = state.priority.get_valid_activations()
             castables = state.priority.get_valid_castables()
             # if there are valid actions, make new nodes by taking them

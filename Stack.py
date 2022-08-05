@@ -90,7 +90,7 @@ class StackObject:
             obj = self.obj.copy_as_pointer(state_new)
         else:
             obj = self.obj.copy()
-        # copy options
+        # copy _options
         options = state_orig.copy_arbitrary_list(state_orig, state_new,
                                                  self.choices)
         verb = self.caster_verb

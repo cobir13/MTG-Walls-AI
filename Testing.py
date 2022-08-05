@@ -832,7 +832,7 @@ if __name__ == "__main__":
 
     # Rewind to before casting 2nd Caretaker. Give 1st TWO things to tap.
     game.give_to(game.active.hand[0], Zone.Field)
-    # only one ability, but two options to activate it
+    # only one ability, but two _options to activate it
     stack_abilities = game.active.get_valid_activations()
     assert len(stack_abilities) == 2
     assert stack_abilities[0].player_index == stack_abilities[1].player_index
@@ -854,7 +854,7 @@ if __name__ == "__main__":
     game3 = univ3
     game3.step_untap()
     # 2 Caretakers plus Caryatid in play. 5 possibilities. But Caretakers are
-    # equivalent so we only see 3 options. Good.
+    # equivalent so we only see 3 _options. Good.
     game3_abils = game3.active.get_valid_activations()
     assert len(game3_abils) == 3
     care3_abils = [obj for obj in game3_abils
@@ -1055,136 +1055,141 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
-    # print("Testing Collected Company and simultaneous ETBs")
-    # start_clock = time.perf_counter()
-    #
-    # def cast_and_resolve_company(state):
-    #     # cast Collected Company
-    #     state.pool.add_mana("GGGG")
-    #     state.give_to(Cardboard(Decklist.Company()), Zone.Hand)
-    #     castables = state.get_valid_castables()
-    #     print(castables)
-    #     assert len(castables) == 1
-    #     assert castables[0][1] == []  # no choices to be made, yet
-    #     [on_stack] = castables[0][0].cast(state, castables[0][1])
-    #     print(castables)
-    #     print(on_stack)
-    #     assert len(on_stack.super_stack) == 0
-    #     return on_stack.resolve_top_of_stack()
-    #
-    # game = GameState()
-    # # deck of 6 cards
-    # game.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Axebane()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Battlement()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
-    # # cast Collected Company
-    # universes = cast_and_resolve_company(game)
-    # assert (len(universes) == 4)
-    # for u in universes:
-    #     assert len(u.deck) == 4
-    #     assert len(u.field) == 2
-    #     assert len(u.grave) == 1
-    #     if any([c.has_type(Decklist.Axebane) for c in u.field]):
-    #         assert (
-    #             not any([c.has_type(Decklist.Axebane) for c in u.deck]))
-    #     if any([c.has_type(Decklist.Battlement) for c in u.field]):
-    #         assert (not any(
-    #             [c.has_type(Decklist.Battlement) for c in u.deck]))
-    #     assert (not any([c.has_type(RulesText.Land) for c in u.field]))
-    #
-    # # deck of 6 forests on top, then 10 islands
-    # gameF = GameState()
-    # for _ in range(6):
-    #     gameF.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
-    # for _ in range(10):
-    #     gameF.give_to(Cardboard(Decklist.Island()), Zone.Deck)
-    # # should be forests on top
-    # assert all([c.has_type(Decklist.Forest) for c in gameF.deck[:6]])
-    # # cast Collected Company
-    # universes = cast_and_resolve_company(gameF)
-    # assert len(universes) == 1
-    # u = universes[0]
-    # # now should be islands on top, forests on bottom
-    # assert all([c.has_type(Decklist.Island) for c in u.deck[:10]])
-    # assert all([c.has_type(Decklist.Forest) for c in u.deck[-6:]])
-    # assert len(u.field) == 0
-    # assert len(u.grave) == 1
-    #
-    # # deck of 5 forests on top, one Caretaker, then 10 islands
-    # game1 = GameState()
-    # for _ in range(5):
-    #     game1.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
-    # game1.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
-    # for _ in range(10):
-    #     game1.give_to(Cardboard(Decklist.Island()), Zone.Deck)
-    # assert (len(game1.deck) == 16)
-    # # cast Collected Company
-    # universes = cast_and_resolve_company(game1)
-    # assert (len(universes) == 1)
-    # u = universes[0]
-    # # now should be islands on top, forests on bottom
-    # assert all([c.has_type(Decklist.Island) for c in u.deck[:10]])
-    # assert all([c.has_type(Decklist.Forest) for c in u.deck[-5:]])
-    # assert u.deck[-6].has_type(Decklist.Island)
-    # assert len(u.field) == 1
-    # assert len(u.grave) == 1
-    #
-    # # deck of only 4 cards total, all Caretakers
-    # game4 = GameState()
-    # for _ in range(4):
-    #     game4.give_to(Cardboard(Decklist.Caretaker()), Zone.Deck)
-    # # should be forests on top
-    # assert (len(game4.deck) == 4)
-    # # cast Collected Company
-    # universes = cast_and_resolve_company(game4)
-    # assert (len(universes) == 1)
-    # u = universes[0]
-    # assert (len(u.deck) == 2)
-    # assert (len(u.field) == 2)
-    # assert (len(u.grave) == 1)
-    #
-    # # Does Blossoms trigger correctly? start with 12 cards in deck
-    # game = GameState()
-    # game.give_to(Cardboard(Decklist.Blossoms()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Omens()), Zone.Deck)
-    # for _ in range(10):
-    #     game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
-    # # cast Collected Company
-    # universes = cast_and_resolve_company(game)
-    # assert len(universes) == 2  # two draws could be on stack in either order
-    # u0, u1 = universes
-    # assert (u0 != u1)
-    # while len(u0.stack) > 0:
-    #     [u0] = u0.resolve_top_of_stack()
-    # while len(u1.stack) > 0:
-    #     [u1] = u1.resolve_top_of_stack()
-    # assert u0 == u1
-    # assert len(u0.hand) == 2 and len(u0.deck) == 8
-    #
-    # # Note: if I put two identical Blossoms into play simultaneously, I STILL
-    # # will get two GameStates even though they are identical! And that's ok.
-    # # it's not worth the effort to optimize this out, right now.
-    # game = GameState()
-    # game.give_to(Cardboard(Decklist.Blossoms()), Zone.Deck)
-    # game.give_to(Cardboard(Decklist.Blossoms()), Zone.Deck)
-    # for _ in range(10):
-    #     game.give_to(Cardboard(Decklist.Forest()), Zone.Deck)
-    # # cast Collected Company
-    # universes = cast_and_resolve_company(game)
-    # assert len(universes) == 2  # two draws could be on stack in either order
-    # u0, u1 = universes
-    # assert (u0 == u1)
-    # while len(u0.stack) > 0:
-    #     [u0] = u0.resolve_top_of_stack()
-    # while len(u1.stack) > 0:
-    #     [u1] = u1.resolve_top_of_stack()
-    # assert (u0 == u1)
-    # assert (len(u0.hand) == 2 and len(u0.deck) == 8)
-    #
-    # print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+    print("Testing Collected Company and simultaneous ETBs")
+    start_clock = time.perf_counter()
+
+    def cast_and_resolve_company(state):
+        # cast Collected Company
+        state.active.pool.add_mana("GGGG")
+        state.give_to(Cardboard(Decklist.Company()), Zone.Hand, 0)
+        castables = state.active.get_valid_castables()
+        assert len(castables) == 1
+        # Defer tracks cause, which is None since this is a card being cast.
+        assert castables[0].choices == [None]
+        [on_stack] = castables[0].put_on_stack(state)
+        assert len(on_stack.super_stack) == 0
+        assert len(on_stack.stack) == 1
+        return on_stack.resolve_top_of_stack()
+
+    game = GameState()
+    # deck of 6 cards
+    game.give_to(Cardboard(Decklist.Caretaker()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Caretaker()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Axebane()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Battlement()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop, 0)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game)
+    assert len(universes) == 11
+    # (axe, caretaker)x2. (battle, caretaker)x2. (axe, battle).
+    # (double caretaker). (axe). (battle). (caretaker)x2. (none). that's 11!
+    assert len(set(universes)) == 8
+    num_in_field = [0, 0, 0]
+    for u in universes:
+        assert len(u.active.deck + u.active.field) == 6
+        num_in_field[len(u.active.field)] += 1
+        assert len(u.active.grave) == 1
+        if any([c.has_type(Decklist.Axebane) for c in u.active.field]):
+            assert (
+                not any([c.has_type(Decklist.Axebane) for c in u.active.deck]))
+        if any([c.has_type(Decklist.Battlement) for c in u.active.field]):
+            assert (not any(
+                [c.has_type(Decklist.Battlement) for c in u.active.deck]))
+        assert (not any([c.has_type(RulesText.Land) for c in u.active.field]))
+    assert num_in_field == [1, 4, 6]
+
+    # deck of 5 forests on top, one Caretaker, then 10 islands
+    game1 = GameState()
+    for _ in range(5):
+        game1.give_to(Cardboard(Decklist.Forest()), Zone.DeckBottom, 0)
+    game1.give_to(Cardboard(Decklist.Caretaker()), Zone.DeckBottom, 0)
+    for _ in range(10):
+        game1.give_to(Cardboard(Decklist.Island()), Zone.DeckBottom, 0)
+    assert (len(game1.active.deck) == 16)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game1)
+    assert (len(universes) == 2)
+    u = [g for g in universes if g.active.field != []][0]
+    # now should be islands on top, forests on bottom
+    assert all([c.has_type(Decklist.Island) for c in u.active.deck[:10]])
+    assert all([c.has_type(Decklist.Forest) for c in u.active.deck[-5:]])
+    assert u.active.deck[-6].has_type(Decklist.Island)
+    assert len(u.active.field) == 1
+    assert len(u.active.grave) == 1
+
+    # deck of only 4 cards total, all Caretakers
+    game4 = GameState()
+    for _ in range(4):
+        game4.give_to(Cardboard(Decklist.Caretaker()), Zone.DeckTop, 0)
+    assert (len(game4.active.deck) == 4)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game4)
+    # Choices DOES avoid returning AB and BA. But it returns A+B1 and A+B2
+    # even if B1 and B2 are equivalent cards. So (4*3)/2 + 4 + 1
+    assert len(universes) == 11
+    for u in universes:
+        assert len(u.active.deck) + len(u.active.field) == 4
+        assert len(u.active.grave) == 1
+
+    # Does Blossoms trigger correctly? start with 12 cards in deck
+    game = GameState()
+    game.give_to(Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Omens()), Zone.DeckTop, 0)
+    for _ in range(10):
+        game.give_to(Cardboard(Decklist.Forest()), Zone.DeckBottom, 0)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game)
+    # (omens, blossons) triggers; reverse order; just one or other; neither.
+    assert len(universes) == 5  # two draws could be on stack in either order
+    u0, u1 = universes
+    assert (u0 != u1)
+    while len(u0.stack) > 0:
+        [u0] = u0.resolve_top_of_stack()
+    while len(u1.stack) > 0:
+        [u1] = u1.resolve_top_of_stack()
+    assert u0 == u1
+    assert len(u0.active.hand) == 2 and len(u0.active.deck) == 8
+
+    # Note: if I put two identical Blossoms into play simultaneously, I STILL
+    # will get two GameStates even though they are identical! And that's ok.
+    # it's not worth the effort to optimize this out, right now.
+    game = GameState()
+    game.give_to(Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
+    game.give_to(Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
+    for _ in range(10):
+        game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop, 0)
+    # cast Collected Company
+    universes = cast_and_resolve_company(game)
+    assert len(universes) == 2  # two draws could be on stack in either order
+    u0, u1 = universes
+    assert (u0 == u1)
+    while len(u0.stack) > 0:
+        [u0] = u0.resolve_top_of_stack()
+    while len(u1.stack) > 0:
+        [u1] = u1.resolve_top_of_stack()
+    assert (u0 == u1)
+    assert (len(u0.active.hand) == 2 and len(u0.active.deck) == 8)
+
+    # deck of 6 forests on top, then 10 islands. remember: -1 is top of deck.
+    gameF = GameState()
+    for _ in range(6):
+        gameF.give_to(Cardboard(Decklist.Forest()), Zone.DeckBottom, 0)
+    for _ in range(10):
+        gameF.give_to(Cardboard(Decklist.Island()), Zone.DeckBottom, 0)
+    # should be forests on top
+    assert all([c.has_type(Decklist.Forest) for c in gameF.active.deck[-6:]])
+    # cast Collected Company
+    universes = cast_and_resolve_company(gameF)
+    assert len(universes) == 1
+    u = universes[0]
+    # now should be islands on top, forests on bottom
+    assert all([c.has_type(Decklist.Island) for c in u.active.deck[-10:]])
+    assert all([c.has_type(Decklist.Forest) for c in u.active.deck[:6]])
+    assert len(u.active.field) == 0
+    assert len(u.active.grave) == 1
+
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
 

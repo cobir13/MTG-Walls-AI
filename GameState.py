@@ -301,9 +301,8 @@ class GameState:
         if isinstance(obj.obj, Cardboard):
             dest = obj.obj.rules_text.cast_destination.copy()
             dest.player = obj.player_index  # update to give to correct player
-            for tup in tuple_list:
-                g: GameState = tup[0]
-                MoveToZone(dest).do_it(g, obj.player_index, obj.obj, [])
+            for gm, pl, cd, ins in tuple_list:
+                MoveToZone(dest).do_it(gm, pl, cd, [])
         # clear the superstack and return!
         results = []
         for tup in tuple_list:
@@ -575,6 +574,10 @@ class Player:
     def add_to_deck(self, card: Cardboard, dist_from_bottom: int):
         """Deck is not sorted but DOES track Zone.location."""
         # deck[0] is bottom, deck[-1] is top
+        if dist_from_bottom < 0:
+            # insert has strange negative indexing. otherwise 0 and -1 would
+            # do the same thing. insert at len(list), not len-1, to be at end.
+            dist_from_bottom+= len(self.deck) + 1
         card.zone = Zone.Deck(self.player_index, dist_from_bottom)
         self.deck.insert(dist_from_bottom, card)
         # update zone locations. mutates, so will also affect pointers.

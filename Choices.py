@@ -19,13 +19,13 @@ class AbortChoiceError(Exception):
 
 def choose_exactly_one(options, source_name: str = "Choose from:") -> list:
     """
-    Given a list of options, return a list of ways to choose
-        exactly one of those options. If there are no ways
-        (e.g. the options-list is empty) then return [].
+    Given a list of _options, return a list of ways to choose
+        exactly one of those _options. If there are no ways
+        (e.g. the _options-list is empty) then return [].
     Either automated (returns all possibilities) or user
         controlled (returns only one possibility).
     Either way, returns a list of selections. Each selection
-        is a single one of the given options.
+        is a single one of the given _options.
     NOTE: if each option is a tuple, the entire tuple will
         be returned as a selection. However, in user
         controlled mode, only the last element of  the tuple
@@ -43,14 +43,14 @@ def choose_exactly_one(options, source_name: str = "Choose from:") -> list:
 def choose_exactly_n(options: list, num_to_choose: int,
                      source_name="Choose from:") -> List[tuple]:
     """
-    Given a list of options, return a list of ways to choose
-        exactly N of those options. If there are no ways
-        (e.g. the options-list is empty) then return [].
+    Given a list of _options, return a list of ways to choose
+        exactly N of those _options. If there are no ways
+        (e.g. the _options-list is empty) then return [].
     Either automated (returns all possibilities) or user
         controlled (returns only one possibility).
     Either way, returns a list of selections, each of which
-        is a tuple containing N options from the list.
-    NOTE: it may not be possible to choose N options. For
+        is a tuple containing N _options from the list.
+    NOTE: it may not be possible to choose N _options. For
         example, you cannot select 5 elements from a list of
         3.  In that case, it will return selections of the
         maximal possible length.
@@ -79,15 +79,15 @@ def choose_exactly_n(options: list, num_to_choose: int,
 def choose_n_or_fewer(options: list, num_to_choose: int,
                       source_name: str = "Choose from:") -> List[tuple]:
     """
-    Given a list of options, return a list of ways to choose
-        up to N of those options. If there are no ways (e.g.
-        the options-list is empty) then return [].
+    Given a list of _options, return a list of ways to choose
+        up to N of those _options. If there are no ways (e.g.
+        the _options-list is empty) then return [].
     Either automated (give all possibilities, including the
         empty list) or user-controlled (give only one
         possibility).
     Either way, returns a list of selections, each of which
-        is a tuple containing N or fewer options from the
-        list of options.
+        is a tuple containing N or fewer _options from the
+        list of _options.
     NOTE: if each option is a tuple, in user
         controlled mode, only the last element of the tuple
         will be shown to the user. This allows the code to
@@ -95,7 +95,7 @@ def choose_n_or_fewer(options: list, num_to_choose: int,
     """
     if AUTOMATION:
         # get all tuples with N things. Then also all tuples with N-1.
-        # Enforce that N can never be larger than number of options:
+        # Enforce that N can never be larger than number of _options:
         if num_to_choose > len(options):
             return choose_n_or_fewer(options, len(options))
         # base case: N==0. Return empty tuple
@@ -114,15 +114,15 @@ def choose_n_or_fewer(options: list, num_to_choose: int,
 def run_gui_to_select(options, name, num_to_select, can_be_less):
     """
     Makes a pop-up window to allow the user to select from a
-    list of options.
+    list of _options.
     `name` CURRENTLY DOES NOTHING, BUT EVENTUALLY defines
     pop-up title.
-    `num_to_select` defines the maximum number of options the
+    `num_to_select` defines the maximum number of _options the
     user can choose.
     `can_be_less` controls whether the user must choose
         exactly `num_to_select` or whether they can choose
-        fewer options.
-    Returns: a list of selected elements from `options`.
+        fewer _options.
+    Returns: a list of selected elements from `_options`.
     NOTE: if each option is a tuple, the entire tuple will be
         returned as a selection. However, in user-controlled
         mode, only the last element of the tuple will be shown
@@ -155,7 +155,7 @@ def run_gui_to_select(options, name, num_to_select, can_be_less):
             text_var.set(
                 "%s: %i remaining" % (instr, num_to_select - sum(selected)))
 
-    # add buttons (and highlight-frames) for each of the options
+    # add buttons (and highlight-frames) for each of the _options
     for ii, obj in enumerate(options):
         if isinstance(obj, tuple):
             obj = obj[-1]

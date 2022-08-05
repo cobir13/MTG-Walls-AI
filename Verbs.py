@@ -443,7 +443,7 @@ class ApplyToPlayer(Verb):
 
 
 class Modal(Verb):
-    """Choose between various Verbs. All options should require
+    """Choose between various Verbs. All _options should require
     the same number of inputs. Mode is chosen at cast-time,
     not on resolution."""
 
@@ -586,80 +586,83 @@ class VerbManyTimes(Verb):
         return str(self.verb) + " x " + str(self.num_to_repeat)
 
 
-# # ----------
-# class VerbOnSplitList(Verb):
-#     def __init__(self, act_on_chosen: AffectSourceCard,
-#                  act_on_non_chosen: AffectSourceCard | None,
-#                  chooser: Get.Chooser):
-#         super().__init__()
-#         assert act_on_non_chosen.num_inputs == 0
-#         assert act_on_chosen.num_inputs == 0
-#         self.sub_verbs = [act_on_chosen, act_on_non_chosen]
-#         # chooser isn't in getter_list because ALL the options are being used
-#         # up one way or another, so it's not working like a normal getter.
-#         self.chooser = chooser
-#
-#     def can_be_done(self, state: GameState, subject: Cardboard,
-#                     choices: list) -> bool:
-#         # Note that NO INPUTS ARE BEING PASSED TO THE SUB_VERBS. This is
-#         # because they are assumed to take no inputs and act only on their
-#         # subjects.
-#         all_options = self.chooser.getter.get(state, subject)
-#         act_on_chosen, act_on_non_chosen = self.sub_verbs
-#         for card in all_options:
-#             if card in choices:
-#                 if not act_on_chosen.can_be_done(state, card, []):
-#                     return False
-#             else:
-#                 if not act_on_non_chosen.can_be_done(state, card, []):
-#                     return False
-#         return True
-#
-#     def do_it(self, state: GameState, subject: Cardboard,
-#               choices: list) -> List[Tuple[GameState, Cardboard, list]]:
-#         """
-#         This function will appy the act_on_chosen Verb to each card in
-#         choices, and will apply the act_on_non_chosen to each other card
-#         in the list of options (which is found from the getter within
-#         the chooser, to find the list the chooser is choosing from).
-#         """
-#         all_options = self.chooser.getter.get(state, subject)
-#         act_on_chosen, act_on_non_chosen = self.sub_verbs
-#         # put all_options and also choices into tuple_list to track them
-#         tuple_list = [(state, asking_card, all_options + choices)]
-#         for ii in range(len(all_options)):
-#             new_tuples = []
-#             for g, s, concat in tuple_list:
-#                 chosen_copied = concat[len(all_options):]
-#                 option = concat[ii]
-#                 # check if this option has been chosen or not
-#                 if option in chosen_copied:
-#                     new_tuples += act_on_chosen.do_it(g, option, concat)
-#                     # Note: act_on_chosen has num_inputs == 0 so it will
-#                     # return (copies of) the contatenated list, without
-#                     # eating through any. Same with act_on_non_chosen below.
-#                 else:
-#                     new_tuples += act_on_non_chosen.do_it(g, option, concat)
-#             tuple_list = new_tuples  # overwrite
-#         return [(g, s, []) for g, s, _ in tuple_list]
-#
-#     def __str__(self):
-#         act_on_chosen, act_on_non_chosen = self.sub_verbs
-#         act_yes = str(act_on_chosen)
-#         comp = "<=" if self.chooser.can_be_less else ""
-#         num = self.chooser.num_to_choose
-#         get_str = str(self.chooser.getter)
-#         act_no = str(act_on_non_chosen)
-#         s = "%s on %s%i of %s else %s" % (act_yes, comp, num, get_str,act_no)
-#         return s
-#
-#     def get_input_options(self, state: GameState,
-#                           asking_card: Cardboard = None, cause=None):
-#         list_of_chosen_tuples = self.chooser.get(state, asking_card)
-#         # I need to return a list of lists. Each sublist has one element: a
-#         # tuple of the chosen cards. Right now I have a list of tuples, not
-#         # a list of lists of tuples.
-#         return [[tup] for tup in list_of_chosen_tuples]
+# ----------
+
+class VerbOnSplitList(Verb):
+    def __init__(self, chooser: Get.Chooser,
+                 act_on_chosen: AffectSourceCard,
+                 act_on_non_chosen: AffectSourceCard | None):
+        """Looks at all valid _options for the chooser. On casting,
+        the chooser selects some of them to apply the `act_on_chosen`
+        verb to, and applies the `act_on_non_chosen` verb to the rest."""
+        super().__init__(1, act_on_chosen.copies or act_on_non_chosen.copies)
+        assert act_on_non_chosen.num_inputs == 0
+        assert act_on_chosen.num_inputs == 0
+        self.act_on_chosen: AffectSourceCard = act_on_chosen
+        self.act_on_non_chosen: AffectSourceCard = act_on_non_chosen
+        self.chooser = chooser
+
+    # noinspection PyTypeChecker
+    def get_input_options(self, state: GameState, player: int,
+                          source: Cardboard | None, cause: Cardboard | None
+                          ) -> List[INPUTS]:
+        # chooser gives list of tuples of cards. I want list of lists of tuples
+        return [[x] for x in self.chooser.get(state, player, source)]
+
+    def can_be_done(self, state: GameState, player: int,
+                    source: Cardboard | None, other_inputs: INPUTS) -> bool:
+        """first element of inputs is the tuple of chosen cards."""
+        if not super().can_be_done(state, player, source, other_inputs):
+            return False
+        chosen = other_inputs[0]
+        all_options = self.chooser.options(state, player, source)
+        for card in all_options:
+            if card in chosen:
+                if not self.act_on_chosen.can_be_done(state, player, card):
+                    return False
+            else:
+                if not self.act_on_non_chosen.can_be_done(state, player, card):
+                    return False
+        return True
+
+    def do_it(self, state: GameState, player: int,
+              source: Cardboard | None, other_inputs: INPUTS) -> List[RESULT]:
+        """The first element of other_inputs are the chosen cards."""
+        chosen: Tuple[Cardboard] = other_inputs[0]
+        all_options: List[Cardboard] = self.chooser.options(state, player,
+                                                            source)
+        # chosen first, then non-chosen second.
+        sequenced = list(chosen) + [c for c in all_options if c not in chosen]
+        concat = sequenced + [source] + other_inputs[1:]
+        if self.copies:
+            state2, concat2 = state.copy_and_track(concat)
+            tuple_list = [(state2, player, source, concat2)]
+        else:
+            tuple_list = [(state, player, source, concat)]
+        # do the chosen ones first. knock off the inputs as they're used
+        for _ in range(len(chosen)):
+            new_list = []
+            for gm, pl, cd, ins in tuple_list:
+                new_list += self.act_on_chosen.do_it(gm, pl, ins[0], ins[1:])
+            tuple_list = new_list
+        # now the non-chosen ones
+        for _ in range(len(all_options) - len(chosen)):
+            new_list = []
+            for gm, pl, cd, ins in tuple_list:
+                new_list += self.act_on_non_chosen.do_it(gm, pl,
+                                                         ins[0], ins[1:])
+            tuple_list = new_list
+        # We've done all the work, but still need to extract the original
+        # source to return! should now be first element of remaining inputs
+        return [(g, plr, ins[-1], ins[:-1])
+                for g, plr, trg, ins in tuple_list]
+
+    def __str__(self):
+        act_yes = str(self.act_on_chosen)
+        choose = str(self.chooser)
+        act_no = str(self.act_on_non_chosen)
+        s = "%s on %s else %s" % (act_yes, choose, act_no)
+        return s
 
 
 # # noinspection PyMissingConstructor
@@ -949,7 +952,14 @@ class MoveToZone(AffectSourceCard):
         # remove from origin zone
         self.origin.remove_from_zone(state, source)
         # add to destination. (also resets source's zone to be destination.)
-        self.destination.add_to_zone(state, source)
+        if not self.destination.is_single:
+            new_dest = self.destination.get_absolute_zones(state, player,
+                                                           source)
+            if len(new_dest) != 1:
+                raise Zone.Zone.NotSpecificPlayerError
+            new_dest[0].add_to_zone(state, source)
+        else:
+            self.destination.add_to_zone(state, source)
         # any time you change zones, reset the cardboard parameters
         source.reset_to_default_cardboard()
         # add triggers to super_stack, reduce length of input list

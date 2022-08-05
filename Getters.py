@@ -296,7 +296,7 @@ class Chooser(Getter):
                  options: GetCards | GetPlayers | List[TARGET],
                  num_to_choose: Integer | int, can_be_fewer: bool):
         super().__init__(False)
-        self.options: GetCards | GetPlayers | List[TARGET] = options
+        self._options: GetCards | GetPlayers | List[TARGET] = options
         if isinstance(num_to_choose, int):
             num_to_choose = ConstInteger(num_to_choose)
         self.num_to_choose: Integer = num_to_choose
@@ -307,11 +307,7 @@ class Chooser(Getter):
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
-        if isinstance(self.options, (GetCards, GetPlayers)):
-            options: List[TARGET] = self.options.get(state, asking_player,
-                                                     asking_card)
-        else:
-            options: List[TARGET] = self.options
+        options = self.options(state, asking_player, asking_card)
         num = self.num_to_choose.get(state, asking_player, asking_card)
         if self.can_be_less:
             return Choices.choose_n_or_fewer(options, num)
@@ -325,7 +321,14 @@ class Chooser(Getter):
     def __str__(self):
         less_ok = "<=" if self.can_be_less else ""
         n = str(self.num_to_choose)
-        return "Choose(%s%s from %s)" % (less_ok, n, str(self.options))
+        return "Choose(%s%s from %s)" % (less_ok, n, str(self._options))
+
+    def options(self, state: GameState, asking_player: int,
+                asking_card: Cardboard) -> List[TARGET]:
+        if isinstance(self._options, (GetCards, GetPlayers)):
+            return self._options.get(state, asking_player, asking_card)
+        else:
+            return self._options
 
 
 class Target(Chooser):
@@ -347,12 +350,12 @@ class Each(Chooser):
         """returns a list of all choices that have been selected. Each element
         of the list is a tuple of length N, where N is the number of items
         requested."""
-        if isinstance(self.options, (GetCards, GetPlayers)):
-            options: List[TARGET] = self.options.get(state, asking_player,
-                                                     asking_card)
+        if isinstance(self._options, (GetCards, GetPlayers)):
+            options: List[TARGET] = self._options.get(state, asking_player,
+                                                      asking_card)
         else:
-            options: List[TARGET] = self.options
+            options: List[TARGET] = self._options
         return [tuple(options)]
 
     def __str__(self):
-        return "All %s" % str(self.options)
+        return "All %s" % str(self._options)

@@ -166,8 +166,8 @@ class Deck(Zone):
             raise Zone.NotSpecificPlayerError
         elif isinstance(self.player, int):
             dist_from_bottom = self.location
-            if dist_from_bottom is None:
-                dist_from_bottom = -1  # add to top of deck by default
+            if dist_from_bottom is None:  # add to top of deck by default
+                dist_from_bottom = - 1
             state.player_list[self.player].add_to_deck(card, dist_from_bottom)
 
     def remove_from_zone(self, state: GameState, card: Cardboard):
@@ -197,6 +197,12 @@ class DeckTop(Deck):
     # index -1 is the top of the deck. Index 0 is the bottom.
     def __init__(self, player: int | None | Getters.GetPlayers):
         super().__init__(player, -1)
+
+
+class DeckTopN(Deck):
+    # index -1 is the top of the deck. Index 0 is the bottom.
+    def __init__(self, player, depth: int):
+        super().__init__(player, slice(-1*depth, None, None))
 
 
 class Hand(Zone):

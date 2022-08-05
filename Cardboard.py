@@ -171,7 +171,7 @@ class Cardboard:
         one for each valid way to cast this Cardboard.
         This function doesn't ACTUALLY add them to stack
         or pay their costs, it just works out the payment
-        options and target options and makes usable
+        _options and target _options and makes usable
         StackObjects accordingly. If the card cannot be
         cast, the empty list is returned."""
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
