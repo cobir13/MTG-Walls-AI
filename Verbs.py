@@ -28,14 +28,6 @@ import Stack
 import Choices
 
 
-class WinTheGameError(Exception):
-    pass
-
-
-class LoseTheGameError(Exception):
-    pass
-
-
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 
@@ -177,7 +169,7 @@ class MultiVerb(Verb):
         return " & ".join([v.__str__() for v in self.sub_verbs])
 
 
-class AffectController(Verb):
+class AffectPlayer(Verb):
     def __init__(self):
         """Subject is the asking_player of the Verb"""
         super().__init__(0, False, )  # mutates, doesn't copy
@@ -349,7 +341,8 @@ class ApplyToCard(Verb):
         return self.verb.is_type(verb_type)
 
     def __str__(self):
-        return "%s(%s)" % (str(self.verb), str(self.chooser))
+        return "%s(%s%s)" % (str(self.verb), str(self.chooser),
+                             str(self.option_getter))
 
 
 class ApplyToPlayer(Verb):
@@ -455,7 +448,8 @@ class ApplyToPlayer(Verb):
         return self.verb.is_type(verb_type)
 
     def __str__(self):
-        return "%s(%s)" % (str(self.verb), str(self.chooser))
+        return "%s(%s%s)" % (str(self.verb), str(self.chooser),
+                             str(self.option_getter))
 
 
 class Modal(Verb):
@@ -481,14 +475,17 @@ class Modal(Verb):
         # step 1: choose a verb or set of verbs
         possible = [(ii, str(v)) for ii, v in enumerate(self.sub_verbs)]
         num: int = self.num_to_choose.get(state, player, source)
+        decider = state.player_list[player].decision_maker
         modes: List[Tuple[Tuple[int, str]]]
         if self.can_be_less:
-            modes = Choices.choose_n_or_fewer(possible, num)
+            modes = Choices.choose_n_or_fewer(possible, num, setting=decider)
         else:
             if num == 1:
-                modes = [(c,) for c in Choices.choose_exactly_one(possible)]
+                modes = [(c,) for c in
+                         Choices.choose_exactly_one(possible, setting=decider)]
             else:
-                modes = Choices.choose_exactly_n(possible, num)
+                modes = Choices.choose_exactly_n(possible, num,
+                                                 setting=decider)
         # step 2: for each chosen verb, return verb plus ITS required inputs
         choices: List[INPUTS] = []
         for set_of_verbs in modes:  # Tuple[Tuple[int, str]]
@@ -600,89 +597,6 @@ class VerbManyTimes(Verb):
 
     def __str__(self):
         return str(self.verb) + " x " + str(self.num_to_repeat)
-
-
-# ----------
-#
-# class VerbOnSplitList(Verb):
-#     def __init__(self, chooser: Get.Chooser,
-#                  act_on_chosen: AffectSourceCard,
-#                  act_on_non_chosen: AffectSourceCard | None):
-#         """Looks at all valid options for the chooser. On casting,
-#         the chooser selects some of them to apply the `act_on_chosen`
-#         verb to, and applies the `act_on_non_chosen` verb to the rest."""
-#         super().__init__(1, act_on_chosen.copies or act_on_non_chosen.copies)
-#         assert act_on_non_chosen.num_inputs == 0
-#         assert act_on_chosen.num_inputs == 0
-#         self.act_on_chosen: AffectSourceCard = act_on_chosen
-#         self.act_on_non_chosen: AffectSourceCard = act_on_non_chosen
-#         self.chooser = chooser
-#
-#     # noinspection PyTypeChecker
-#     def get_input_options(self, state: GameState, player: int,
-#                           source: Cardboard | None, cause: Cardboard | None
-#                           ) -> List[INPUTS]:
-#         # chooser gives list of tuples of cards. I want list of lists
-#         of tuples
-#         return [[x] for x in self.chooser.get(state, player, source)]
-#
-#     def can_be_done(self, state: GameState, player: int,
-#                     source: Cardboard | None, other_inputs: INPUTS) -> bool:
-#         """first element of inputs is the tuple of chosen cards."""
-#         if not super().can_be_done(state, player, source, other_inputs):
-#             return False
-#         chosen = other_inputs[0]
-#         all_options = self.chooser.options(state, player, source)
-#         for card in all_options:
-#             if card in chosen:
-#                 if not self.act_on_chosen.can_be_done(state, player, card):
-#                     return False
-#             else:
-#                 if not self.act_on_non_chosen.can_be_done(state, player,
-#                 card):
-#                     return False
-#         return True
-#
-#     def do_it(self, state: GameState, player: int,
-#               source: Cardboard | None, other_inputs: INPUTS
-#               ) -> List[RESULT]:
-#         """The first element of other_inputs are the chosen cards."""
-#         chosen: Tuple[Cardboard] = other_inputs[0]
-#         all_options: List[Cardboard] = self.chooser.options(state, player,
-#                                                             source)
-#         # chosen first, then non-chosen second.
-#         sequenced = list(chosen) + [c for c in all_options
-#         if c not in chosen]
-#         concat = sequenced + [source] + other_inputs[1:]
-#         if self.copies:
-#             state2, concat2 = state.copy_and_track(concat)
-#             tuple_list = [(state2, player, source, concat2)]
-#         else:
-#             tuple_list = [(state, player, source, concat)]
-#         # do the chosen ones first. knock off the inputs as they're used
-#         for _ in range(len(chosen)):
-#             new_list = []
-#             for gm, pl, cd, ins in tuple_list:
-#                 new_list += self.act_on_chosen.do_it(gm, pl, ins[0], ins[1:])
-#             tuple_list = new_list
-#         # now the non-chosen ones
-#         for _ in range(len(all_options) - len(chosen)):
-#             new_list = []
-#             for gm, pl, cd, ins in tuple_list:
-#                 new_list += self.act_on_non_chosen.do_it(gm, pl,
-#                                                          ins[0], ins[1:])
-#             tuple_list = new_list
-#         # We've done all the work, but still need to extract the original
-#         # source to return! should now be first element of remaining inputs
-#         return [(g, plr, ins[-1], ins[:-1])
-#                 for g, plr, trg, ins in tuple_list]
-#
-#     def __str__(self):
-#         act_yes = str(self.act_on_chosen)
-#         choose = str(self.chooser)
-#         act_no = str(self.act_on_non_chosen)
-#         s = "%s on %s else %s" % (act_yes, choose, act_no)
-#         return s
 
 
 class LookDoAndDo(Verb):
@@ -805,7 +719,7 @@ class NullVerb(Verb):
         return ""
 
 
-class PayMana(AffectController):
+class PayMana(AffectPlayer):
     """deducts the given amount of mana from the Player's
     mana pool."""
 
@@ -841,8 +755,8 @@ class PayMana(AffectController):
             state.events_since_previous += text
 
 
-class AddMana(AffectController):
-    """adds the given amount of mana to the GameState's mana pool"""
+class AddMana(AffectPlayer):
+    """adds the given amount of mana to the player's mana pool"""
 
     def __init__(self, mana_string: Get.String | str):
         super().__init__()
@@ -865,9 +779,9 @@ class AddMana(AffectController):
             state.events_since_previous += text
 
 
-class LoseLife(AffectController):
+class LoseLife(AffectPlayer):
     def __init__(self, damage_getter: Get.Integer | int):
-        """The subject asking_player loses the given amount of life"""
+        """The subject player loses the given amount of life"""
         super().__init__()
         if isinstance(damage_getter, int):
             damage_getter = Get.ConstInteger(damage_getter)
@@ -886,9 +800,9 @@ class LoseLife(AffectController):
             state.events_since_previous += text
 
 
-class GainLife(AffectController):
+class GainLife(AffectPlayer):
     def __init__(self, amount_getter: Get.Integer | int):
-        """The subject asking_player gains the given amount of life"""
+        """The subject player gains the given amount of life"""
         super().__init__()
         if isinstance(amount_getter, int):
             amount_getter = Get.ConstInteger(amount_getter)
@@ -906,6 +820,65 @@ class GainLife(AffectController):
                                                              source)
             state.events_since_previous += text
 
+
+class DamageToPlayer(AffectPlayer):
+    def __init__(self, amount_getter: Get.Integer | int):
+        """The subject asking_player gains the given amount of life"""
+        super().__init__()
+        if isinstance(amount_getter, int):
+            amount_getter = Get.ConstInteger(amount_getter)
+        self.amount_getter: Get.Integer = amount_getter
+
+    def do_it(self, state, player, source, other_inputs=[]):
+        amount = self.amount_getter.get(state, player, source)
+        LoseLife(amount).do_it(state, player, source, [])
+        keywords = Get.Keywords().get(state, source.player_index, source)
+        if "lifelink" in keywords:
+            GainLife(amount).do_it(state, source.player_index, source, [])
+        return super().do_it(state, player, source, other_inputs)
+
+    def add_self_to_state_history(self, state, player, source, other_inputs):
+        if state.is_tracking_history:
+            amount = self.amount_getter.get(state, player, source)
+            text = "\n%s dealt %i damage to player%i" % (str(source),
+                                                         amount, player)
+            state.events_since_previous += text
+
+
+class LoseTheGame(AffectPlayer):
+
+    def do_it(self, state, player, source, other_inputs=[]):
+        state.player_list[player].victory_status = "L"
+        # if everyone else has lost, the last player standing wins!
+        still_playing = [pl for pl in state.player_list
+                         if pl.victory_status == ""]
+        if len(still_playing) == 1:
+            WinTheGame().do_it(state, still_playing[0].player_index, None, [])
+        return super().do_it(state, player, source, other_inputs)
+
+    def add_self_to_state_history(self, state, player, source, other_inputs):
+        if state.is_tracking_history:
+            text = "\nPlayer %i loses the game!" % player
+            state.events_since_previous += text
+
+
+class WinTheGame(AffectPlayer):
+
+    def do_it(self, state, player, source, other_inputs=[]):
+        state.player_list[player].victory_status = "W"
+        # all other players automatically lose
+        for pl in state.player_list:
+            if pl.victory_status == "":
+                LoseTheGame().do_it(state, pl.player_index, None, [])
+        return super().do_it(state, player, source, other_inputs)
+
+    def add_self_to_state_history(self, state, player, source, other_inputs):
+        if state.is_tracking_history:
+            text = "\nPlayer %i wins the game!" % player
+            state.events_since_previous += text
+
+
+# ----------
 
 class Tap(AffectSourceCard):
     """taps the source card if it was not already tapped."""
@@ -998,7 +971,7 @@ class ActivateOnlyAsSorcery(Verb):
         return  # doesn't mark itself as having done anything
 
 
-class Shuffle(AffectController):
+class Shuffle(AffectPlayer):
     """Shuffles the deck of given player."""
 
     def do_it(self, state, player, source, other_inputs=[]):
@@ -1071,7 +1044,7 @@ class MoveToZone(AffectSourceCard):
         return "MoveTo" + str(self.destination)
 
 
-class DrawCard(AffectController):
+class DrawCard(AffectPlayer):
     """The player draws from the top (index -1) of the deck"""
 
     def can_be_done(self, state, player, source, other_inputs=[]) -> bool:
@@ -1084,13 +1057,13 @@ class DrawCard(AffectController):
             mover = MoveToZone(Zone.Hand(player))
             # move the card using MoveToZone, so as to trigger move triggers
             mover.do_it(state, player, top_card_list[0], [])
-            # add triggers to super_stack, reduce length of input list
-            return super().do_it(state, player, source, other_inputs)
         else:
-            raise LoseTheGameError
+            state.player_list[player].victory_status = "L"
+        # add triggers to super_stack, reduce length of input list
+        return super().do_it(state, player, source, other_inputs)
 
 
-class MarkAsPlayedLand(AffectController):
+class MarkAsPlayedLand(AffectPlayer):
     """Doesn't actually move any cards, just toggles the
     gamestate to say that the asking_player of `subject` has
     played a land this turn"""
@@ -1138,7 +1111,7 @@ class Destroy(AffectSourceCard):
 
 # ----------
 
-class SearchDeck(AffectController):
+class SearchDeck(AffectPlayer):
     def __init__(self, zone_to_move_to: Zone.Zone, num_to_find: int,
                  pattern: Match.Pattern):
         self.chooser = Get.Chooser(pattern, num_to_find, can_be_fewer=True)

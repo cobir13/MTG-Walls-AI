@@ -549,12 +549,14 @@ if __name__ == "__main__":
     assert len(tree1.get_active()) == 1
     assert len(tree1.get_intermediate(2)) == 1
     assert len(tree1.get_intermediate()) == 1
-    # try untap and upkeep
-    try:
-        tree1.beginning_phase_for_all_valid_states()
-        assert False  # SHOULD throw error, because drawing from empty library
-    except Verbs.LoseTheGameError:
-        assert True
+    assert len(tree1.get_finished()) == 0
+    # try untap and upkeep. expect game_over because draw from empty deck
+    tree1.beginning_phase_for_all_valid_states()
+    assert len(tree1.get_active()) == 0
+    assert len(tree1.get_intermediate()) == 1  # new turn so only 1 this turn.
+    assert len(tree1.get_finished()) == 1
+    assert tree1.get_finished()[0].game_over
+    assert tree1.get_finished()[0].active.victory_status == "L"
 
     tree_game = carygame1.copy()
     tree_game.active.turn_count = 1  # to simplify, roll back to earlier turn
@@ -573,7 +575,8 @@ if __name__ == "__main__":
     assert all([len(gs.active.hand) == 3 for gs in tree2.get_active()])
 
     tree2.beginning_phase_for_all_valid_states()
-    assert len(tree2.active_states) == 3  # turns 0, 1, 2
+    # noinspection PyProtectedMember
+    assert len(tree2._active_states) == 3  # turns 0, 1, 2
     assert len(tree2.get_active()) == 1
     assert len(tree2.get_active(1)) == 1
     assert len(tree2.get_intermediate()) == 1

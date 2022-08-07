@@ -10,15 +10,14 @@ import itertools
 # import tkinter.filedialog
 import tkinter as tk
 
-AUTOMATION = True
-
 
 class AbortChoiceError(Exception):
     pass
 
 
 def choose_exactly_one(options: list | tuple,
-                       source_name: str = "Choose from:") -> list:
+                       source_name: str = "Choose from:",
+                       setting: str = "try_all") -> list:
     """
     Given a list of _options, return a list of ways to choose
         exactly one of those _options. If there are no ways
@@ -33,16 +32,19 @@ def choose_exactly_one(options: list | tuple,
         will be shown to the user. This allows the code to
         pass a tuple of (backend info, user-viewable info).
     """
-    if AUTOMATION:
+    if setting == "try_all":
         return options
-    else:
+    elif setting == "try_first":
+        return options[:1]
+    elif setting == "manual":
         if len(options) == 1 or len(options) == 0:
             return options
         return run_gui_to_select(options, source_name, 1, False)
 
 
 def choose_exactly_n(options: list | tuple, num_to_choose: int,
-                     source_name="Choose from:") -> List[tuple]:
+                     source_name="Choose from:",
+                     setting: str = "try_all") -> List[tuple]:
     """
     Given a list of _options, return a list of ways to choose
         exactly N of those _options. If there are no ways
@@ -61,12 +63,14 @@ def choose_exactly_n(options: list | tuple, num_to_choose: int,
         shown to the user. This allows the code to pass a
         tuple of (backend info, user-viewable info).
     """
-    if AUTOMATION:
+    if setting == "try_all":
         if num_to_choose > len(options):
             num_to_choose = len(options)
         # exactly N only
         return list(itertools.combinations(options, num_to_choose))
-    else:
+    elif setting == "try_first":
+        return options[:num_to_choose]
+    elif setting == "manual":
         if len(options) == 0:
             return [()]
         elif len(options) == 1:
@@ -78,7 +82,8 @@ def choose_exactly_n(options: list | tuple, num_to_choose: int,
 
 
 def choose_n_or_fewer(options: list | tuple, num_to_choose: int,
-                      source_name: str = "Choose from:") -> List[tuple]:
+                      source_name: str = "Choose from:",
+                      setting: str = "try_all") -> List[tuple]:
     """
     Given a list of _options, return a list of ways to choose
         up to N of those _options. If there are no ways (e.g.
@@ -94,7 +99,7 @@ def choose_n_or_fewer(options: list | tuple, num_to_choose: int,
         will be shown to the user. This allows the code to
         pass a tuple of (backend info, user-viewable info).
     """
-    if AUTOMATION:
+    if setting == "try_all":
         # get all tuples with N things. Then also all tuples with N-1.
         # Enforce that N can never be larger than number of _options:
         if num_to_choose > len(options):
@@ -105,11 +110,13 @@ def choose_n_or_fewer(options: list | tuple, num_to_choose: int,
         # recurse: Get all pairs of size exactly N, plus all shorter pairs
         exactly_n = list(itertools.combinations(options, num_to_choose))
         return exactly_n + choose_n_or_fewer(options, num_to_choose - 1)
-    else:
+    elif setting == "try_first":
+        return options[:num_to_choose]
+    elif setting == "manual":
         if len(options) == 0:
             return [()]
-        return [tuple(run_gui_to_select(options, source_name, num_to_choose,
-                                        True))]
+        return [tuple(run_gui_to_select(options, source_name,
+                                        num_to_choose, True))]
 
 
 def run_gui_to_select(options, name, num_to_select, can_be_less):

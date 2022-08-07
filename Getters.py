@@ -398,13 +398,15 @@ class Chooser(AllWhich):
         requested."""
         options: tuple = super().pick(options, state, player, card)[0]
         num = self.num_to_choose.get(state, player, card)
+        decider = state.player_list[player].decision_maker
         if self.can_be_less:
-            return Choices.choose_n_or_fewer(options, num)
+            return Choices.choose_n_or_fewer(options, num, setting=decider)
         else:
             if num == 1:
-                return [(c,) for c in Choices.choose_exactly_one(options)]
+                return [(c,) for c in
+                        Choices.choose_exactly_one(options, setting=decider)]
             else:
-                return Choices.choose_exactly_n(options, num)
+                return Choices.choose_exactly_n(options, num, setting=decider)
         # TODO: add equivalence screening?
 
     def __str__(self):

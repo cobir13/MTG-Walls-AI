@@ -94,8 +94,12 @@ class GameState:
         return self.player_list[self.priority_player_index]
 
     @property
-    def total_turns(self):
+    def total_turns(self) -> int:
         return sum([p.turn_count for p in self.player_list])
+
+    @property
+    def game_over(self) -> bool:
+        return not any([pl.victory_status == "" for pl in self.player_list])
 
     def copy_and_track(self, track_list: list | tuple
                        ) -> Tuple[GameState, list | tuple]:
@@ -319,11 +323,21 @@ class GameState:
         if len(self.super_stack) == 0:
             return [self]
         results: List[GameState] = []
+        # active player puts their triggers onto the stack first. So, find the
+        # first player in player-order who has a trigger on the super_stack.
+        player = self.active_player_index
+        theirs = [(ii, trig) for (ii, trig) in enumerate(self.super_stack)
+                  if trig.player_index == player]
+        while len(theirs) == 0:
+            player = player + 1 % len(self.player_list)
+            theirs = [(ii, trig) for (ii, trig) in enumerate(self.super_stack)
+                      if trig.player_index == player]
+            # only back to active player if super_stack==[]. breaks base case.
+            assert player != self.active_player_index
         # pick a super_stack StackTrigger to move to the stack
-        for item in Choices.choose_exactly_one(
-                list(enumerate(self.super_stack)),
-                "Add to stack"):
-            ii = item[0]  # player_index first, then object second
+        maker = self.player_list[player].decision_maker
+        for item in Choices.choose_exactly_one(theirs, "Add to stack", maker):
+            ii = item[0]  # index first, then object second
             state2 = self.copy()
             obj = state2.super_stack.pop(ii)
             if not obj.caster_verb.can_be_done(state2, obj.player_index,
@@ -378,7 +392,7 @@ class GameState:
 
 
 class Player:
-    def __init__(self, state: GameState):
+    def __init__(self, state: GameState, decision_maker: str = "try_all"):
         """Initializer also adds the new Player to the
         GameState's list of players"""
         self.gamestate: GameState = state
@@ -390,11 +404,14 @@ class Player:
         self.num_lands_played: int = 0
         self.num_spells_cast: int = 0  # number of spells you cast this turn
         self.pool: ManaPool = ManaPool("")
+        self.victory_status: str = ""  # "Playing". can also be "W" or "L".
         # game zones
         self.deck: List[Cardboard] = []  # list of Cardboard objects
         self.hand: List[Cardboard] = []  # list of Cardboard objects
         self.field: List[Cardboard] = []  # list of Cardboard objects
         self.grave: List[Cardboard] = []  # list of Cardboard objects
+        # how the player makes decisions. ["try_all", "try_one", or "manual"]
+        self.decision_maker: str = decision_maker
 
     @property
     def is_my_turn(self):
@@ -412,6 +429,8 @@ class Player:
         txt = "Player%i" % self.player_index
         txt += "(ACTIVE)" if self.is_my_turn else ""
         txt += "(PRIORITY)" if self.is_my_priority else ""
+        txt += "(WON)" if self.victory_status == "W" else ""
+        txt += "(LOST)" if self.victory_status == "L" else ""
         txt += "  T:%2i" % self.turn_count
         txt += "  HP:%2i" % self.life
         txt += "  Deck:%2i" % len(self.deck)
@@ -428,6 +447,7 @@ class Player:
         index = "P%i" % self.player_index
         index += "A" if self.is_my_turn else ""
         index += "P" if self.is_my_priority else ""
+        index += "" if self.victory_status == "" else self.victory_status
         turn = "t%i" % self.turn_count
         life = "life%i" % self.life
         land = "land%i" % self.num_lands_played

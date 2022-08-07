@@ -7,7 +7,7 @@ from GameState import GameState
 
 class ManualGame(tk.Tk):
 
-    def __init__(self, startstate):
+    def __init__(self, startstate: GameState):
         super().__init__()
         self.history = [startstate]
         # if you win or lose, game raises an error
