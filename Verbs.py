@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     CAUSE = Cardboard | Player | None
     INPUTS = List[int | Cardboard | StackObject | None |
                   Tuple[int | Cardboard | StackObject | None]]
-    RESULT = Tuple[GameState, int, Cardboard | None, INPUTS]
+    RESULT = Tuple[GameState, int, Cardboard | None, INPUTS]  # or CONTEXT?
 
 import Zone
 import Match as Match
@@ -198,8 +198,11 @@ class AffectController(Verb):
               ) -> List[RESULT]:
         return super().do_it(state, player, source, other_inputs)
 
-    def on(self, subject_chooser: Get.Chooser) -> ApplyToPlayer:
-        return ApplyToPlayer(subject_chooser, self)
+    def on(self, subject_chooser: Get.AllWhich,
+           option_getter: Get.PlayerList, allowed_to_fail: bool = True
+           ) -> ApplyToPlayer:
+        return ApplyToPlayer(subject_chooser, option_getter, self,
+                             allowed_to_fail)
 
 
 class AffectSourceCard(Verb):
@@ -224,8 +227,11 @@ class AffectSourceCard(Verb):
               ) -> List[RESULT]:
         return super().do_it(state, player, source, other_inputs)
 
-    def on(self, subject_chooser: Get.Chooser) -> ApplyToCard:
-        return ApplyToCard(subject_chooser, self)
+    def on(self, subject_chooser: Get.AllWhich,
+           option_getter: Get.CardsFrom, allowed_to_fail: bool = True
+           ) -> ApplyToCard:
+        return ApplyToCard(subject_chooser, option_getter, self,
+                           allowed_to_fail)
 
 
 class ApplyToCard(Verb):
@@ -236,12 +242,15 @@ class ApplyToCard(Verb):
     the sub-verb is applied to all the targets in turn.
     """
 
-    def __init__(self, subject_chooser: Get.Chooser, verb: Verb):
+    def __init__(self, subject_chooser: Get.AllWhich,
+                 option_getter: Get.CardsFrom, verb: Verb,
+                 allowed_to_fail: bool = True):
         super().__init__(1, copies=True)
-        self.chooser = subject_chooser
+        self.chooser: Get.AllWhich = subject_chooser
+        self.option_getter: Get.CardsFrom = option_getter
         self.verb = verb
         assert verb.num_inputs == 0
-        self.allowed_to_fail = self.chooser.can_be_less
+        self.allowed_to_fail = allowed_to_fail
 
     def get_input_options(self, state, player, source, cause
                           ) -> List[INPUTS]:
@@ -256,11 +265,13 @@ class ApplyToCard(Verb):
         In this particular case, the sublists are length 1 and
         contain a tuple of possible targets to apply the subverb
         to.
+        Note that these choices are made at CAST-TIME. If you want
+        them to run at RESOLVE-TIME instead, wrap this in `Defer`.
         """
+        options = self.option_getter.get(state, player, source)
+        choices = self.chooser.pick(options, state, player, source)
         # chooser returns a list of tuples of Cardboards. An input is a
         # LIST of tuples of Cardboards, so wrap each tuple in a list
-        choices: List[Tuple[int | Cardboard | StackObject]]
-        choices = self.chooser.get(state, player, source)
         assert self.verb.num_inputs == 0
         return [[x] for x in choices]
 
@@ -268,10 +279,10 @@ class ApplyToCard(Verb):
         """
         The first element of `other_inputs` is a tuple containing
         targets to use as the single target of the given Verb. If
-        the tuple is empty, the chooser "failed to find" a target.
-        The Verb will not be applied to anything. Still may be ok.
-        If the tuple has many elements, the Verb must be able to
-        be performed on ALL of them.
+        # the tuple is empty, the chooser "failed to find" a target.
+        # The Verb will not be applied to anything. Still may be ok.
+        # If the tuple has many elements, the Verb must be able to
+        # be performed on ALL of them.
         """
         if not super().can_be_done(state, player, source, other_inputs):
             return False  # confirms other_inputs is long enough
@@ -349,34 +360,39 @@ class ApplyToPlayer(Verb):
     the sub-verb is applied to all the players in turn.
     """
 
-    def __init__(self, subject_chooser: Get.Chooser, verb: Verb):
+    def __init__(self, subject_chooser: Get.AllWhich,
+                 option_getter: Get.PlayerList, verb: Verb,
+                 allowed_to_fail: bool = True):
         super().__init__(1, copies=True)
-        self.chooser = subject_chooser
+        self.chooser: Get.AllWhich = subject_chooser
+        self.option_getter: Get.PlayerList = option_getter
         self.verb = verb
         assert verb.num_inputs == 0
-        self.allowed_to_fail = self.chooser.can_be_less
+        self.allowed_to_fail = allowed_to_fail
 
     def get_input_options(self, state, player, source, cause
-                          ) -> List[INPUTS]:
+                          ) -> List[List[Tuple[int]]]:
         """
         In this particular case, the sublists are length 1 and
-        contain a tuple of possible targets to apply the subverb
+        contain a tuple of possible players to apply the subverb
         to.
         """
-        # chooser returns a list of tuples of player indices. An input is a
-        # LIST of tuples of player indices, so wrap each tuple in a list
-        choices = self.chooser.get(state, player, source)
-        assert self.verb.num_inputs == 0
-        return [[x] for x in choices]
+        options: List[Player] = self.option_getter.get(state, player, source)
+        results: List[List[Tuple[int]]] = []
+        for tup in self.chooser.pick(options, state, player, source):
+            tup: Tuple[Player]
+            new_tup: Tuple[int] = tuple([p.player_index for p in tup])
+            results.append([new_tup])
+        return results
 
     def can_be_done(self, state, player, source, other_inputs) -> bool:
         """
         The first element of `other_inputs` is a tuple containing
         targets to use as the `player` of the given Verb. If
-        the tuple is empty, the chooser "failed to find" a target.
-        The Verb will not be applied to anything. Still may be ok.
-        If the tuple has many elements, the Verb must be able to
-        be performed on ALL of those players.
+        # the tuple is empty, the chooser "failed to find" a target.
+        # The Verb will not be applied to anything. Still may be ok.
+        # If the tuple has many elements, the Verb must be able to
+        # be performed on ALL of those players.
         """
         if not super().can_be_done(state, player, source, other_inputs):
             return False  # confirms other_inputs is long enough
@@ -587,27 +603,109 @@ class VerbManyTimes(Verb):
 
 
 # ----------
+#
+# class VerbOnSplitList(Verb):
+#     def __init__(self, chooser: Get.Chooser,
+#                  act_on_chosen: AffectSourceCard,
+#                  act_on_non_chosen: AffectSourceCard | None):
+#         """Looks at all valid options for the chooser. On casting,
+#         the chooser selects some of them to apply the `act_on_chosen`
+#         verb to, and applies the `act_on_non_chosen` verb to the rest."""
+#         super().__init__(1, act_on_chosen.copies or act_on_non_chosen.copies)
+#         assert act_on_non_chosen.num_inputs == 0
+#         assert act_on_chosen.num_inputs == 0
+#         self.act_on_chosen: AffectSourceCard = act_on_chosen
+#         self.act_on_non_chosen: AffectSourceCard = act_on_non_chosen
+#         self.chooser = chooser
+#
+#     # noinspection PyTypeChecker
+#     def get_input_options(self, state: GameState, player: int,
+#                           source: Cardboard | None, cause: Cardboard | None
+#                           ) -> List[INPUTS]:
+#         # chooser gives list of tuples of cards. I want list of lists
+#         of tuples
+#         return [[x] for x in self.chooser.get(state, player, source)]
+#
+#     def can_be_done(self, state: GameState, player: int,
+#                     source: Cardboard | None, other_inputs: INPUTS) -> bool:
+#         """first element of inputs is the tuple of chosen cards."""
+#         if not super().can_be_done(state, player, source, other_inputs):
+#             return False
+#         chosen = other_inputs[0]
+#         all_options = self.chooser.options(state, player, source)
+#         for card in all_options:
+#             if card in chosen:
+#                 if not self.act_on_chosen.can_be_done(state, player, card):
+#                     return False
+#             else:
+#                 if not self.act_on_non_chosen.can_be_done(state, player,
+#                 card):
+#                     return False
+#         return True
+#
+#     def do_it(self, state: GameState, player: int,
+#               source: Cardboard | None, other_inputs: INPUTS
+#               ) -> List[RESULT]:
+#         """The first element of other_inputs are the chosen cards."""
+#         chosen: Tuple[Cardboard] = other_inputs[0]
+#         all_options: List[Cardboard] = self.chooser.options(state, player,
+#                                                             source)
+#         # chosen first, then non-chosen second.
+#         sequenced = list(chosen) + [c for c in all_options
+#         if c not in chosen]
+#         concat = sequenced + [source] + other_inputs[1:]
+#         if self.copies:
+#             state2, concat2 = state.copy_and_track(concat)
+#             tuple_list = [(state2, player, source, concat2)]
+#         else:
+#             tuple_list = [(state, player, source, concat)]
+#         # do the chosen ones first. knock off the inputs as they're used
+#         for _ in range(len(chosen)):
+#             new_list = []
+#             for gm, pl, cd, ins in tuple_list:
+#                 new_list += self.act_on_chosen.do_it(gm, pl, ins[0], ins[1:])
+#             tuple_list = new_list
+#         # now the non-chosen ones
+#         for _ in range(len(all_options) - len(chosen)):
+#             new_list = []
+#             for gm, pl, cd, ins in tuple_list:
+#                 new_list += self.act_on_non_chosen.do_it(gm, pl,
+#                                                          ins[0], ins[1:])
+#             tuple_list = new_list
+#         # We've done all the work, but still need to extract the original
+#         # source to return! should now be first element of remaining inputs
+#         return [(g, plr, ins[-1], ins[:-1])
+#                 for g, plr, trg, ins in tuple_list]
+#
+#     def __str__(self):
+#         act_yes = str(self.act_on_chosen)
+#         choose = str(self.chooser)
+#         act_no = str(self.act_on_non_chosen)
+#         s = "%s on %s else %s" % (act_yes, choose, act_no)
+#         return s
 
-class VerbOnSplitList(Verb):
-    def __init__(self, chooser: Get.Chooser,
-                 act_on_chosen: AffectSourceCard,
-                 act_on_non_chosen: AffectSourceCard | None):
-        """Looks at all valid _options for the chooser. On casting,
-        the chooser selects some of them to apply the `act_on_chosen`
-        verb to, and applies the `act_on_non_chosen` verb to the rest."""
-        super().__init__(1, act_on_chosen.copies or act_on_non_chosen.copies)
-        assert act_on_non_chosen.num_inputs == 0
-        assert act_on_chosen.num_inputs == 0
-        self.act_on_chosen: AffectSourceCard = act_on_chosen
-        self.act_on_non_chosen: AffectSourceCard = act_on_non_chosen
-        self.chooser = chooser
+
+class LookDoAndDo(Verb):
+    def __init__(self, look_at: Get.CardsFrom, choose: Get.AllWhich,
+                 do_to_chosen: AffectSourceCard,
+                 do_to_others: AffectSourceCard):
+        super().__init__(1, ((not choose.single_output)
+                             or do_to_chosen.copies or do_to_others.copies))
+        self.option_getter: Get.CardsFrom = look_at
+        self.chooser: Get.AllWhich = choose
+        assert do_to_chosen.num_inputs == 0
+        assert do_to_others.num_inputs == 0
+        self.do_to_chosen: AffectSourceCard = do_to_chosen
+        self.do_to_others: AffectSourceCard = do_to_others
 
     # noinspection PyTypeChecker
     def get_input_options(self, state: GameState, player: int,
                           source: Cardboard | None, cause: Cardboard | None
                           ) -> List[INPUTS]:
+        options = self.option_getter.get(state, player, source)
+        choices = self.chooser.pick(options, state, player, source)
         # chooser gives list of tuples of cards. I want list of lists of tuples
-        return [[x] for x in self.chooser.get(state, player, source)]
+        return [[x] for x in choices]
 
     def can_be_done(self, state: GameState, player: int,
                     source: Cardboard | None, other_inputs: INPUTS) -> bool:
@@ -615,13 +713,14 @@ class VerbOnSplitList(Verb):
         if not super().can_be_done(state, player, source, other_inputs):
             return False
         chosen = other_inputs[0]
-        all_options = self.chooser.options(state, player, source)
+        all_options: List[Cardboard] = self.option_getter.get(state, player,
+                                                              source)
         for card in all_options:
             if card in chosen:
-                if not self.act_on_chosen.can_be_done(state, player, card):
+                if not self.do_to_chosen.can_be_done(state, player, card):
                     return False
             else:
-                if not self.act_on_non_chosen.can_be_done(state, player, card):
+                if not self.do_to_others.can_be_done(state, player, card):
                     return False
         return True
 
@@ -629,39 +728,40 @@ class VerbOnSplitList(Verb):
               source: Cardboard | None, other_inputs: INPUTS) -> List[RESULT]:
         """The first element of other_inputs are the chosen cards."""
         chosen: Tuple[Cardboard] = other_inputs[0]
-        all_options: List[Cardboard] = self.chooser.options(state, player,
-                                                            source)
+        opts: List[Cardboard] = self.option_getter.get(state, player, source)
         # chosen first, then non-chosen second.
-        sequenced = list(chosen) + [c for c in all_options if c not in chosen]
+        sequenced = list(chosen) + [c for c in opts if c not in chosen]
         concat = sequenced + [source] + other_inputs[1:]
         if self.copies:
             state2, concat2 = state.copy_and_track(concat)
-            tuple_list = [(state2, player, source, concat2)]
+            tuple_list = [(state2, player, concat2[len(sequenced)], concat2)]
         else:
             tuple_list = [(state, player, source, concat)]
         # do the chosen ones first. knock off the inputs as they're used
         for _ in range(len(chosen)):
             new_list = []
             for gm, pl, cd, ins in tuple_list:
-                new_list += self.act_on_chosen.do_it(gm, pl, ins[0], ins[1:])
+                new_list += self.do_to_chosen.do_it(gm, pl, ins[0], ins[1:])
             tuple_list = new_list
         # now the non-chosen ones
-        for _ in range(len(all_options) - len(chosen)):
+        for _ in range(len(opts) - len(chosen)):
             new_list = []
             for gm, pl, cd, ins in tuple_list:
-                new_list += self.act_on_non_chosen.do_it(gm, pl,
-                                                         ins[0], ins[1:])
+                new_list += self.do_to_others.do_it(gm, pl, ins[0], ins[1:])
             tuple_list = new_list
         # We've done all the work, but still need to extract the original
         # source to return! should now be first element of remaining inputs
-        return [(g, plr, ins[-1], ins[:-1])
-                for g, plr, trg, ins in tuple_list]
+        result_list = []
+        for g, plr, trg, ins in tuple_list:
+            result_list += super().do_it(g, plr, ins[-1], ins[:-1])
+        return result_list
 
     def __str__(self):
-        act_yes = str(self.act_on_chosen)
+        act_yes = str(self.do_to_chosen)
         choose = str(self.chooser)
-        act_no = str(self.act_on_non_chosen)
-        s = "%s on %s else %s" % (act_yes, choose, act_no)
+        options = str(self.option_getter)
+        act_no = str(self.do_to_others)
+        s = "%s on %s%s else %s" % (act_yes, choose, options, act_no)
         return s
 
 
@@ -951,18 +1051,20 @@ class MoveToZone(AffectSourceCard):
         self.origin = source.zone.copy()  # so trigger knows card's origin
         # remove from origin zone
         self.origin.remove_from_zone(state, source)
-        # add to destination. (also resets source's zone to be destination.)
+        # makes sure that the destination is well-defined, and defines if not.
         if not self.destination.is_single:
             new_dest = self.destination.get_absolute_zones(state, player,
                                                            source)
             if len(new_dest) != 1:
                 raise Zone.Zone.NotSpecificPlayerError
-            new_dest[0].add_to_zone(state, source)
-        else:
-            self.destination.add_to_zone(state, source)
+            self.destination = new_dest[0]
+        # add to destination. (also resets source's zone to be destination.)
+        self.destination.add_to_zone(state, source)
         # any time you change zones, reset the cardboard parameters
         source.reset_to_default_cardboard()
-        # add triggers to super_stack, reduce length of input list
+        # add triggers to super_stack, reduce length of input list. NOTE:
+        # needs origin and destination zones to be well-defined so that
+        # triggers can hook into them properly. "You" != "0", for example.
         return super().do_it(state, player, source, other_inputs)
 
     def __str__(self):
@@ -1036,11 +1138,10 @@ class Destroy(AffectSourceCard):
 
 # ----------
 
-class Tutor(AffectController):
+class SearchDeck(AffectController):
     def __init__(self, zone_to_move_to: Zone.Zone, num_to_find: int,
                  pattern: Match.Pattern):
-        self.chooser = Get.Chooser(Get.GetCards(pattern, Zone.Deck(Get.You())),
-                                   num_to_find, can_be_fewer=True)
+        self.chooser = Get.Chooser(pattern, num_to_find, can_be_fewer=True)
         self.destination: Zone.Zone = zone_to_move_to
         super().__init__()
         self.copies = True
@@ -1053,9 +1154,11 @@ class Tutor(AffectController):
                                                           player, source)]
         assert len(mover_list) == 1  # debug
         mover: MoveToZone = mover_list[0]
+        # search the deck
+        decklist = Get.CardsFrom(Zone.Deck(player, None))
         # find cards and move them to proper zone!
         res_list = []
-        for choice in self.chooser.get(state, player, source):
+        for choice in self.chooser.pick(decklist, state, player, source):
             things = [source] + list(choice) + other_inputs
             state2, things2 = state.copy_and_track(things)
             source2 = things2[0]

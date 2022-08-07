@@ -60,13 +60,10 @@ class Caretaker(Creature):
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
                                 Verbs.Tap().on(
-                                    Get.Any(
-                                        Get.GetCards(
-                                            Match.Another()
-                                            & Match.Untapped()
-                                            & Match.CardType(Creature),
-                                            Zone.Field(Get.You())))),
-                                ),
+                                    Get.Any(Match.Another() & Match.Untapped()
+                                            & Match.CardType(Creature)),
+                                    Get.CardsFrom(Zone.Field(Get.You()))
+                                )),
                            Verbs.AddMana("A"))
 
 
@@ -164,15 +161,13 @@ class Company(RulesText.Instant):
         self.name = "CollectedCompany"
         self.cost = Cost("3G")
         self.effect = Verbs.Defer(
-            Verbs.VerbOnSplitList(
-                Get.Chooser(
-                    Get.GetCards(
-                        Match.CardType(Creature) & Match.ManaValue("<=", 3),
-                        Zone.DeckTopN(Get.You(), 6)),
-                    2, can_be_fewer=True),
-                Verbs.MoveToZone(Zone.Field(Get.You())),
-                Verbs.MoveToZone(Zone.DeckTop(Get.You()))
-            ))
+            Verbs.LookDoAndDo(Get.CardsFrom(Zone.DeckTopN(Get.You(), 6)),
+                              Get.Chooser(Match.CardType(Creature)
+                                          & Match.ManaValue("<=", 3),
+                                          2, can_be_fewer=True),
+                              Verbs.MoveToZone(Zone.Field(Get.You())),
+                              Verbs.MoveToZone(Zone.DeckBottom(Get.You()))
+                              ))
 
 
 # =============================================================================
@@ -277,10 +272,10 @@ class WindsweptHeath(Land):
                            TriggerOnSelfEnter(),
                            Verbs.LoseLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.Tutor(Zone.Field(Get.You()),
-                                         1,
-                                         Match.CardType(Forest)
-                                         | Match.CardType(Plains))
+                           + Verbs.SearchDeck(Zone.Field(Get.You()),
+                                              1,
+                                              Match.CardType(Forest)
+                                              | Match.CardType(Plains))
                            )
 
 
@@ -294,10 +289,10 @@ class MistyRainforest(Land):
                            TriggerOnSelfEnter(),
                            Verbs.LoseLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.Tutor(Zone.Field(Get.You()),
-                                         1,
-                                         Match.CardType(Forest)
-                                         | Match.CardType(Island))
+                           + Verbs.SearchDeck(Zone.Field(Get.You()),
+                                              1,
+                                              Match.CardType(Forest)
+                                              | Match.CardType(Island))
                            )
 
 
@@ -311,10 +306,10 @@ class FloodedStrand(Land):
                            TriggerOnSelfEnter(),
                            Verbs.LoseLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.Tutor(Zone.Field(Get.You()),
-                                         1,
-                                         Match.CardType(Island)
-                                         | Match.CardType(Plains))
+                           + Verbs.SearchDeck(Zone.Field(Get.You()),
+                                              1,
+                                              Match.CardType(Island)
+                                              | Match.CardType(Plains))
                            )
 
 # =============================================================================

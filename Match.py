@@ -33,6 +33,7 @@ class Pattern:
 
     def get_type(self, pattern_type: type) -> List[Pattern]:
         if isinstance(self, pattern_type):
+            # noinspection PyTypeChecker
             return [self]
         else:
             return []

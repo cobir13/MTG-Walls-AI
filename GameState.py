@@ -292,9 +292,10 @@ class GameState:
         new_state = self.copy()
         # remove StackObject from the stack
         obj = new_state.stack.pop(-1)
-        tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
-        # perform the effect (resolve ability, perform spell, etc)
-        if obj.effect is not None:
+        if obj.effect is None:
+            tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
+        else:
+            # perform the effect (resolve ability, perform spell, etc)
             tuple_list = obj.effect.do_it(new_state, obj.player_index,
                                           obj.source_card, obj.choices)
         # if card is on stack (not just a pointer), move it to destination zone
@@ -577,7 +578,7 @@ class Player:
         if dist_from_bottom < 0:
             # insert has strange negative indexing. otherwise 0 and -1 would
             # do the same thing. insert at len(list), not len-1, to be at end.
-            dist_from_bottom+= len(self.deck) + 1
+            dist_from_bottom += len(self.deck) + 1
         card.zone = Zone.Deck(self.player_index, dist_from_bottom)
         self.deck.insert(dist_from_bottom, card)
         # update zone locations. mutates, so will also affect pointers.

@@ -18,7 +18,7 @@ class Zone:
     class NotSpecificPlayerError(Exception):
         pass
 
-    def __init__(self, player: int | None | Getters.GetPlayers = None,
+    def __init__(self, player: int | None | Getters.PlayerList = None,
                  location: int | slice | None = None):
         """
         Represents the Game Zone, e.g. for a Cardboard to be
@@ -28,7 +28,7 @@ class Zone:
         the zone (like index 0 to mean the top of the deck),
         or None if the zone is unordered (like battlefields).
         """
-        self.player: int | None | Getters.GetPlayers = player
+        self.player: int | None | Getters.PlayerList = player
         self.location: int | slice | None = location
 
     @property
@@ -97,12 +97,12 @@ class Zone:
         if self.is_fixed:
             return [self.copy()]
         else:
-            # self.player is a Getter.GetPlayers
+            # self.player is a Getter.PlayerList
             pl_list = self.player.get(state, asking_player, asking_source)
             zone_list = []
-            for ii in pl_list:
+            for pl in pl_list:
                 new_zone = self.copy()
-                new_zone.player = ii
+                new_zone.player = pl.player_index
                 zone_list.append(new_zone)
             return zone_list
 
@@ -155,7 +155,7 @@ class Zone:
 
 class Deck(Zone):
     # index -1 is the top of the deck. Index 0 is the bottom.
-    def __init__(self, player: int | None | Getters.GetPlayers, location=None):
+    def __init__(self, player: int | None | Getters.PlayerList, location=None):
         super().__init__(player, location)
 
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
@@ -189,13 +189,13 @@ class Deck(Zone):
 
 class DeckBottom(Deck):
     # index -1 is the top of the deck. Index 0 is the bottom.
-    def __init__(self, player: int | None | Getters.GetPlayers):
+    def __init__(self, player: int | None | Getters.PlayerList):
         super().__init__(player, 0)
 
 
 class DeckTop(Deck):
     # index -1 is the top of the deck. Index 0 is the bottom.
-    def __init__(self, player: int | None | Getters.GetPlayers):
+    def __init__(self, player: int | None | Getters.PlayerList):
         super().__init__(player, -1)
 
 
@@ -206,7 +206,7 @@ class DeckTopN(Deck):
 
 
 class Hand(Zone):
-    def __init__(self, player: int | None | Getters.GetPlayers):
+    def __init__(self, player: int | None | Getters.PlayerList):
         super().__init__(player, None)  # hand resorts itself, so no location
 
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
@@ -235,7 +235,7 @@ class Hand(Zone):
 
 
 class Field(Zone):
-    def __init__(self, player: int | None | Getters.GetPlayers):
+    def __init__(self, player: int | None | Getters.PlayerList):
         super().__init__(player, None)  # field resorts itself, so no location
 
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:
@@ -264,7 +264,7 @@ class Field(Zone):
 
 
 class Grave(Zone):
-    def __init__(self, player: int | None | Getters.GetPlayers):
+    def __init__(self, player: int | None | Getters.PlayerList):
         super().__init__(player, None)  # grave is not ordered
 
     def _get_whole_zone_list(self, player: Player) -> List[Cardboard]:

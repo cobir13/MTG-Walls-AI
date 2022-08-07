@@ -7,7 +7,7 @@ Created on Tue Dec 29 22:15:57 2020
 from __future__ import annotations
 from typing import List
 
-import Getters
+import Getters as Get
 import Abilities
 import Zone
 from GameState import GameState
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     assert Zone.Grave(0).get(game1) is game1.player_list[0].grave
     assert len(Zone.Field(None).get(game1)) == 3
     try:
-        Zone.Field(Getters.Controllers()).get(game1)
+        Zone.Field(Get.Controllers()).get(game1)
         assert False
     except Zone.Zone.RelativeError:
         assert True
@@ -102,35 +102,53 @@ if __name__ == "__main__":
     assert Match.YouControl().match(vanil0, game1, 0, vanil0)
     assert not Match.YouControl().match(vanil1, game1, 0, vanil0)
     assert Match.OppControls().match(vanil1, game1, 0, vanil0)
-    assert Zone.Field(Getters.Controllers()
+    assert Zone.Field(Get.Controllers()
                       ).get_absolute_zones(game1, 1, vanil0)[0].player == 0
-    assert Zone.Field(Getters.Controllers()
+    assert Zone.Field(Get.Controllers()
                       ).get_absolute_zones(game1, 1, vanil1)[0].player == 1
-    # test matchers and GetCards
-    assert len(Getters.GetCards(Match.Toughness(">", 1), Zone.Field(0)
-                                ).get(game1, 0, vanil0)) == 1
-    assert Getters.GetCards(Match.Toughness(">", 1), Zone.Field(0)
-                            ).get(game1, 0, vanil0)[0] is vanil0
-    assert len(Getters.GetCards(Match.Toughness(">", 1), Zone.Field(0)
-                                ).get(game1, 1, vanil0)) == 1  # still player0
-    assert len(Getters.GetCards(Match.Toughness(">", 1), Zone.Field(None)
-                                ).get(game1, 1, choc0)) == 2  # all players
-    assert len(Getters.GetCards(Match.Toughness(">", 1),
-                                Zone.Field(Getters.You())
-                                ).get(game1, 0, vanil0)) == 1  # you=player0
-    assert len(Getters.GetCards(Match.Toughness(">", 1),
-                                Zone.Field(Getters.You())
-                                ).get(game1, 1, choc0)) == 1  # you=player1
-    assert len(Getters.GetCards(Match.YouControl(), Zone.Field(Getters.You())
-                                ).get(game1, 0, vanil0)) == 2  # you=player0
-    assert len(Getters.GetCards(Match.YouControl(), Zone.Field(Getters.You())
-                                ).get(game1, 1, choc0)) == 1  # you=player1
-    assert len(Getters.GetCards(Match.YouControl(),
-                                Zone.Field(Getters.Controllers())
-                                ).get(game1, 0, choc0)) == 2  # controller=0
-    assert len(Getters.GetCards(Match.CardType(RulesText.Creature),
-                                Zone.Field(None)
-                                ).get(game1, 1, choc0)) == 3
+    # test matchers and CardsFromZone
+    assert Get.Count(Match.Toughness(">", 1), Zone.Field(0)
+                     ).get(game1, 0, vanil0) == 1
+    assert len(Get.AllWhich(Match.Toughness(">", 1)
+                            ).pick(Get.CardsFrom(Zone.Field(0)),
+                                   game1, 0, vanil0)[0]) == 1  # you=player1
+    assert Get.AllWhich(Match.Toughness(">", 1)
+                        ).pick(Get.CardsFrom(Zone.Field(0)),
+                               game1, 0, vanil0)[0][0] is vanil0
+    assert len(Get.AllWhich(Match.Toughness(">", 1)
+                            ).pick(Get.CardsFrom(Zone.Field(0)),
+                                   game1, 1, vanil0)) == 1  # still player0
+    assert len(Get.AllWhich(Match.Toughness(">", 1)
+                            ).pick(Get.CardsFrom(Zone.Field(None)),
+                                   game1, 0, choc0)[0]) == 2  # all players
+    assert len(Get.AllWhich(Match.Toughness(">", 1)
+                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                                   game1, 0, vanil0)[0]) == 1  # you=player0
+    assert len(Get.AllWhich(Match.Toughness(">", 1)
+                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                                   game1, 1, choc0)[0]) == 1  # you=player1
+    assert len(Get.AllWhich(Match.Toughness(">", 1)
+                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                                   game1, 0, vanil0)[0]) == 1  # you=player0
+    assert len(Get.AllWhich(Match.YouControl()
+                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                                   game1, 0, vanil0)[0]) == 2  # you=player0
+    assert len(Get.AllWhich(Match.YouControl()
+                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                                   game1, 0, choc0)[0]) == 2  # you=player0
+    assert len(Get.AllWhich(Match.YouControl()
+                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                                   game1, 1, choc0)[0]) == 1  # you=player1
+    assert len(
+        Get.AllWhich(
+            Match.YouControl()
+        ).pick(Get.CardsFrom(Zone.Field(Get.Controllers())),
+               game1, 0, choc0)[0]) == 2  # controller=0
+    assert len(
+        Get.AllWhich(
+            Match.CardType(RulesText.Creature)
+        ).pick(Get.CardsFrom(Zone.Field(None)),
+               game1, 1, choc0)[0]) == 3  # all players
 
     # test copying
     gameB, [chocB] = game1.copy_and_track([choc0])
@@ -194,8 +212,8 @@ if __name__ == "__main__":
                                    Zone.Grave(None)
                                ),
                                Verbs.GainLife(1)
-                               + Verbs.LoseLife(1).on(
-                                   Getters.Each(Getters.Opponents()))
+                               + Verbs.LoseLife(1).on(Get.AllWhich(),
+                                                      Get.Opponents())
                                )
 
     # give both of these creatures to player1
@@ -260,8 +278,10 @@ if __name__ == "__main__":
             for g in [gameE, gameF, gameG]] == [20, 20, 21]
 
     # try to destroy the world!
-    wrath = Verbs.Defer(Verbs.Destroy().on(Getters.Each(Getters.GetCards(
-        Match.CardType(RulesText.Creature), Zone.Field(None)))))
+    wrath = Verbs.Defer(Verbs.Destroy().on(Get.AllWhich(
+        Match.CardType(RulesText.Creature)),
+                                           Get.CardsFrom(Zone.Field(None))
+                                           ))
     assert wrath.copies
     gameH = wrath.do_it(gameG, 0, None, [None])[0][0]
     assert len(gameH.super_stack) == 4
@@ -1111,9 +1131,9 @@ if __name__ == "__main__":
     universes = cast_and_resolve_company(game1)
     assert (len(universes) == 2)
     u = [g for g in universes if g.active.field != []][0]
-    # now should be islands on top, forests on bottom
-    assert all([c.has_type(Decklist.Island) for c in u.active.deck[:10]])
-    assert all([c.has_type(Decklist.Forest) for c in u.active.deck[-5:]])
+    # now should be islands on top (index -1), forests on bottom (index 0)
+    assert all([c.has_type(Decklist.Island) for c in u.active.deck[-10:]])
+    assert all([c.has_type(Decklist.Forest) for c in u.active.deck[:5]])
     assert u.active.deck[-6].has_type(Decklist.Island)
     assert len(u.active.field) == 1
     assert len(u.active.grave) == 1
@@ -1138,12 +1158,15 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.Omens()), Zone.DeckTop, 0)
     for _ in range(10):
         game.give_to(Cardboard(Decklist.Forest()), Zone.DeckBottom, 0)
+    assert len(game.active.deck) == 12
     # cast Collected Company
     universes = cast_and_resolve_company(game)
     # (omens, blossons) triggers; reverse order; just one or other; neither.
-    assert len(universes) == 5  # two draws could be on stack in either order
-    u0, u1 = universes
-    assert (u0 != u1)
+    assert len(universes) == 5
+    lengths = [(len(u.active.field), len(u.active.deck)) for u in universes]
+    assert lengths == [(2, 10), (2, 10), (1, 11), (1, 11), (0, 12)]
+    u0, u1 = [u for u in universes if len(u.active.field) == 2]
+    assert u0 != u1
     while len(u0.stack) > 0:
         [u0] = u0.resolve_top_of_stack()
     while len(u1.stack) > 0:
@@ -1158,18 +1181,18 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
     game.give_to(Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
     for _ in range(10):
-        game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop, 0)
+        game.give_to(Cardboard(Decklist.Forest()), Zone.DeckBottom, 0)
     # cast Collected Company
     universes = cast_and_resolve_company(game)
-    assert len(universes) == 2  # two draws could be on stack in either order
-    u0, u1 = universes
-    assert (u0 == u1)
+    # (blossons, blossons) triggers; reverse order; just one or other; neither.
+    assert len(universes) == 5
+    lengths = [(len(u.active.field), len(u.active.deck)) for u in universes]
+    assert lengths == [(2, 10), (2, 10), (1, 11), (1, 11), (0, 12)]
+    u0, u1 = [u for u in universes if len(u.active.field) == 2]
+    assert u0 == u1
     while len(u0.stack) > 0:
         [u0] = u0.resolve_top_of_stack()
-    while len(u1.stack) > 0:
-        [u1] = u1.resolve_top_of_stack()
-    assert (u0 == u1)
-    assert (len(u0.active.hand) == 2 and len(u0.active.deck) == 8)
+    assert len(u0.active.hand) == 2 and len(u0.active.deck) == 8
 
     # deck of 6 forests on top, then 10 islands. remember: -1 is top of deck.
     gameF = GameState()

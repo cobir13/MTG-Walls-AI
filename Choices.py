@@ -17,7 +17,8 @@ class AbortChoiceError(Exception):
     pass
 
 
-def choose_exactly_one(options, source_name: str = "Choose from:") -> list:
+def choose_exactly_one(options: list | tuple,
+                       source_name: str = "Choose from:") -> list:
     """
     Given a list of _options, return a list of ways to choose
         exactly one of those _options. If there are no ways
@@ -40,7 +41,7 @@ def choose_exactly_one(options, source_name: str = "Choose from:") -> list:
         return run_gui_to_select(options, source_name, 1, False)
 
 
-def choose_exactly_n(options: list, num_to_choose: int,
+def choose_exactly_n(options: list | tuple, num_to_choose: int,
                      source_name="Choose from:") -> List[tuple]:
     """
     Given a list of _options, return a list of ways to choose
@@ -76,7 +77,7 @@ def choose_exactly_n(options: list, num_to_choose: int,
     # I should remove duplicates HERE (rather than where Choice gets used    
 
 
-def choose_n_or_fewer(options: list, num_to_choose: int,
+def choose_n_or_fewer(options: list | tuple, num_to_choose: int,
                       source_name: str = "Choose from:") -> List[tuple]:
     """
     Given a list of _options, return a list of ways to choose

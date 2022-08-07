@@ -53,13 +53,17 @@ class Cardboard:
     def __repr__(self):
         s = "Card_"
         s += type(self.rules_text).__name__  # MtG type (creature, land, etc)
+        if self.tapped or self.summon_sick:
+            s += "_"
         if self.tapped:
             s += "T"
         if self.summon_sick:
             s += "S"
-        s += "_%s[%s]" % (str(self.zone), str(self.zone.location))
+        s += "_%s" % str(self.zone)
+        if self.zone.location is not None:
+            s += "[%s]" % str(self.zone.location)
         if len(self.counters) > 0:
-            s += "[" + ",".join(self.counters) + "]"
+            s += "_[" + ",".join(self.counters) + "]"
         return s
 
     def copy(self):
