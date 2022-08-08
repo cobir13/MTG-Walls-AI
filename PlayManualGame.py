@@ -1,38 +1,42 @@
 from __future__ import annotations
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from Stack import StackObject
+
 import tkinter as tk
-from Verbs import WinTheGameError, LoseTheGameError
+
 import RulesText  # for Creature
 from GameState import GameState
 
 
 class ManualGame(tk.Tk):
 
-    def __init__(self, startstate: GameState):
+    def __init__(self, startstate: GameState, player_index: int):
         super().__init__()
-        self.history = [startstate]
-        # if you win or lose, game raises an error
-        self.report_callback_exception = self.HandleError
+        self.player_index: int = player_index
+        self.history: List[GameState] = [startstate]
         # option to pass and allow stack to resolve. like F2 on MagicOnline
         self.var_resolveall = tk.IntVar(self, 1)
+        # opponents
+        self.player_frame_list = []  # frames, indexed by player_index
+        for pl in self.game.player_list:
+            fr = tk.Frame(self, borderwidth=1, relief="solid")
+            self.player_frame_list.append(fr)
+            if pl.player_index != self.player_index:
+                fr.grid(row=pl.player_index, column=1,
+                        padx=5, pady=5, sticky="W")
         # stack
         tk.Label(self, text="STACK", wraplength=1).grid(row=0, column=0)
-        self.stack = tk.Frame(self, borderwidth=1, relief="solid")
-        self.stack.grid(row=0, column=1, padx=5, pady=5, sticky="W")
-        # current situation
-        tk.Label(self, text="STATE", wraplength=1).grid(row=1, column=0)
-        self.status = tk.Frame(self, borderwidth=1, relief="solid")
-        self.status.grid(row=1, column=1, padx=5, pady=5, sticky="W")
-        # battlefield
-        tk.Label(self, text="FIELD", wraplength=1).grid(row=2, column=0)
-        self.field = tk.Frame(self, bg="lightgray", borderwidth=1,
-                              relief="solid")
-        self.field.grid(row=2, column=1, padx=5, pady=15, sticky="W")
-        # hand
-        tk.Label(self, text="HAND", wraplength=1).grid(row=3, column=0)
-        self.hand = tk.Frame(self, borderwidth=1, relief="solid")
-        self.hand.grid(row=3, column=1, padx=5, pady=5, sticky="W")
+        self.stack_frame = tk.Frame(self, borderwidth=1, relief="solid")
+        self.stack_frame.grid(row=len(self.player_frame_list), column=1,
+                              padx=5, pady=5, sticky="W")
+        # main player
+        fr = self.player_frame_list[self.player_index]
+        fr.grid(row=len(self.player_frame_list) + 1, column=1,
+                padx=5, pady=5, sticky="W")
         # populate the display and start the game
-        self.RebuildDisplay()
+        self.rebuild_display()
         self.mainloop()
 
     @property
@@ -40,158 +44,162 @@ class ManualGame(tk.Tk):
         assert (not isinstance(self.history[-1], str))
         return self.history[-1]
 
-    def RebuildStack(self):
-        for widgets in self.stack.winfo_children():
-            widgets.destroy()
-        for ii, obj in enumerate(self.game.stack):
-            butt = obj.build_tk_display(self.stack)
-            butt.config(command=self.ResolveTopOfStack)
-            butt.grid(row=1, column=ii, padx=5, pady=3)
+    @property
+    def player(self):
+        return game.player_list[self.player_index]
 
-    def RebuildStatus(self):
-        for widgets in self.status.winfo_children():
+    def _caster(self, options: List[StackObject]):
+        chosen = Choices.choose_exactly_one(options, "choose to activate",
+                                            self.player.decision_maker)
+        if len(chosen) == 0:
+            return  # no valid choice, so just pass
+        elif len(chosen) == 1:
+            self._put_on_stack(chosen[0])
+        else:
+            assert False  # problem!
+
+    def _put_on_stack(self, stack_obj: StackObject):
+        universes = stack_obj.put_on_stack(self.game)
+        if len(universes) == 0:
+            return  # casting failed, nothing changed so do nothing
+        assert (len(universes) == 1)
+        self.history.append(universes[0])
+        if self.var_resolveall.get():
+            self.empty_entire_stack()
+        else:
+            self.rebuild_display()
+
+    def build_player_display(self, player):
+        # clear previous
+        for widgets in self.stack_frame.winfo_children():
             widgets.destroy()
-        # turn count
-        tk.Label(self.status, text="Turn:\n%i" % self.game.turn_count,
-                 ).grid(row=1, column=1, rowspan=2, padx=5, pady=5)
-        # life totals
-        tk.Label(self.status, text="Life total: %i" % self.game.life
-                 ).grid(row=1, column=2, padx=5, pady=2)
-        tk.Label(self.status, text="Opponent: %i" % self.game.opponent_life
-                 ).grid(row=2, column=2, padx=5, pady=2)
-        # cards remaining
-        tk.Label(self.status, text="Cards in deck: %i" % len(self.game.deck)
-                 ).grid(row=1, column=3, padx=5, pady=2)
-        tk.Label(self.status, text="Cards in grave: %i" % len(self.game.grave)
-                 ).grid(row=2, column=3, padx=5, pady=2)
-        # mana and land-drops
-        if str(self.game.pool) != "":
-            manastr = "Mana floating: (%s)" % str(self.game.pool)
+        self_frame = self.player_frame_list[player.player_index]
+        # status zone for life, mana, etc
+        status_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
+        status_frame.grid(row=0, rowspan=3, column=0, padx=5, pady=5)
+        tk.Label(status_frame, text="Turn:\n%i" % player.turn_count,
+                 ).grid(row=0, column=1, rowspan=2, padx=5, pady=5)
+        tk.Label(status_frame, text="Life total: %i" % player.life
+                 ).grid(row=1, column=1, padx=5, pady=2)
+        tk.Label(status_frame, text="Cards in deck: %i" % len(player.deck)
+                 ).grid(row=2, column=1, padx=5, pady=2)
+        tk.Label(status_frame, text="Cards in grave: %i" % len(player.grave)
+                 ).grid(row=3, column=1, padx=5, pady=2)
+        if str(player.pool) != "":
+            manastr = "Mana floating: (%s)" % str(player.pool)
         else:
             manastr = "Mana floating: None"
-        landstr = "Played land: %s" % (
-            "yes" if self.game.has_played_land else "no")
-        tk.Label(self.status, text=manastr
-                 ).grid(row=1, column=4, padx=5, pady=2)
-        tk.Label(self.status, text=landstr
-                 ).grid(row=2, column=4, padx=5, pady=2)
-        # button to do the next thing
-        if len(self.game.stack) == 0:
-            b = tk.Button(self.status, text="Pass\nturn", bg="yellow", width=7,
-                          command=self.PassTurn)
-            b.grid(row=1, column=5, padx=5, pady=5)
-        else:
-            b = tk.Button(self.status, text="Resolve\nnext", bg="yellow",
-                          width=7,
-                          command=self.ResolveTopOfStack)
-            b.grid(row=1, column=5, padx=5, pady=2)
-        # undo button
-        b2 = tk.Button(self.status, text="undo", bg="yellow",
-                       command=self.Undo)
-        b2.grid(row=1, column=6, padx=5, pady=2)
-        # auto-resolve button
-        b3 = tk.Checkbutton(self.status, text="Auto-resolve all",
-                            variable=self.var_resolveall,
-                            indicatoron=True)
-        # onvalue=1,background='grey')#,selectcolor='green')
-        b3.grid(row=2, column=5, columnspan=2, padx=5, pady=5)
-
-    def RebuildHand(self):
-        for widgets in self.hand.winfo_children():
-            widgets.destroy()
-        for ii, card in enumerate(self.game.hand):
-            butt = card.build_tk_display(self.hand)
-            abils = [a for a in card.get_activated()
-                     if a.CanAfford(self.game, card)]
-            # activated abilities in hand are not yet implemented
-            assert (len(abils) == 0)
-            if card.rules_text.CanAfford(self.game, card):
-                butt.config(state="normal",
-                            command=lambda c=card: self.CastSpell(c))
-            else:
-                butt.config(state="disabled")
-            butt.grid(row=1, column=ii, padx=5, pady=3)
-
-    def RebuildField(self):
-        for widgets in self.field.winfo_children():
-            widgets.destroy()
+        tk.Label(status_frame, text=manastr
+                 ).grid(row=4, column=1, padx=5, pady=2)
+        tk.Label(status_frame,
+                 text="Land drops left: %i" % player.land_drops_left
+                 ).grid(row=5, column=1, padx=5, pady=2)
+        # field
+        field_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
+        field_frame.grid(row=0, column=1, padx=5, pady=5)
+        tk.Label(field_frame, text="FIELD", wraplength=1).grid(row=0, column=0,
+                                                               rowspan=2)
         toprow = 0  # number in bottom row
         botrow = 0  # number in top row
-        for card in self.game.field:
-            butt = card.build_tk_display(self.field)
-            # make the button activate this card's abilities
-            abils = [a for a in card.get_activated() if
-                     a.CanAfford(self.game, card)]
-            if len(abils) == 0:
-                butt.config(state="disabled")  # nothing to activate
-            elif len(abils) == 1:
-                command = lambda c=card, a=abils[0]: self.ActivateAbility(c, a)
-                butt.config(state="normal", command=command)
-            else:  # len(abils)>1:
-                # ask the user which one to use
-                print("ask the user which ability to use, I guess")
-            # add card-button to the GUI. Lands on bottom, cards on top
+        for ii, card in enumerate(player.field):
+            butt = card.build_tk_display(field_frame)
+            # add option for user to activate abilities, if is human player.
+            if player.player_index == self.player_index:
+                opts = []
+                for ab in card.get_activated():
+                    opts += ab.valid_stack_objects(player.gamestate,
+                                                   player.player_index, card)
+                if len(opts) >= 1:
+                    cast_fn = lambda options=opts: self._caster(options)
+                    butt.config(state="normal", command=cast_fn)
+                else:
+                    butt.config(state="disabled")
             if card.has_type(RulesText.Creature):
                 butt.grid(row=1, column=toprow, padx=5, pady=3)
                 toprow += 1
             else:
                 butt.grid(row=2, column=botrow, padx=5, pady=3)
                 botrow += 1
+        # hand
+        hand_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
+        hand_frame.grid(row=0, column=3, padx=5, pady=5)
+        tk.Label(field_frame, text="HAND", wraplength=1).grid(row=0, column=0)
+        for ii, card in enumerate(player.hand):
+            butt = card.build_tk_display(hand_frame)
+            # add option for user to activate abilities, if is human player.
+            if player.player_index == self.player_index:
+                opts = []
+                for ab in card.get_activated():
+                    opts += ab.valid_stack_objects(player.gamestate,
+                                                   player.player_index, card)
+                opts += card.valid_stack_objects(player.gamestate)  # cast card
+                if len(opts) >= 1:
+                    cast_fn = lambda options=opts: self._caster(options)
+                    butt.config(state="normal", command=cast_fn)
+                else:
+                    butt.config(state="disabled")
+            butt.grid(row=1, column=ii, padx=5, pady=3)
 
-    def RebuildDisplay(self):
-        self.RebuildStack()
-        self.RebuildStatus()
-        self.RebuildField()
-        self.RebuildHand()
+    def build_stack_display(self):
+        # clear previous
+        for widgets in self.stack_frame.winfo_children():
+            widgets.destroy()
+        # button to do the next thing
+        if len(self.game.stack) == 0:
+            b = tk.Button(self.stack_frame, text="Pass\nturn", bg="yellow",
+                          width=7, command=self.PassTurn)
+            b.grid(row=1, column=0, padx=5, pady=5)
+        else:
+            b = tk.Button(self.stack_frame, text="Resolve\nnext", bg="yellow",
+                          width=7, command=self.resolve_top_of_stack)
+            b.grid(row=1, column=0, padx=5, pady=2)
+        # undo button
+        b2 = tk.Button(self.stack_frame, text="undo", bg="yellow",
+                       command=self.undo_action)
+        b2.grid(row=1, column=1, padx=5, pady=2)
+        # auto-resolve button
+        b3 = tk.Checkbutton(self.stack_frame, text="Auto-resolve all",
+                            variable=self.var_resolveall, indicatoron=True)
+        b3.grid(row=0, column=0, columnspan=2, padx=5, pady=5)
+        # show the items on the stack
+        for widgets in self.stack_frame.winfo_children():
+            widgets.destroy()
+        for ii, obj in enumerate(self.game.stack):
+            butt = obj.build_tk_display(self.stack_frame)
+            butt.config(command=self.resolve_top_of_stack)
+            butt.grid(row=1, column=ii+5, padx=5, pady=3, rowspan=2)
 
-    def Undo(self):
+    def rebuild_display(self):
+        self.build_stack_display()
+        for player in self.game.player_list:
+            self.build_player_display(player)
+
+    def undo_action(self):
         if len(self.history) > 1:
             self.history.pop(-1)  # delete last gamestate from history list
-            self.RebuildDisplay()
+            self.rebuild_display()
 
-    def CastSpell(self, spell):
-        universes = self.game.CastSpell(spell)
-        if len(universes) == 0:
-            return  # casting failed, nothing changed so do nothing
-        assert (len(universes) == 1)
-        self.history.append(universes[0])
-        if self.var_resolveall.get():
-            self.EmptyEntireStack()
-        else:
-            self.RebuildDisplay()
-
-    def ActivateAbility(self, source, ability):
-        universes = self.game.ActivateAbilities(source, ability)
-        if len(universes) == 0:
-            return  # activation failed, nothing changed so do nothing
-        assert (len(universes) == 1)
-        self.history.append(universes[0])
-        if self.var_resolveall.get():
-            self.EmptyEntireStack()
-        else:
-            self.RebuildDisplay()
-
-    def ResolveTopOfStack(self):
+    def resolve_top_of_stack(self):
         if len(self.game.stack) == 0:
             return  # nothing to resolve, so don't change anything
-        universes = self.game.ResolveTopOfStack()
+        universes = self.game.resolve_top_of_stack()
         # if len(universes)==0:
         #     return #nothing changed so do nothing
         assert (len(universes) == 1)
         self.history.append(universes[0])
         if self.var_resolveall.get():
-            self.EmptyEntireStack()
+            self.empty_entire_stack()
         else:
-            self.RebuildDisplay()
+            self.rebuild_display()
 
-    def EmptyEntireStack(self):
+    def empty_entire_stack(self):
         while len(self.game.stack) > 0:
-            universes = self.game.ResolveTopOfStack()
+            universes = self.game.resolve_top_of_stack()
             # if len(universes)==0:
             #     return #nothing changed so do nothing
             assert (len(universes) == 1)
             self.history.append(universes[0])
-        self.RebuildDisplay()
+        self.rebuild_display()
 
     def PassTurn(self):
         newstate = self.game.copy()
@@ -206,39 +214,11 @@ class ManualGame(tk.Tk):
             if len(state.stack) == 0:
                 finalstates.add(state)
             else:
-                activelist += state.ResolveTopOfStack()
+                activelist += state.resolve_top_of_stack()
         # all untap/upkeep/draw abilities are done
         assert (len(finalstates) == 1)
         self.history.append(finalstates.pop())
-        self.RebuildDisplay()
-
-    def HandleError(self, exc, val, tb, *args):
-        """overwrite tkinter's usual error-handling routine if it's something
-        I care about (like winning or losing the game)
-        exc is the error type (it is of class 'type')
-        val is the error itself (it is some subclass of Exception)
-        tb is the traceback object (it is of class 'traceback')
-        See https://stackoverflow.com/questions/4770993/how-can-i-make-silent
-            -exceptions-louder-in-tkinter
-        """
-        if isinstance(val, WinTheGameError):
-            tk.Label(self.status, text="CONGRATS! YOU WON THE GAME!", bg="red",
-                     ).grid(row=0, column=0, columnspan=10, padx=5, pady=5)
-            for frame in [self.field, self.hand, self.stack, self.status]:
-                for widget in frame.winfo_children():
-                    if isinstance(widget, tk.Button):
-                        widget.config(state="disabled")
-        elif isinstance(val, LoseTheGameError):
-            tk.Label(self.status, text="SORRY, YOU LOST THE GAME", bg="red",
-                     ).grid(row=0, column=0, columnspan=10, padx=5, pady=5)
-            for frame in [self.field, self.hand, self.stack, self.status]:
-                for widget in frame.winfo_children():
-                    if isinstance(widget, tk.Button):
-                        widget.config(state="disabled")
-        elif isinstance(val, Choices.AbortChoiceError):
-            return  # just don't panic. gamestate is unchanged.
-        else:
-            super().report_callback_exception(exc, val, tb, *args)
+        self.rebuild_display()
 
 
 if __name__ == "__main__":

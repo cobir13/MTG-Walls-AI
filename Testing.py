@@ -768,7 +768,7 @@ if __name__ == "__main__":
     assert (game != cp3)
     assert (cp != cp3)
     obj2 = forest2.get_activated()[0].valid_stack_objects(cp, 0, forest2)[0]
-    cp4 = obj2.put_on_stack(cp)[0]
+    cp4 = obj2._put_on_stack(cp)[0]
     assert (game != cp4)
     assert (cp3 == cp4)
     assert (not (cp3 is cp4))

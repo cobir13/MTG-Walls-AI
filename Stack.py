@@ -1,14 +1,15 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
-import Zone
-
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility
     from Cardboard import Cardboard
     from Verbs import Verb, INPUTS
     from Costs import Cost
     from GameState import GameState
+
+import Zone
+import tkinter as tk
 
 
 class StackObject:
@@ -106,19 +107,19 @@ class StackObject:
         else:
             return Zone.Stack()
 
+    def build_tk_display(self, parentframe, ):
+        return tk.Button(parentframe,
+                         text=str(self),
+                         anchor="w",
+                         height=7, width=10, wraplength=80,
+                         padx=3, pady=3,
+                         relief="solid", bg="lightblue")
+
 
 class StackAbility(StackObject):
 
     def __str__(self):
         return "Effect(%s)" % self.name
-
-    # def build_tk_display(self, parentframe, ):
-    #     return tk.Button(parentframe,
-    #                      text="Effect: %s" % self.name,
-    #                      anchor="w",
-    #                      height=7, width=10, wraplength=80,
-    #                      padx=3, pady=3,
-    #                      relief="solid", bg="lightblue")
 
 
 class StackTrigger(StackAbility):
@@ -146,10 +147,10 @@ class StackCardboard(StackObject):
     def __str__(self):
         return "Spell: " + self.name
 
-    # def build_tk_display(self, parentframe, ):
-    #     return tk.Button(parentframe,
-    #                      text="Effect: %s" % self.name,
-    #                      anchor="w",
-    #                      height=7, width=10, wraplength=80,
-    #                      padx=3, pady=3,
-    #                      relief="solid", bg="lightblue")
+    def build_tk_display(self, parentframe, ):
+        return tk.Button(parentframe,
+                         text=str(self),
+                         anchor="w",
+                         height=7, width=10, wraplength=80,
+                         padx=3, pady=3,
+                         relief="solid", bg="lightgreen")

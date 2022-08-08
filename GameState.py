@@ -17,6 +17,8 @@ from Stack import StackCardboard, StackTrigger, StackObject
 from Verbs import MoveToZone, DrawCard, Untap
 import Choices
 
+import tkinter as tk
+
 
 class GameState:
     """The current state of the game.
@@ -387,6 +389,29 @@ class GameState:
         print("not yet implemented")
         return
 
+    def build_tk_display(self, parentframe):
+        # button to do the next thing
+        if len(self.game.stack) == 0:
+            b = tk.Button(self.status, text="Pass\nturn", bg="yellow",
+                          width=7,
+                          command=self.PassTurn)
+            b.grid(row=1, column=5, padx=5, pady=5)
+        else:
+            b = tk.Button(self.status, text="Resolve\nnext", bg="yellow",
+                          width=7,
+                          command=self.ResolveTopOfStack)
+            b.grid(row=1, column=5, padx=5, pady=2)
+        # undo button
+        b2 = tk.Button(self.status, text="undo", bg="yellow",
+                       command=self.Undo)
+        b2.grid(row=1, column=6, padx=5, pady=2)
+        # auto-resolve button
+        b3 = tk.Checkbutton(self.status, text="Auto-resolve all",
+                            variable=self.var_resolveall,
+                            indicatoron=True)
+        # onvalue=1,background='grey')#,selectcolor='green')
+        b3.grid(row=2, column=5, columnspan=2, padx=5, pady=5)
+
 
 # ---------------------------------------------------------------------------
 
@@ -612,3 +637,25 @@ class Player:
         # update zone locations. mutates, so will also affect pointers.
         for ii in range(index, len(self.deck)):
             self.deck[ii].zone.location = ii
+
+
+
+
+
+
+
+    def RebuildHand(self):
+        for widgets in self.hand.winfo_children():
+            widgets.destroy()
+        for ii, card in enumerate(self.game.hand):
+            butt = card.build_tk_display(self.hand)
+            abils = [a for a in card.get_activated()
+                     if a.CanAfford(self.game, card)]
+            # activated abilities in hand are not yet implemented
+            assert (len(abils) == 0)
+            if card.rules_text.CanAfford(self.game, card):
+                butt.config(state="normal",
+                            command=lambda c=card: self.CastSpell(c))
+            else:
+                butt.config(state="disabled")
+            butt.grid(row=1, column=ii, padx=5, pady=3)
