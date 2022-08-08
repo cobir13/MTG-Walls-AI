@@ -262,7 +262,6 @@ class CardNull(Cardboard):
 
     def __init__(self):
         super().__init__(RulesText())
-        self.rules_text: None
         self.tapped: bool = False
         self.summon_sick: bool = True
         self.counters = []
@@ -279,6 +278,9 @@ class CardNull(Cardboard):
 
     def add_counter(self, addition):
         return
+
+    def valid_stack_objects(self, state: GameState) -> List[StackCardboard]:
+        return []
 
     @property
     def name(self):

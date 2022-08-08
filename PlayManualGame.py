@@ -6,8 +6,12 @@ if TYPE_CHECKING:
 
 import tkinter as tk
 
-import RulesText  # for Creature
+import Zone
+import Choices
+import RulesText  # for Creature, maybe Land
 from GameState import GameState
+import Decklist
+import Cardboard
 
 
 class ManualGame(tk.Tk):
@@ -26,17 +30,22 @@ class ManualGame(tk.Tk):
             if pl.player_index != self.player_index:
                 fr.grid(row=pl.player_index, column=1,
                         padx=5, pady=5, sticky="W")
+                pl.decision_maker = "try_one"
         # stack
-        tk.Label(self, text="STACK", wraplength=1).grid(row=0, column=0)
-        self.stack_frame = tk.Frame(self, borderwidth=1, relief="solid")
-        self.stack_frame.grid(row=len(self.player_frame_list), column=1,
-                              padx=5, pady=5, sticky="W")
+        self.stack_frame = tk.Frame(self)
+        self.stack_frame.grid(row=len(self.player_frame_list),
+                              column=1, padx=5, pady=5, sticky="W")
         # main player
         fr = self.player_frame_list[self.player_index]
         fr.grid(row=len(self.player_frame_list) + 1, column=1,
                 padx=5, pady=5, sticky="W")
+        print(len(self.player_frame_list) + 1)
+        startstate.player_list[self.player_index].decision_maker = "manual"
         # populate the display and start the game
         self.rebuild_display()
+
+        print([fr.grid_info()["row"] for fr in self.player_frame_list])
+
         self.mainloop()
 
     @property
@@ -70,33 +79,42 @@ class ManualGame(tk.Tk):
             self.rebuild_display()
 
     def build_player_display(self, player):
-        # clear previous
-        for widgets in self.stack_frame.winfo_children():
-            widgets.destroy()
         self_frame = self.player_frame_list[player.player_index]
+        # clear previous
+        for widgets in self_frame.winfo_children():
+            widgets.destroy()
         # status zone for life, mana, etc
         status_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
-        status_frame.grid(row=0, rowspan=3, column=0, padx=5, pady=5)
-        tk.Label(status_frame, text="Turn:\n%i" % player.turn_count,
-                 ).grid(row=0, column=1, rowspan=2, padx=5, pady=5)
+        status_frame.grid(row=0, rowspan=3, column=0, padx=5, pady=0)
+        txt = "PLAYER %i" % player.player_index
+        if player.player_index == self.player_index:
+            txt += " (YOU)"
+        tk.Label(status_frame, text=txt
+                 ).grid(row=0, column=1, padx=5, pady=0)
+        tk.Label(status_frame, text="Turn: %i" % player.turn_count,
+                 ).grid(row=1, column=1, padx=5, pady=0)
         tk.Label(status_frame, text="Life total: %i" % player.life
-                 ).grid(row=1, column=1, padx=5, pady=2)
+                 ).grid(row=2, column=1, padx=5, pady=0)
+        tk.Label(status_frame, text="Cards in hand: %i" % len(player.hand)
+                 ).grid(row=3, column=1, padx=5, pady=0)
         tk.Label(status_frame, text="Cards in deck: %i" % len(player.deck)
-                 ).grid(row=2, column=1, padx=5, pady=2)
+                 ).grid(row=4, column=1, padx=5, pady=0)
         tk.Label(status_frame, text="Cards in grave: %i" % len(player.grave)
-                 ).grid(row=3, column=1, padx=5, pady=2)
+                 ).grid(row=5, column=1, padx=5, pady=0)
         if str(player.pool) != "":
             manastr = "Mana floating: (%s)" % str(player.pool)
         else:
             manastr = "Mana floating: None"
         tk.Label(status_frame, text=manastr
-                 ).grid(row=4, column=1, padx=5, pady=2)
+                 ).grid(row=6, column=1, padx=5, pady=0)
         tk.Label(status_frame,
                  text="Land drops left: %i" % player.land_drops_left
-                 ).grid(row=5, column=1, padx=5, pady=2)
+                 ).grid(row=7, column=1, padx=5, pady=0)
         # field
-        field_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
-        field_frame.grid(row=0, column=1, padx=5, pady=5)
+        field_frame = tk.Frame(self_frame, borderwidth=1, relief="solid",
+                               height=250, width=800)
+        field_frame.grid_propagate(False)  # don't resize
+        field_frame.grid(row=0, column=1, padx=5, pady=3, sticky="W")
         tk.Label(field_frame, text="FIELD", wraplength=1).grid(row=0, column=0,
                                                                rowspan=2)
         toprow = 0  # number in bottom row
@@ -115,19 +133,20 @@ class ManualGame(tk.Tk):
                 else:
                     butt.config(state="disabled")
             if card.has_type(RulesText.Creature):
-                butt.grid(row=1, column=toprow, padx=5, pady=3)
+                butt.grid(row=0, column=toprow+1, padx=2, pady=2)
                 toprow += 1
             else:
-                butt.grid(row=2, column=botrow, padx=5, pady=3)
+                butt.grid(row=1, column=botrow+1, padx=2, pady=2)
                 botrow += 1
         # hand
-        hand_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
-        hand_frame.grid(row=0, column=3, padx=5, pady=5)
-        tk.Label(field_frame, text="HAND", wraplength=1).grid(row=0, column=0)
-        for ii, card in enumerate(player.hand):
-            butt = card.build_tk_display(hand_frame)
-            # add option for user to activate abilities, if is human player.
-            if player.player_index == self.player_index:
+        if player.player_index == self.player_index:
+            # the user-controller player:
+            hand_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
+            hand_frame.grid(row=1, column=1, padx=5, pady=3, sticky="W")
+            tk.Label(hand_frame, text="HAND", wraplength=1).grid(row=0, column=0)
+            for ii, card in enumerate(player.hand):
+                butt = card.build_tk_display(hand_frame)
+                # add option for user to activate abilities
                 opts = []
                 for ab in card.get_activated():
                     opts += ab.valid_stack_objects(player.gamestate,
@@ -138,7 +157,7 @@ class ManualGame(tk.Tk):
                     butt.config(state="normal", command=cast_fn)
                 else:
                     butt.config(state="disabled")
-            butt.grid(row=1, column=ii, padx=5, pady=3)
+                butt.grid(row=0, column=ii+1, padx=2, pady=2)
 
     def build_stack_display(self):
         # clear previous
@@ -147,7 +166,7 @@ class ManualGame(tk.Tk):
         # button to do the next thing
         if len(self.game.stack) == 0:
             b = tk.Button(self.stack_frame, text="Pass\nturn", bg="yellow",
-                          width=7, command=self.PassTurn)
+                          width=7, command=self.pass_turn)
             b.grid(row=1, column=0, padx=5, pady=5)
         else:
             b = tk.Button(self.stack_frame, text="Resolve\nnext", bg="yellow",
@@ -162,17 +181,19 @@ class ManualGame(tk.Tk):
                             variable=self.var_resolveall, indicatoron=True)
         b3.grid(row=0, column=0, columnspan=2, padx=5, pady=5)
         # show the items on the stack
-        for widgets in self.stack_frame.winfo_children():
-            widgets.destroy()
+        obj_frame = tk.Frame(self.stack_frame, borderwidth=1, relief="solid",
+                             height=120, width=800)
+        obj_frame.grid(row=0, rowspan=5, column=5, padx=5, pady=3, sticky="EW")
+        tk.Label(obj_frame, text="STACK", wraplength=1).grid(row=0, column=0)
         for ii, obj in enumerate(self.game.stack):
-            butt = obj.build_tk_display(self.stack_frame)
+            butt = obj.build_tk_display(obj_frame)
             butt.config(command=self.resolve_top_of_stack)
-            butt.grid(row=1, column=ii+5, padx=5, pady=3, rowspan=2)
+            butt.grid(row=0, column=ii+5, padx=5, pady=3, rowspan=2)
 
     def rebuild_display(self):
-        self.build_stack_display()
         for player in self.game.player_list:
             self.build_player_display(player)
+        self.build_stack_display()
 
     def undo_action(self):
         if len(self.history) > 1:
@@ -201,13 +222,14 @@ class ManualGame(tk.Tk):
             self.history.append(universes[0])
         self.rebuild_display()
 
-    def PassTurn(self):
+    def pass_turn(self):
         newstate = self.game.copy()
-        newstate.UntapStep()
-        newstate.UpkeepStep()
+        newstate.pass_turn()
+        newstate.step_untap()
+        newstate.step_upkeep()
         newstate.step_draw()  # should clear super_stack FIRST? but whatever
         # clear the super stack, then clear the normal stack
-        activelist = newstate.ClearSuperStack()
+        activelist = newstate.clear_super_stack()
         finalstates = set()
         while len(activelist) > 0:
             state = activelist.pop(0)
@@ -223,36 +245,30 @@ class ManualGame(tk.Tk):
 
 if __name__ == "__main__":
     print("testing ManualGame...")
-    import Decklist
-    import Choices
-    import Cardboard
-    import Zone
 
-    Choices.AUTOMATION = False
+    game = GameState(2)
 
-    game = GameState(1)
-    game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.FIELD)
-    game.give_to(Cardboard.Cardboard(Decklist.Caretaker()), ZONE.FIELD)
+    # player1 has entirely mountains. 3 in hand, 30 in deck.
+    for _ in range(30):
+        game.give_to(Cardboard.Cardboard(Decklist.Mountain()), Zone.DeckTop, 1)
+    for _ in range(3):
+        game.give_to(Cardboard.Cardboard(Decklist.Mountain()), Zone.Hand, 1)
 
-    game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.HAND)
-    game.give_to(Cardboard.Cardboard(Decklist.Roots()), ZONE.HAND)
-    game.give_to(Cardboard.Cardboard(Decklist.Battlement()), ZONE.HAND)
-    game.give_to(Cardboard.Cardboard(Decklist.Company()), ZONE.HAND)
+    # player0 is playing Walls
+    game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.Caretaker()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.Roots()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.Battlement()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.Company()), Zone.Hand, 0)
 
     for _ in range(5):
-        game.give_to(Cardboard.Cardboard(Decklist.Blossoms()), ZONE.DECK)
+        game.give_to(Cardboard.Cardboard(Decklist.Omens()), Zone.DeckTop, 0)
+        game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.DeckTop, 0)
+        game.give_to(Cardboard.Cardboard(Decklist.Battlement()),
+                     Zone.DeckTop, 0)
     for _ in range(5):
-        game.give_to(Cardboard.Cardboard(Decklist.Omens()), ZONE.DECK)
-        game.give_to(Cardboard.Cardboard(Decklist.Forest()), ZONE.DECK)
-        game.give_to(Cardboard.Cardboard(Decklist.Battlement()), ZONE.DECK)
+        game.give_to(Cardboard.Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
 
-    # window = tk.Tk()
-
-    # Choices.SelecterGUI(game.hand,"test chooser GUI",1,False)
-
-    # window.mainloop()
-
-    game.UntapStep()
-    game.UpkeepStep()
-    gui = ManualGame(game)
+    gui = ManualGame(game, 0)

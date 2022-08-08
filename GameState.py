@@ -227,6 +227,15 @@ class GameState:
             # legend rule   # TODO
             # Sacrifice().do_it(self, player.player_index, card)
 
+    def pass_turn(self):
+        self.phase = 0
+        self.active_player_index = ((self.active_player_index + 1)
+                                    % len(self.player_list))
+        self.priority_player_index: int = self.active_player_index
+        # make sure that the stack is empty
+        self.stack = []
+        self.super_stack = []
+
     def step_untap(self):
         """MUTATES. Adds any triggered StackAbilities to the
         super_stack. This function is where things reset for
@@ -238,9 +247,6 @@ class GameState:
             text = "\nUntap step: Player%i Turn%i" % (turn, ii)
             self.events_since_previous += text
         self.phase = GameState.PHASES.index("untap")
-        # make sure that the stack is empty
-        self.stack = []
-        self.super_stack = []
         # resets that happen for all players
         for player in self.player_list:
             player.pool = ManaPool("")

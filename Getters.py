@@ -59,47 +59,6 @@ class GetTrait(Getter):
         Getter.__init__(self, gives_single_output=True)
 
 
-# class FromZone(Getter):
-#     """Returns a list of cards (Cardboards) who match the given
-#     criteria. (Possibly empty, if no matches)."""
-#
-#     def __init__(self, pattern_to_satisfy: Match.Pattern,
-#                  zone_or_zones: Zone.Zone | List[Zone.Zone]):
-#         super().__init__(True)
-#         if not isinstance(zone_or_zones, list):
-#             zone_or_zones = [zone_or_zones]
-#         self.zones: List[Zone.Zone] = zone_or_zones
-#         self.pattern: Match.Pattern = pattern_to_satisfy
-#
-#     def get(self, state: GameState, player: int, source: Cardboard
-#             ) -> List[Cardboard]:
-#         zones_to_check = []
-#         for z in self.zones:
-#             zones_to_check += z.get_absolute_zones(state, player, source)
-#         cards: List[Cardboard] = []
-#         for z in zones_to_check:
-#             cards += [c for c in z.get(state)
-#                       if self.pattern.match(c, state, player, source)]
-#         return cards
-#
-#     def __str__(self):
-#         return str(self.pattern) + " in " + ",".join([str(z)
-#                                                       for z in self.zones])
-#
-#
-# class GetPlayers(Getter):
-#     """Returns a list of players (ints) who match the given
-#     criteria. (Possibly empty, if no matches)."""
-#
-#     def __init__(self, player_pattern: Match.PlayerPattern):
-#         super().__init__(gives_single_output=False)
-#         self.pattern = player_pattern
-#
-#     def get(self, state: GameState, player, source) -> List[int]:
-#         return [p.player_index for p in state.player_list
-#                 if self.pattern.match(p, state, player, source)]
-
-
 class CardsFrom(Getter):
     """Returns a list of cards (Cardboards) from the
     given zone. Handes the zone being relative rather
@@ -343,7 +302,7 @@ class AllWhich:
     """return subsets of the given list, of all objects
      which match the specified pattern."""
 
-    def __init__(self, pattern_for_valid: Match.Pattern = Match.Anything()):
+    def __init__(self, pattern_for_valid: Match.Pattern):
         self.pattern = pattern_for_valid
         self.single_output = True
 
@@ -421,5 +380,7 @@ class Target(Chooser):
 
 class Any(Chooser):
     """Choose any one option from the given list of options"""
-    def __init__(self, pattern_for_valid: Match.Pattern = Match.Anything()):
+    def __init__(self, pattern_for_valid: Match.Pattern | None):
+        if pattern_for_valid is None:
+            pattern_for_valid = Match.Anything()
         super().__init__(pattern_for_valid, 1, False)
