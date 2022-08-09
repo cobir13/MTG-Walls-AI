@@ -32,6 +32,9 @@ import Choices
 # ---------------------------------------------------------------------------
 
 class Verb:
+    """Describes an action that a human player can take.
+    NOTE: VERBS ARE NOT ALLOWED TO MUTATE AFTER CREATION."""
+
     def __init__(self, num_inputs: int, copies: bool):
         self.num_inputs: int = num_inputs
         self.copies: bool = copies  # returns copies of GameStates, not mutate.
@@ -1001,14 +1004,14 @@ class MoveToZone(AffectSourceCard):
 
     def __init__(self, destination_zone: Zone.Zone):
         super().__init__()
-        self.destination: Zone.Zone = destination_zone
+        self._destination: Zone.Zone = destination_zone
         # track origin to let triggers check where card was moved from
-        self.origin: Zone.Zone = Zone.Unknown()
+        self._origin: Zone.Zone = Zone.Unknown()
 
     def can_be_done(self, state, player, source, other_inputs=[]) -> bool:
         if not super().can_be_done(state, player, source, other_inputs):
             return False
-        if not source.zone.is_fixed or self.destination.is_single:
+        if not source.zone.is_fixed or self._destination.is_single:
             # origin zone and destination zone must be clear locations
             print("dest zone not specified!", state, player, source)  # debug
             return False
@@ -1018,30 +1021,40 @@ class MoveToZone(AffectSourceCard):
             return True
 
     def do_it(self, state, player, source, other_inputs=[]):
-        # NOTE: Cardboard can't live on the stack. only StackObjects do. So
-        # reassign card zone and remove/add to zones as appropriate, but never
-        # directly add or remove from the stack. StackCardboard does the rest.
-        self.origin = source.zone.copy()  # so trigger knows card's origin
-        # remove from origin zone
-        self.origin.remove_from_zone(state, source)
+        # need to build a new verb to pass to super() to see if it triggers
+        # anything, because not safe to mutate this Verb. Screws with copy.
+        new_verb = MoveToZone(self._destination)
         # makes sure that the destination is well-defined, and defines if not.
-        if not self.destination.is_single:
-            new_dest = self.destination.get_absolute_zones(state, player,
-                                                           source)
+        if not new_verb._destination.is_single:
+            new_dest = new_verb._destination.get_absolute_zones(state, player,
+                                                                source)
             if len(new_dest) != 1:
                 raise Zone.Zone.NotSpecificPlayerError
-            self.destination = new_dest[0]
+            new_verb._destination = new_dest[0]
+        # define the origin for new_verb, so trigger knows card's origin
+        new_verb._origin = source.zone.copy()
+        # NOTE: Zone handles whether the Cardboard is actually added or pulled
+        # from the zone (e.g. for the Stack). Don't worry about that here.
+        new_verb._origin.remove_from_zone(state, source)
         # add to destination. (also resets source's zone to be destination.)
-        self.destination.add_to_zone(state, source)
-        # any time you change zones, reset the cardboard parameters
+        new_verb._destination.add_to_zone(state, source)
         source.reset_to_default_cardboard()
-        # add triggers to super_stack, reduce length of input list. NOTE:
-        # needs origin and destination zones to be well-defined so that
-        # triggers can hook into them properly. "You" != "0", for example.
-        return super().do_it(state, player, source, other_inputs)
+        # add triggers to super_stack, reduce length of input list.
+        # I use new_verb not self because need to pass origin and destination
+        # info but can't mutate self.
+        return super(MoveToZone, new_verb).do_it(state, player,
+                                                 source, other_inputs)
+
+    @property
+    def origin(self) -> Zone.Zone:
+        return self._origin
+
+    @property
+    def destination(self) -> Zone.Zone:
+        return self._destination
 
     def __str__(self):
-        return "MoveTo" + str(self.destination)
+        return "MoveTo" + str(self._destination)
 
 
 class DrawCard(AffectPlayer):

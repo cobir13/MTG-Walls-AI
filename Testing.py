@@ -212,7 +212,7 @@ if __name__ == "__main__":
                                    Zone.Grave(None)
                                ),
                                Verbs.GainLife(1)
-                               + Verbs.LoseLife(1).on(Get.AllWhich(),
+                               + Verbs.LoseLife(1).on(Get.All(),
                                                       Get.Opponents())
                                )
 
@@ -261,12 +261,15 @@ if __name__ == "__main__":
     artist = gameE.player_list[1].field[0]
     s = artist.rules_text.trig_verb[0].trigger
     assert s.pattern.match(chocE, gameE, 0, artist)
+    # assert False
     Verbs.Destroy().do_it(gameE, 0, chocE, [])
     assert not chocE.tapped  # not tapped, because dead and in grave
     assert len(Zone.Field(None).get(gameE)) == 4
+    assert len(gameE.super_stack) == 1
     game_list = gameE.clear_super_stack()
     assert len(game_list) == 1
     gameF = game_list[0]
+    assert len(gameF.stack) == 1  # blood artist trigger
     game_list = gameF.resolve_top_of_stack()
     assert len(game_list) == 1
     gameG = game_list[0]
@@ -304,6 +307,47 @@ if __name__ == "__main__":
     assert len(final_game.super_stack) == 0
     assert len(Zone.Field(None).get(final_game)) == 0
     assert len(Zone.Grave(None).get(final_game)) == 5
+
+    # some additional tests for Verbs.MoveToZone in particular
+    class Jumper(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "Jumper"
+            self.cost = Costs.Cost("BBB")
+            self.set_power_toughness(7, 1)
+            self.add_activated("Jumper move to hand",
+                               Costs.Cost("2"),
+                               Verbs.MoveToZone(Zone.Hand(Get.Controllers())))
+
+    gameJ1 = GameState()
+    gameJ1.give_to(Cardboard(Jumper()), Zone.Field, 0)
+    gameJ1.active.pool.add_mana("WW")  # to pay for ability
+    gameJ2 = gameJ1.copy()
+    j1 = gameJ1.active.field[0]
+    j2 = gameJ2.active.field[0]
+    assert j1.is_equiv_to(j2)
+    assert j1 is not j2
+    # COPYING DOESN'T COPY THE RULESTEXT OR ABILITY. ALL POINTERS TO SAME OBJ.
+    assert j1.rules_text is j2.rules_text
+    assert j1.get_activated()[0] is j2.get_activated()[0]
+    assert (j1.get_activated()[0].effect.destination
+            is j2.get_activated()[0].effect.destination)
+    assert isinstance(j1.get_activated()[0].effect.destination, Zone.Hand)
+    assert isinstance(j1.get_activated()[0].effect.origin, Zone.Unknown)
+    activs = gameJ1.active.get_valid_activations()
+    assert len(activs) == 1
+    universes = activs[0].put_on_stack(gameJ1)
+    assert len(universes) == 1
+    gameJ3 = universes[0]
+    universes = gameJ3.resolve_top_of_stack()
+    assert len(universes) == 1
+    gameJ4 = universes[0]
+    j4 = gameJ4.active.hand[0]
+    assert (j1.get_activated()[0].effect.destination
+            is j4.get_activated()[0].effect.destination)
+    # WHEN MOVE, ZONE OBJECT IS STILL NOT MUTATED.
+    assert not isinstance(j1.get_activated()[0].effect.origin, Zone.Field)
+    assert isinstance(j1.get_activated()[0].effect.origin, Zone.Unknown)
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
