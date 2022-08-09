@@ -50,7 +50,6 @@ class ManualGame(tk.Tk):
 
     @property
     def game(self):
-        assert (not isinstance(self.history[-1], str))
         return self.history[-1]
 
     @property
@@ -146,16 +145,21 @@ class ManualGame(tk.Tk):
             tk.Label(hand_frame, text="HAND", wraplength=1).grid(row=0, column=0)
             for ii, card in enumerate(player.hand):
                 butt = card.build_tk_display(hand_frame)
-                # add option for user to activate abilities
-                opts = []
-                for ab in card.get_activated():
-                    opts += ab.valid_stack_objects(player.gamestate,
-                                                   player.player_index, card)
-                opts += card.valid_stack_objects(player.gamestate)  # cast card
-                if len(opts) >= 1:
-                    cast_fn = lambda options=opts: self._caster(options)
-                    butt.config(state="normal", command=cast_fn)
+                # add option for user to activate abilities, if has priority
+                if self.player_index == self.game.priority_player_index:
+                    opts = []
+                    for ab in card.get_activated():
+                        opts += ab.valid_stack_objects(player.gamestate,
+                                                       player.player_index,
+                                                       card)
+                    opts += card.valid_stack_objects(player.gamestate)  # cast
+                    if len(opts) >= 1:
+                        cast_fn = lambda options=opts: self._caster(options)
+                        butt.config(state="normal", command=cast_fn)
+                    else:
+                        butt.config(state="disabled")
                 else:
+                    # not your priority, so can't do anything!
                     butt.config(state="disabled")
                 butt.grid(row=0, column=ii+1, padx=2, pady=2)
 

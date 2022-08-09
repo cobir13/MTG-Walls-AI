@@ -261,7 +261,6 @@ if __name__ == "__main__":
     artist = gameE.player_list[1].field[0]
     s = artist.rules_text.trig_verb[0].trigger
     assert s.pattern.match(chocE, gameE, 0, artist)
-    # assert False
     Verbs.Destroy().do_it(gameE, 0, chocE, [])
     assert not chocE.tapped  # not tapped, because dead and in grave
     assert len(Zone.Field(None).get(gameE)) == 4
@@ -279,7 +278,6 @@ if __name__ == "__main__":
             for g in [gameE, gameF, gameG]] == [20, 20, 19]
     assert [g.player_list[1].life
             for g in [gameE, gameF, gameG]] == [20, 20, 21]
-
     # try to destroy the world!
     wrath = Verbs.Defer(Verbs.Destroy().on(Get.AllWhich(
         Match.CardType(RulesText.Creature)),
@@ -307,6 +305,17 @@ if __name__ == "__main__":
     assert len(final_game.super_stack) == 0
     assert len(Zone.Field(None).get(final_game)) == 0
     assert len(Zone.Grave(None).get(final_game)) == 5
+
+    # try to pass turn
+    assert game1.active_player_index == 0
+    assert game1.priority_player_index == 0
+    assert choc0 in game1.active.field
+    assert choc0 in game1.player_list[0].field
+    game1.pass_turn()
+    assert game1.active_player_index == 1
+    assert game1.priority_player_index == 1
+    assert choc0 not in game1.active.field  # because active has changed
+    assert choc0 in game1.player_list[0].field  # but choc0 hasn't moved
 
     # some additional tests for Verbs.MoveToZone in particular
     class Jumper(RulesText.Creature):
@@ -345,9 +354,11 @@ if __name__ == "__main__":
     j4 = gameJ4.active.hand[0]
     assert (j1.get_activated()[0].effect.destination
             is j4.get_activated()[0].effect.destination)
-    # WHEN MOVE, ZONE OBJECT IS STILL NOT MUTATED.
+    # WHEN MOVE, ZONE OBJECT IS STILL NOT MUTATED. GOOD.
     assert not isinstance(j1.get_activated()[0].effect.origin, Zone.Field)
     assert isinstance(j1.get_activated()[0].effect.origin, Zone.Unknown)
+    assert not isinstance(j4.get_activated()[0].effect.origin, Zone.Field)
+    assert isinstance(j4.get_activated()[0].effect.origin, Zone.Unknown)
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
