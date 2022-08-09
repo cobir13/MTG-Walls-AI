@@ -475,6 +475,7 @@ if __name__ == "__main__":
     assert len(cost_game.active.get_valid_activations()) == 0
 
     # untap to reset things, then try to activate the ability "properly"
+    game_orig.pass_turn()  # increments turn
     game_orig.step_untap()
     activations = game_orig.active.get_valid_activations()
     assert len(activations) == 1
@@ -560,6 +561,7 @@ if __name__ == "__main__":
     assert (len(carygame1.active.get_valid_castables()) == 0)  # no castables
 
     # try to untap and upkeep to get rid of summonning sickness
+    carygame1.pass_turn()  # increments turn
     carygame1.step_untap()
     carygame1.step_upkeep()
     assert len(carygame1.active.get_valid_castables()) == 0  # no castables
@@ -857,15 +859,19 @@ if __name__ == "__main__":
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
     game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
+    game1A.pass_turn()
     game1A.step_untap()
     game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
     # game 2: [1] into play, then the other
     game2A = mover.do_it(game2, 0, game2.active.hand[1])[0][0]
+    game2A.pass_turn()
     game2A.step_untap()
     game2B = mover.do_it(game2A, 0, game2.active.hand[0])[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
+    game1B.pass_turn()
     game1B.step_untap()
+    game2B.pass_turn()
     game2B.step_untap()
     assert (game1B == game2B)
 
@@ -890,6 +896,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_activations()) == 0
     game.active.field.remove(caryatid)
 
+    game.pass_turn()
     game.step_untap()
     assert not game.active.field[0].summon_sick
     assert (len(game.active.get_valid_activations()) == 0)  # nothing to tap
@@ -930,6 +937,7 @@ if __name__ == "__main__":
 
     # see what happens with two active caretakers
     game3 = univ3
+    game3.pass_turn()
     game3.step_untap()
     # 2 Caretakers plus Caryatid in play. 5 possibilities. But Caretakers are
     # equivalent so we only see 3 _options. Good.
@@ -959,6 +967,7 @@ if __name__ == "__main__":
     game6.give_to(axe, Zone.Field)
     game6.give_to(battle, Zone.Field)
     assert len(game6.active.get_valid_activations()) == 0  # still summon_sick
+    game6.pass_turn()  # increments turn
     game6.step_untap()
     # axebane; battlement; caryatid; caretaker with 4 targets to tap
     assert len(game6.active.get_valid_activations()) == 7

@@ -170,7 +170,7 @@ def run_gui_to_select(options, name, num_to_select, can_be_less):
         frame = tk.Frame(disp, borderwidth=0, background="lightgrey")
         frame.grid(row=1, column=ii, padx=2, pady=2)
         frame_list.append(frame)
-        if hasattr(obj, "TkDisplay"):
+        if hasattr(obj, "build_tk_display"):
             butt = obj.build_tk_display(frame)
         else:
             butt = tk.Button(frame, text=str(obj), height=7, width=10,
@@ -194,12 +194,12 @@ def run_gui_to_select(options, name, num_to_select, can_be_less):
                   height=2)
     b.grid(row=20, columnspan=20)  # very bottom
 
-    # hitting "X" to close the window abandons the choice early
-    def give_up():
-        disp.destroy()
-        raise AbortChoiceError
+    # # hitting "X" to close the window abandons the choice early
+    # def give_up():
+    #     disp.destroy()
+    #     raise AbortChoiceError
+    # disp.protocol("WM_DELETE_WINDOW", give_up)
 
-    disp.protocol("WM_DELETE_WINDOW", give_up)
     # run the GUI window
     disp.grab_set()
     disp.wait_window()  # code hangs here until user accepts

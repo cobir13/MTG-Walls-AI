@@ -108,8 +108,15 @@ class StackObject:
             return Zone.Stack()
 
     def build_tk_display(self, parentframe, ):
+        text = self.name
+        if self.source_card is not None:
+            text += "\nFrom: %s" % self.source_card.name
+        list_chosen = ",".join([c.name if hasattr(c, "name") else str(c)
+                               for c in self.choices])
+        if len(list_chosen) > 0:
+            text += "\n" + list_chosen
         return tk.Button(parentframe,
-                         text=str(self),
+                         text=text,
                          anchor="w",
                          height=7, width=10, wraplength=80,
                          padx=3, pady=3,

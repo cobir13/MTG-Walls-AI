@@ -208,20 +208,26 @@ class Cardboard:
         Similarly, whatever calls this function is responsible for adding the
         button to the tkinter frame so that it actually appears on screen.
         """
-        # string for mana cost (if any)
+        button = tk.Button(parent_frame,
+                           height=4 if self.tapped else 7,
+                           width=15 if self.tapped else 10,
+                           wraplength=110 if self.tapped else 80,
+                           padx=3, pady=3,
+                           relief="raised", bg='lightgreen',
+                           anchor="center"
+                           )
+        button.grid_propagate(False)  # don't resize
+        # mana cost (if any)
         cost_string = ""
         if self.mana_value() > 0:
             cost_string = "(" + str(self.rules_text.mana_cost) + ")"
-        # string for name
-        # text += "".join([l if l.islower() else " "+l for l in self.name])[1:]
-        name_string = self.name
-        # string for power and toughness, if any
-        power_toughness_string = ""
-        if hasattr(self.rules_text, "power") and hasattr(self.rules_text,
-                                                         "toughness"):
-            power_toughness_string = "%i/%i" % (self.rules_text.power,
-                                                self.rules_text.toughness)
-            # string for counters, if any
+        cost_label = tk.Label(button, text=cost_string, bg="red", anchor="ne")
+        cost_label.grid(row=0, column=0, sticky="ewn")
+        # name
+        name_label = tk.Label(button, text=self.name, bg="red",
+                              anchor="center", wraplength=70)
+        name_label.grid(row=1, column=0, sticky="ns")
+        # counters, if any
         counter_string = ""
         for c in set(self.counters):
             if c[0] != "@":
@@ -229,33 +235,73 @@ class Cardboard:
                 if self.counters.count(c) > 1:
                     counter_string += "x%i" % self.counters.count(c)
                 counter_string += "\n"
-        # configure text. tapped and untapped display differently
-        if self.tapped:
-            text = " " * (27 - len(name_string)) + name_string + "\n"
-            text += counter_string
-            while text.count("\n") < 3:
-                text += "\n"
-            text += power_toughness_string
-            text += " " * (30 - len(power_toughness_string) - len(cost_string))
-            text += cost_string
-        else:
-            text = " " * (20 - len(cost_string)) + cost_string + "\n"
-            text += name_string + "\n"
-            text += counter_string
-            while text.count("\n") < 6:
-                text += "\n"
-            text += " " * (20 - len(power_toughness_string))
-            text += power_toughness_string
-        # build the button and return it
-        # noinspection SpellCheckingInspection
-        button = tk.Button(parent_frame,
-                           text=text, anchor="w",
-                           height=4 if self.tapped else 7,
-                           width=15 if self.tapped else 10,
-                           wraplength=110 if self.tapped else 80,
-                           padx=3, pady=3,
-                           relief="raised", bg='lightgreen')
+        counter_label = tk.Label(button, text=counter_string, bg="red",
+                                 anchor="center", borderwidth=1)
+        counter_label.grid(row=2, column=0, sticky="ns")
+        # power and toughness, if any
+        pt_string = ""
+        if hasattr(self.rules_text, "power") and hasattr(self.rules_text,
+                                                         "toughness"):
+            pt_string = "%i/%i" % (self.rules_text.power,
+                                   self.rules_text.toughness)
+        pt_label = tk.Label(button, text=pt_string, bg="red", anchor="e")
+        pt_label.grid(row=3, column=0, sticky="ews")
+        # let subcomponents resize
+        button.rowconfigure("all", weight=1)
+        button.columnconfigure("all", weight=1)
+        # let clicks pass through the labels onto the button??? TODO
+        # TODO: button overwrites labels when cursor leaves?
+
         return button
+        # # string for mana cost (if any)
+        # cost_string = ""
+        # if self.mana_value() > 0:
+        #     cost_string = "(" + str(self.rules_text.mana_cost) + ")"
+        # # string for name
+        # # text += "".join([l if l.islower() else " "+l
+        #                    for l in self.name])[1:]
+        # name_string = self.name
+        # # string for power and toughness, if any
+        # power_toughness_string = ""
+        # if hasattr(self.rules_text, "power") and hasattr(self.rules_text,
+        #                                                  "toughness"):
+        #     power_toughness_string = "%i/%i" % (self.rules_text.power,
+        #                                         self.rules_text.toughness)
+        # # string for counters, if any
+        # counter_string = ""
+        # for c in set(self.counters):
+        #     if c[0] != "@":
+        #         counter_string += "[%s]" % c
+        #         if self.counters.count(c) > 1:
+        #             counter_string += "x%i" % self.counters.count(c)
+        #         counter_string += "\n"
+        # # configure text. tapped and untapped display differently
+        # if self.tapped:
+        #     text = " " * (27 - len(name_string)) + name_string + "\n"
+        #     text += counter_string
+        #     while text.count("\n") < 3:
+        #         text += "\n"
+        #     text += power_toughness_string
+        #     text += " " * (30 - len(power_toughness_string) - len(cost_string))
+        #     text += cost_string
+        # else:
+        #     text = " " * (20 - len(cost_string)) + cost_string + "\n"
+        #     text += name_string + "\n"
+        #     text += counter_string
+        #     while text.count("\n") < 6:
+        #         text += "\n"
+        #     text += " " * (20 - len(power_toughness_string))
+        #     text += power_toughness_string
+        # # build the button and return it
+        # # noinspection SpellCheckingInspection
+        # button = tk.Button(parent_frame,
+        #                    text=text, anchor="w",
+        #                    height=4 if self.tapped else 7,
+        #                    width=15 if self.tapped else 10,
+        #                    wraplength=110 if self.tapped else 80,
+        #                    padx=3, pady=3,
+        #                    relief="raised", bg='lightgreen')
+        # return button
 
 
 class CardNull(Cardboard):

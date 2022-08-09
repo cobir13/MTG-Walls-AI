@@ -9,7 +9,7 @@ import tkinter as tk
 import Zone
 import Choices
 import RulesText  # for Creature, maybe Land
-from GameState import GameState
+from GameState import GameState, Player
 import Decklist
 import Cardboard
 
@@ -39,13 +39,9 @@ class ManualGame(tk.Tk):
         fr = self.player_frame_list[self.player_index]
         fr.grid(row=len(self.player_frame_list) + 1, column=1,
                 padx=5, pady=5, sticky="W")
-        print(len(self.player_frame_list) + 1)
         startstate.player_list[self.player_index].decision_maker = "manual"
         # populate the display and start the game
         self.rebuild_display()
-
-        print([fr.grid_info()["row"] for fr in self.player_frame_list])
-
         self.mainloop()
 
     @property
@@ -77,37 +73,43 @@ class ManualGame(tk.Tk):
         else:
             self.rebuild_display()
 
-    def build_player_display(self, player):
+    def build_player_display(self, player: Player):
         self_frame = self.player_frame_list[player.player_index]
         # clear previous
         for widgets in self_frame.winfo_children():
             widgets.destroy()
         # status zone for life, mana, etc
-        status_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
+        color = "lightgrey"
+        if player.player_index == self.game.priority_player_index:
+            color = "lightgreen"
+        status_frame = tk.Frame(self_frame, borderwidth=1, relief="solid",
+                                bg=color)
         status_frame.grid(row=0, rowspan=3, column=0, padx=5, pady=0)
         txt = "PLAYER %i" % player.player_index
         if player.player_index == self.player_index:
             txt += " (YOU)"
-        tk.Label(status_frame, text=txt
+        if player.player_index == self.game.active_player_index:
+            txt = "THIS PLAYER'S TURN\n" + txt
+        tk.Label(status_frame, text=txt, bg=color
                  ).grid(row=0, column=1, padx=5, pady=0)
-        tk.Label(status_frame, text="Turn: %i" % player.turn_count,
+        tk.Label(status_frame, text="Turn: %i" % player.turn_count, bg=color
                  ).grid(row=1, column=1, padx=5, pady=0)
-        tk.Label(status_frame, text="Life total: %i" % player.life
+        tk.Label(status_frame, text="Life total: %i" % player.life, bg=color
                  ).grid(row=2, column=1, padx=5, pady=0)
-        tk.Label(status_frame, text="Cards in hand: %i" % len(player.hand)
-                 ).grid(row=3, column=1, padx=5, pady=0)
-        tk.Label(status_frame, text="Cards in deck: %i" % len(player.deck)
-                 ).grid(row=4, column=1, padx=5, pady=0)
-        tk.Label(status_frame, text="Cards in grave: %i" % len(player.grave)
-                 ).grid(row=5, column=1, padx=5, pady=0)
+        tk.Label(status_frame, text="Cards in hand: %i" % len(player.hand),
+                 bg=color).grid(row=3, column=1, padx=5, pady=0)
+        tk.Label(status_frame, text="Cards in deck: %i" % len(player.deck),
+                 bg=color).grid(row=4, column=1, padx=5, pady=0)
+        tk.Label(status_frame, text="Cards in grave: %i" % len(player.grave),
+                 bg=color).grid(row=5, column=1, padx=5, pady=0)
         if str(player.pool) != "":
             manastr = "Mana floating: (%s)" % str(player.pool)
         else:
             manastr = "Mana floating: None"
-        tk.Label(status_frame, text=manastr
+        tk.Label(status_frame, text=manastr, bg=color
                  ).grid(row=6, column=1, padx=5, pady=0)
         tk.Label(status_frame,
-                 text="Land drops left: %i" % player.land_drops_left
+                 text="Land drops left: %i" % player.land_drops_left, bg=color
                  ).grid(row=7, column=1, padx=5, pady=0)
         # field
         field_frame = tk.Frame(self_frame, borderwidth=1, relief="solid",
@@ -130,12 +132,13 @@ class ManualGame(tk.Tk):
                     cast_fn = lambda options=opts: self._caster(options)
                     butt.config(state="normal", command=cast_fn)
                 else:
-                    butt.config(state="disabled")
+                    butt.config(state="disabled", disabledforeground="black",
+                                bg="lightgrey")
             if card.has_type(RulesText.Creature):
-                butt.grid(row=0, column=toprow+1, padx=2, pady=2)
+                butt.grid(row=0, column=toprow+1, padx=2, pady=2, sticky="N")
                 toprow += 1
             else:
-                butt.grid(row=1, column=botrow+1, padx=2, pady=2)
+                butt.grid(row=1, column=botrow+1, padx=2, pady=2, sticky="S")
                 botrow += 1
         # hand
         if player.player_index == self.player_index:
@@ -157,10 +160,13 @@ class ManualGame(tk.Tk):
                         cast_fn = lambda options=opts: self._caster(options)
                         butt.config(state="normal", command=cast_fn)
                     else:
-                        butt.config(state="disabled")
+                        butt.config(state="disabled",
+                                    disabledforeground="black",
+                                    bg="lightgrey")
                 else:
                     # not your priority, so can't do anything!
-                    butt.config(state="disabled")
+                    butt.config(state="disabled", disabledforeground="black",
+                                bg="lightgrey")
                 butt.grid(row=0, column=ii+1, padx=2, pady=2)
 
     def build_stack_display(self):
@@ -243,7 +249,7 @@ class ManualGame(tk.Tk):
                 activelist += state.resolve_top_of_stack()
         # all untap/upkeep/draw abilities are done
         assert (len(finalstates) == 1)
-        self.history.append(finalstates.pop())
+        self.history.append(finalstates.pop())  # use this state
         self.rebuild_display()
 
 

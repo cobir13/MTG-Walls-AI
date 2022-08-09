@@ -66,7 +66,6 @@ class PlayTree:
             activables = state.priority.get_valid_activations()
             castables = state.priority.get_valid_castables()
             # if there are valid actions, make new nodes by taking them
-            # TODO: win and loss conditions here?
             new_nodes = []
             for stack_object in activables + castables:
                 for state2 in stack_object.put_on_stack(state):
@@ -80,7 +79,7 @@ class PlayTree:
                 self._add_state_to_trackers(new_state)
 
     def beginning_phase_for_all_valid_states(self, turn=-1):
-        """Apply untap, upkeep, draw to all intermediate states
+        """Pass turn, untap, upkeep, draw to all intermediate states
         which are legal stopping points -- have empty stacks.
         This will result in new states being added to the active
         states list for the next turn, since untap step
@@ -89,6 +88,7 @@ class PlayTree:
         new_nodes = []
         for state in self.get_states_no_stack(turn):
             state2 = state.copy()
+            state2.pass_turn()
             state2.step_untap()
             state2.step_upkeep()
             state2.step_draw()
