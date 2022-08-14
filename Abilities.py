@@ -172,8 +172,8 @@ class TriggeredAbility:
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
 
-    def add_any_to_super(self, verb: Verbs.Verb, state: GameState,
-                         player: int, source: Cardboard,
+    def add_any_to_super(self, state: GameState, player: int,
+                         source: Cardboard, verb: Verbs.Verb,
                          trigger_card: Cardboard | None):
         """
         MUTATES.
@@ -203,3 +203,31 @@ class TriggeredAbility:
 
     def copy(self):
         return self
+
+
+class TimedAbility(TriggeredAbility):
+    def __init__(self, name, if_condition: Get.Bool, effect: Verbs.Verb):
+        super().__init__(name, AlwaysTrigger(), effect)
+        self.condition: Get.Bool = if_condition
+
+    def add_any_to_super(self, state: GameState, player: int,
+                         source: Cardboard,
+                         verb: Verbs.Verb = Verbs.NullVerb(),
+                         trigger_card: Cardboard | None = None):
+        """
+        MUTATES.
+        Checks if the given Verb `verb` being performed on the
+        card `trigger_card` meets this ability's trigger
+        condition. `asking_card` is assumed to be the source of this
+        triggered ability. If the ability IS triggered, MUTATES
+        the GameState `state` to add a StackTrigger object to
+        the super_stack.  Control of the ability is `player`.
+        """
+        if self.condition.get(state, player, source):  # if meets condition:
+            caster = Verbs.AddTriggeredAbility()
+            stack_obj = Stack.StackTrigger(player, source, self, None,
+                                           [], caster)
+            state.super_stack.append(stack_obj)
+
+    def __str__(self):
+        return "Ability(%s -> %s)" % (str(self.condition), str(self.effect))

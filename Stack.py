@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from Abilities import ActivatedAbility, TriggeredAbility
+    from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility
     from Cardboard import Cardboard
     from Verbs import Verb, INPUTS
     from Costs import Cost
@@ -112,7 +112,7 @@ class StackObject:
         if self.source_card is not None:
             text += "\nFrom: %s" % self.source_card.name
         list_chosen = ",".join([c.name if hasattr(c, "name") else str(c)
-                               for c in self.choices])
+                                for c in self.choices])
         if len(list_chosen) > 0:
             text += "\n" + list_chosen
         return tk.Button(parentframe,
@@ -132,11 +132,10 @@ class StackAbility(StackObject):
 class StackTrigger(StackAbility):
 
     def __init__(self, controller: int, source_card: Cardboard,
-                 obj: TriggeredAbility, cause_card: Cardboard,
+                 obj: TriggeredAbility, cause_card: Cardboard | None,
                  chosen_options: INPUTS, caster_verb: Verb):
         """First entry in `choices` should be the Cardboard that
         caused the ability to trigger."""
-
         super().__init__(controller, source_card, obj,
                          [cause_card] + chosen_options, caster_verb)
 

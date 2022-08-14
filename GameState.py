@@ -5,10 +5,9 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, Tuple, Type
-# if TYPE_CHECKING:
-#     from Abilities import ActivatedAbility
-
+from typing import List, Tuple, Type, TYPE_CHECKING
+if TYPE_CHECKING:
+    from Abilities import TriggeredAbility
 from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
 import Zone
@@ -59,6 +58,12 @@ class GameState:
         self.is_tracking_history: bool = False
         self.previous_state: GameState | None = None
         self.events_since_previous: str = ""
+        # track triggesr. lists are updated when a card changes zones.
+        # Format is tuple of (source-Cardboard, triggered ability).
+        self.trig_upkeep: List[Tuple[Cardboard, TriggeredAbility]] = []
+        self.trig_attack: List[Tuple[Cardboard, TriggeredAbility]] = []
+        self.trig_endstep: List[Tuple[Cardboard, TriggeredAbility]] = []
+        self.trig_event: List[Tuple[Cardboard, TriggeredAbility]] = []
 
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id
@@ -129,6 +134,15 @@ class GameState:
             state.super_stack.append(obj.copy(self, state))
         # finally, copy the track_list, which can contain any types
         new_track_list = GameState.copy_arbitrary_list(self, state, track_list)
+        # copy each trigger in the various trigger-tracker lists
+        state.trig_event = [(s.copy_as_pointer(state), ab.copy())
+                            for s, ab in self.trig_event]
+        state.trig_upkeep = [(s.copy_as_pointer(state), ab.copy())
+                             for s, ab in self.trig_upkeep]
+        state.trig_attack = [(s.copy_as_pointer(state), ab.copy())
+                             for s, ab in self.trig_attack]
+        state.trig_endstep = [(s.copy_as_pointer(state), ab.copy())
+                              for s, ab in self.trig_endstep]
         # return!
         return state, new_track_list
 
@@ -268,10 +282,9 @@ class GameState:
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
         self.phase = GameState.PHASES.index("upkeep")
-        for card in self.get_all_public_cards():
-            for ability in card.rules_text.trig_upkeep:
-                # adds any triggering abilities to self.super_stack
-                ability.add_any_to_super(self, self, card, None)
+        for card, ability in self.trig_upkeep:
+            # adds triggering abilities to self.super_stack, if meet condition
+            ability.add_any_to_super(self, card, None, self, )
 
     def step_draw(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
@@ -573,6 +586,15 @@ class Player:
         # update zone locations. mutates, so will also affect pointers.
         for ii in range(len(self.field)):
             self.field[ii].zone.location = ii
+        # add mechanism to sense triggers from cards in play
+        self.gamestate.trig_event += [(card, ab)
+                                      for ab in card.rules_text.trig_verb]
+        self.gamestate.trig_upkeep += [(card, ab)
+                                       for ab in card.rules_text.trig_upkeep]
+        self.gamestate.trig_attack += [(card, ab)
+                                       for ab in card.rules_text.trig_attack]
+        self.gamestate.trig_endstep += [(card, ab)
+                                        for ab in card.rules_text.trig_endstep]
 
     def remove_from_field(self, card: Cardboard):
         """Field is sorted and tracks Zone.location."""
@@ -581,6 +603,15 @@ class Player:
         # update zone locations. mutates, so will also affect pointers.
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
+        # remove mechanism for sensing triggers from this card
+        self.gamestate.trig_event = [t for t in self.gamestate.trig_event
+                                     if t[0] is not card]
+        self.gamestate.trig_upkeep = [t for t in self.gamestate.trig_upkeep
+                                      if t[0] is not card]
+        self.gamestate.trig_attack = [t for t in self.gamestate.trig_attack
+                                      if t[0] is not card]
+        self.gamestate.trig_endstep = [t for t in self.gamestate.trig_endstep
+                                       if t[0] is not card]
 
     def add_to_grave(self, card: Cardboard):
         """Grave is sorted and tracks Zone.location."""

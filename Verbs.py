@@ -76,12 +76,10 @@ class Verb:
         # `trigger_source` is asking_card of the trigger. Not to be confused
         # with `subject`, which is the cause of the Verb which is
         # potentially CAUSING the trigger.
-        for trigger_source in state.get_all_public_cards():
-            for ability in trigger_source.rules_text.trig_verb:
-                # add any abilities that trigger to the super_stack
-                ability.add_any_to_super(self, state,
-                                         trigger_source.player_index,
-                                         trigger_source, source)
+        for trigger_source, ability in state.trig_event:
+            # add any abilities that trigger to the super_stack
+            ability.add_any_to_super(state, trigger_source.player_index,
+                                     trigger_source, self, source)
         return [(state, player, source, other_inputs[self.num_inputs:])]
 
     def is_type(self, verb_type: type) -> bool:
