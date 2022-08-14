@@ -307,10 +307,8 @@ class GameState:
             tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
         else:
             # perform the effect (resolve ability, perform spell, etc)
-            print("doing effect!")
             tuple_list = obj.effect.do_it(new_state, obj.player_index,
                                           obj.source_card, obj.choices)
-            print("ok, effect is done")
         # if card is on stack (not just a pointer), move it to destination zone
         if isinstance(obj.obj, Cardboard):
             dest = obj.obj.rules_text.cast_destination.copy()

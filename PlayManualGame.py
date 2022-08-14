@@ -15,6 +15,7 @@ import Cardboard
 
 
 class ManualGame(tk.Tk):
+    """THIS CLASS IS STILL UNFINISHED AND A FEW THINGS DON'T QUITE WORK."""
 
     def __init__(self, startstate: GameState, player_index: int):
         super().__init__()
