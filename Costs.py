@@ -52,18 +52,18 @@ class Cost:
         else:
             afford_mana = state.player_list[player].pool.can_afford_mana_cost(
                 self.mana_cost)
-        afford_other = all([v.can_be_done(state, player, subject, other_inputs)
+        afford_other = all([v.can_be_done(state)
                             for v in self.additional])
         return afford_mana and afford_other
 
     def pay_cost(self, state: GameState, player: int, subject: Cardboard,
                  choices: INPUTS) -> List[RESULT]:
-        return self._get_multi_verb().do_it(state, player, subject, choices)
+        return self._get_multi_verb().do_it(state)
 
     def get_options(self, state: GameState, controller: int,
                     source: Cardboard | None, cause: Cardboard | None):
-        return self._get_multi_verb().get_input_options(state, controller,
-                                                        source, cause)
+        return self._get_multi_verb().populate_options(state, controller,
+                                                       source, cause)
 
     def __str__(self):
         if self.mana_cost is not None and len(self.additional) > 0:

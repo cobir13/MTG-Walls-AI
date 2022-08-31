@@ -130,11 +130,11 @@ class GameState:
         # Need to append as I go, in case of pointers to StackObjects, so
         # I can't use list comprehensions. Must use a loop. I tried. --Cobi.
         for obj in self.stack:
-            state.stack.append(obj.copy(self, state))
+            state.stack.append(obj.copy(state))
         for obj in self.super_stack:
-            state.super_stack.append(obj.copy(self, state))
+            state.super_stack.append(obj.copy(state))
         # finally, copy the track_list, which can contain any types
-        new_track_list = GameState.copy_arbitrary_list(self, state, track_list)
+        new_track_list = GameState.copy_arbitrary_list(state, track_list)
         # copy each trigger in the various trigger-tracker lists
         state.trig_event = [(s.copy_as_pointer(state), ab.copy())
                             for s, ab in self.trig_event]
@@ -150,7 +150,7 @@ class GameState:
         return state, new_track_list
 
     @staticmethod
-    def copy_arbitrary_list(state_orig: GameState, state_new: GameState,
+    def copy_arbitrary_list(state_new: GameState,
                             list_to_copy: list | tuple) -> list:
         """This function assumes that everything except the
         stack and superstack have already been copied
@@ -166,10 +166,9 @@ class GameState:
             if isinstance(item, Cardboard):
                 new_list.append(item.copy_as_pointer(state_new))
             elif isinstance(item, StackObject):
-                new_list.append(item.copy(state_orig, state_new))
+                new_list.append(item.copy(state_new))
             elif isinstance(item, list) or isinstance(item, tuple):
-                new_iterable = GameState.copy_arbitrary_list(state_orig,
-                                                             state_new, item)
+                new_iterable = GameState.copy_arbitrary_list(state_new, item)
                 new_list.append(new_iterable)  # recurse!
             else:
                 new_list.append(item)  # immutable and passed by value, I hope
@@ -199,6 +198,7 @@ class GameState:
     def add_to_stack(self, obj: StackObject):
         if hasattr(obj.obj, "zone"):
             obj.obj.zone = Zone.Stack()
+        obj.zone = Zone.Stack(len(self.stack))
         self.stack.append(obj)
 
     def get_all_public_cards(self):
@@ -222,7 +222,7 @@ class GameState:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination(player_index))
         mover.add_self_to_state_history = lambda *args: None  # silent
-        mover.do_it(self, player_index, cardboard, )
+        mover.do_it(self)
 
     # -------------------------------------------------------------------------
 
@@ -239,7 +239,7 @@ class GameState:
                                                 card)
                 if toughness is not None and toughness <= 0:
                     mover = MoveToZone(Zone.Grave(player.player_index))
-                    mover.do_it(self, player.player_index, card, )
+                    mover.do_it(self)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -276,7 +276,7 @@ class GameState:
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
-            Untap().do_it(self, self.active_player_index, card, [])
+            Untap().do_it(self)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
@@ -298,7 +298,7 @@ class GameState:
         self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
-        DrawCard().do_it(self, self.active_player_index, None, [])
+        DrawCard().do_it(self)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
@@ -323,14 +323,14 @@ class GameState:
             tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
         else:
             # perform the effect (resolve ability, perform spell, etc)
-            tuple_list = obj.effect.do_it(new_state, obj.player_index,
-                                          obj.source_card, obj.choices)
+            tuple_list = obj.effect.do_it(new_state)
         # if card is on stack (not just a pointer), move it to destination zone
-        if isinstance(obj.obj, Cardboard):
+        if (isinstance(obj.obj, Cardboard)
+                and isinstance(obj.obj.zone, Zone.Stack)):
             dest = obj.obj.rules_text.cast_destination.copy()
             dest.player = obj.player_index  # update to give to correct player
             for gm, pl, cd, ins in tuple_list:
-                MoveToZone(dest).do_it(gm, pl, cd, [])
+                MoveToZone(dest).do_it(gm)
         # clear the superstack and return!
         results = []
         for tup in tuple_list:
@@ -369,16 +369,14 @@ class GameState:
             ii = item[0]  # index first, then object second
             state2 = self.copy()
             obj = state2.super_stack.pop(ii)
-            if not obj.caster_verb.can_be_done(state2, obj.player_index,
-                                               obj.source_card, [obj]):
+            if not obj.caster_verb.can_be_done(state2):
                 # If can't resolve ability, still use the GameState where it
                 # was removed from the stack. e.g. invalid targets still
                 # removes the trigger from the super_stack.
                 results += [state2]
             else:
                 results += [tup[0] for tup in
-                            obj.caster_verb.do_it(state2, obj.player_index,
-                                                  obj.source_card, [obj])]
+                            obj.caster_verb.do_it(state2)]
         # recurse
         final_results = []
         for state in results:

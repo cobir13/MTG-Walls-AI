@@ -228,18 +228,18 @@ if __name__ == "__main__":
     gameC = game1.copy()
     chocC = gameC.player_list[0].field[0]
     assert chocC.is_equiv_to(choc0)
-    Verbs.Tap().do_it(gameC, 0, chocC, [])
+    Verbs.Tap().do_it(gameC)
     assert chocC.tapped
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 1
     assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
     assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
     # even if player1 taps player0's creature, Orb won't see it
-    Verbs.Tap().do_it(gameC, 1, gameC.player_list[0].field[1], [])
+    Verbs.Tap().do_it(gameC)
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 2
     assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
     assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
     # now try to tap one of player1's creatures
-    Verbs.Tap().do_it(gameC, 1, gameC.player_list[1].field[0], [])
+    Verbs.Tap().do_it(gameC)
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 3
     game_list = gameC.clear_super_stack()
     assert len(game_list) == 1  # only one way to clear the superstack
@@ -261,7 +261,7 @@ if __name__ == "__main__":
     artist = gameE.player_list[1].field[0]
     s = artist.rules_text.trig_verb[0].trigger
     assert s.pattern.match(chocE, gameE, 0, artist)
-    Verbs.Destroy().do_it(gameE, 0, chocE, [])
+    Verbs.Destroy().do_it(gameE)
     assert not chocE.tapped  # not tapped, because dead and in grave
     assert len(Zone.Field(None).get(gameE)) == 4
     assert len(gameE.super_stack) == 1
@@ -284,7 +284,7 @@ if __name__ == "__main__":
                                            Get.CardsFrom(Zone.Field(None))
                                            ))
     assert wrath.copies
-    gameH = wrath.do_it(gameG, 0, None, [None])[0][0]
+    gameH = wrath.do_it(gameG)[0][0]
     assert len(gameH.super_stack) == 4
     assert len(Zone.Field(None).get(gameH)) == 0
     assert len(Zone.Grave(None).get(gameH)) == 5
@@ -432,7 +432,7 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, 0, None, )
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig)
     assert len(tuple_list) == 1
     mana_game, player, source, choices = tuple_list[0]
     assert player == 0
@@ -843,11 +843,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.do_it(game1, 0, game1.active.hand[0], )[0][0]
-    game1B = mover.do_it(game1A, 0, game1.active.hand[0], )[0][0]
+    game1A = mover.do_it(game1)[0][0]
+    game1B = mover.do_it(game1A)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, 0, game2.active.hand[1], )[0][0]
-    game2B = mover.do_it(game2A, 0, game2.active.hand[0], )[0][0]
+    game2A = mover.do_it(game2)[0][0]
+    game2B = mover.do_it(game2A)[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -858,15 +858,15 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.do_it(game1, 0, game1.active.hand[0], )[0][0]
+    game1A = mover.do_it(game1)[0][0]
     game1A.pass_turn()
     game1A.step_untap()
-    game1B = mover.do_it(game1A, 0, game1.active.hand[0], )[0][0]
+    game1B = mover.do_it(game1A)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, 0, game2.active.hand[1], )[0][0]
+    game2A = mover.do_it(game2)[0][0]
     game2A.pass_turn()
     game2A.step_untap()
-    game2B = mover.do_it(game2A, 0, game2.active.hand[0], )[0][0]
+    game2B = mover.do_it(game2A)[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.pass_turn()

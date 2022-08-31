@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import types
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, TypeVar
 
 if TYPE_CHECKING:
     from GameState import GameState, Player
@@ -293,8 +293,8 @@ class Grave(Zone):
 
 
 class Stack(Zone):
-    def __init__(self):
-        super().__init__(None, None)  # stack is shared. Zone doesn't order.
+    def __init__(self, location=None):
+        super().__init__(None, location)  # stack is shared. Zone tracks order.
 
     @property
     def is_fixed(self):
@@ -306,6 +306,16 @@ class Stack(Zone):
 
     def _get_whole_zone_list(self, player: Player) -> List[StackObject]:
         return player.gamestate.stack
+
+    def get(self, state: GameState) -> List[StackObject | Cardboard]:
+        if self.location is None or len(state.stack) == 0:
+            return state.stack
+        elif isinstance(self.location, int):
+            # slice to ensure we return a list. also avoids index errors.
+            loc = self.location % len(state.stack)  # avoid issues with -1.
+            return state.stack[loc:loc+1]
+        else:  # slice
+            return state.stack[self.location]
 
     def add_to_zone(self, state: GameState, card: Cardboard):
         """Cardboard doesn't live on the stack, so just change

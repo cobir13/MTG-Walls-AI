@@ -185,9 +185,9 @@ class Cardboard:
         payments = [ch for ch in payments
                     if self.cost.can_afford(state, player, self, ch)]
         # 601.2c: choose targets and modes
-        targets = self.effect.get_input_options(state, player, self, None)
+        targets = self.effect.populate_options(state, player, self, None)
         targets = [ch for ch in targets if
-                   self.effect.can_be_done(state, player, self, ch)]
+                   self.effect.can_be_done(state)]
         # combine all combinations of these
         obj_list = []
         for sub_pay in payments:

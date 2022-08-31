@@ -144,7 +144,7 @@ class TapSymbol(Tap):
 
     def can_be_done(self, state: GameState, controller, source: Cardboard,
                     other_input: INPUTS = []) -> bool:
-        return (super().can_be_done(state, controller, source, other_input)
+        return (super().can_be_done(state)
                 and not (Match.CardType(Creature).match(source, state,
                                                         controller, source)
                          and source.summon_sick
@@ -163,8 +163,7 @@ class Revert(Verbs.AffectSourceCard):
                     other_input: INPUTS = []) -> bool:
         return True
 
-    def do_it(self, state, player, source: Cardboard, other_inputs,
-              check_triggers=True):
+    def do_it(self, state, to_track=[], check_triggers=True):
         while hasattr(source.rules_text, "former"):
             source.rules_text = getattr(source.rules_text, "former")
         return [(state, controller, source, other_input)]
@@ -179,8 +178,7 @@ class Animate(Verbs.AffectSourceCard):
                     other_input: INPUTS = []) -> bool:
         return source.is_in(Zone.Field)
 
-    def do_it(self, state, player, source: Cardboard, other_inputs,
-              check_triggers=True):
+    def do_it(self, state, to_track=[], check_triggers=True):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name
@@ -198,7 +196,7 @@ class Animate(Verbs.AffectSourceCard):
                                                    AlwaysTrigger(), Revert()))
         # overwrite with new RulesText
         source.rules_text = rules
-        return super().do_it(state, controller, source, other_input)
+        return super().do_it(state)
 
     @property
     def mutates(self):

@@ -32,13 +32,10 @@ class Trigger:
     def is_triggered(self,
                      state: GameState,
                      source_of_ability: Cardboard,
-                     verb: Verbs.Verb,
-                     player_doing_verb: int,
-                     source_of_verb: Cardboard | None,
-                     inputs_to_verb: Verbs.INPUTS):
+                     verb: Verbs.Verb):
         ability_owner = source_of_ability.player_index
         return (isinstance(verb, self.verb_type)
-                and self.pattern_for_subject.match(source_of_verb, state,
+                and self.pattern_for_subject.match(verb.subject, state,
                                                    ability_owner,
                                                    source_of_ability))
 
@@ -61,10 +58,7 @@ class TriggerOnMove(Trigger):
     def is_triggered(self,
                      state: GameState,
                      source_of_ability: Cardboard,
-                     verb: Verbs.Verb,
-                     player_doing_verb: int,
-                     source_of_verb: Cardboard | None,
-                     inputs_to_verb: Verbs.INPUTS):
+                     verb: Verbs.Verb):
         pl = source_of_ability.player_index
         origins: List[Zone] = [self.origin]
         if self.origin is not None and not self.origin.is_fixed:
@@ -74,15 +68,12 @@ class TriggerOnMove(Trigger):
         if self.destination is not None and not self.destination.is_fixed:
             dests = self.destination.get_absolute_zones(state, pl,
                                                         source_of_ability)
-        card_origin = inputs_to_verb[0]
-        card_dest = inputs_to_verb[1]
-        return (super().is_triggered(state, source_of_ability, verb,
-                                     player_doing_verb, source_of_verb,
-                                     inputs_to_verb)
+        return (super().is_triggered(state, source_of_ability, verb)
+                and isinstance(verb, Verbs.MoveToZone)
                 and (self.origin is None
-                     or any([card_origin.is_contained_in(z) for z in origins]))
+                     or any([verb.origin.is_contained_in(z) for z in origins]))
                 and (self.destination is None
-                     or any([card_dest.is_contained_in(z) for z in dests]))
+                     or any([verb.dest.is_contained_in(z) for z in dests]))
                 )
 
 
@@ -148,9 +139,9 @@ class ActivatedAbility:
         payments = [ch for ch in payments
                     if self.cost.can_afford(state, player, source, ch)]
         # 601.2c: choose targets and modes
-        targets = self.effect.get_input_options(state, player, source, None)
+        targets = self.effect.populate_options(state, player, source, None)
         targets = [ch for ch in targets if
-                   self.effect.can_be_done(state, player, source, ch)]
+                   self.effect.can_be_done(state)]
         # combine all combinations of these
         obj_list = []
         for sub_pay in payments:
@@ -187,10 +178,7 @@ class TriggeredAbility:
 
     def add_any_to_super(self, state: GameState,
                          source_of_ability: Cardboard,
-                         verb: Verbs.Verb,
-                         player_doing_verb: int,
-                         source_of_verb: Cardboard | None,
-                         inputs_to_verb: Verbs.INPUTS):
+                         verb: Verbs.Verb):
         """
         MUTATES.
         Checks if the given Verb meets this ability's trigger
@@ -198,9 +186,7 @@ class TriggeredAbility:
         the GameState `state` to add a StackTrigger object to
         the super_stack.
         """
-        if self.trigger.is_triggered(state, source_of_ability, verb,
-                                     player_doing_verb, source_of_verb,
-                                     inputs_to_verb):
+        if self.trigger.is_triggered(state, source_of_ability, verb):
             caster = Verbs.AddTriggeredAbility()
             if isinstance(self.trigger, AsEnterEffect):
                 caster = Verbs.AddAsEntersAbility()

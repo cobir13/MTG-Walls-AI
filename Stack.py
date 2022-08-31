@@ -26,6 +26,8 @@ class StackObject:
         # or activation.  If targets are Cardboards, they are pointers.
         self.choices: INPUTS = chosen_options
         self.caster_verb = caster_verb
+        self.zone = Zone.Stack(None)
+
 
     @property
     def cost(self) -> Cost | None:
@@ -63,22 +65,22 @@ class StackObject:
         been cast (put onto the stack) and all costs paid.
         GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
         # PlayAbility.do_it does not mutate
-        return [t[0] for t in self.caster_verb.do_it(state, self.player_index,
-                                                     self.source_card, [self])]
+        return [t[0] for t in self.caster_verb.do_it(state)]
 
-    def copy(self, state_orig: GameState, state_new: GameState):
-        """This function assumes that everything except the
-        stack and superstack have already been copied
-        correctly. In other words, all Cardboards have
-        already been copied. It is only StackObjects which
-        remain to be copied."""
+    def copy(self, state_new: GameState):
+        """This function assumes that everything except maybe
+        the stack and superstack have already been copied
+        correctly. In other words, all Cardboards have already
+        been copied. It is only StackObjects which remain to
+        be copied."""
         # if this StackObject is a pointer to a DIFFERENT StackObject on the
         # stack which already has a copy, then just return that new copied
         # object. (Relevant for e.g. counterspell, which targets a StackObject)
-        if self in state_orig.stack:
-            index = state_orig.stack.index(self)
-            if len(state_new.stack) > index:  # check if new copy exists yet
-                return state_new.stack[index]
+        new_home = self.zone.get(state_new)
+        if len(new_home) == 1 and new_home[0].is_equiv_to(self):
+            # An identical StackObject is in the new game at the location self
+            # expects to live. Return pointer to this StackObject
+            return new_home[0]
         # If reached here, we need to make a new StackObject ourselves
         controller: int = self.player_index  # copy int directly
         # asking_card card
@@ -92,20 +94,19 @@ class StackObject:
         else:
             obj = self.obj.copy()
         # copy _options
-        options = state_orig.copy_arbitrary_list(state_orig, state_new,
-                                                 self.choices)
+        options = state_new.copy_arbitrary_list(state_new, self.choices)
         verb = self.caster_verb
         # initialize into a StackObject, then cast it to the correct subclass
         new_obj = StackObject(controller, source, obj, options, verb)
         new_obj.__class__ = self.__class__  # set the class type directly
         return new_obj
 
-    @property
-    def zone(self):
-        if hasattr(self.obj, "zone"):
-            return self.obj.zone
-        else:
-            return Zone.Stack()
+    # @property
+    # def zone(self):
+    #     if hasattr(self.obj, "zone"):
+    #         return self.obj.zone
+    #     else:
+    #         return Zone.Stack()
 
     def build_tk_display(self, parentframe, ):
         text = self.name
