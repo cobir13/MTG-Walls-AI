@@ -38,13 +38,20 @@ values without disturbing the text printed on the cards, so to speak.
 Notes comparing this program to the real Magic:The Gathering rules:
     - cannot activate mana abilities WHILE casting a spell. (must pre-float
         all mana to pay for the spell)
-    - "Gold" mana that can be used to pay for any colored cost, to simplify
+    - "Gold" mana can be used to pay for any colored cost, to simplify
         choices during goldfish games.
     - fetchlands are deliberately templated as an enter-the-battlefield
         effect rather than as an activated ability, to simplify choices
         during goldfish games.
-    - All targets are chosen at cast-time. Nothing is chosen on resolution.
     - There is no difference between "choosing" a target and "targeting" one.
+    - Triggered abilities can only trigger from play. Cards like Narcomoeba
+        or Bridge From Below, whose triggers operate from non-battlefield
+        zones, do not yet work. Implementing them would require messing with
+        the add-to-zone functions in Player so that they report their
+        abilities properly.
+    - Drawing a card will not trigger any abilities that care about a card
+        moving into your hand generically or leaving your deck generically. It
+        will only trigger things which explicitly care about "drawing a card".
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack

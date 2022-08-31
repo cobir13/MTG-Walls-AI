@@ -432,7 +432,7 @@ if __name__ == "__main__":
     assert (len(game_orig.active.field) == 0)
 
     # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, 0, None)
+    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig, 0, None, )
     assert len(tuple_list) == 1
     mana_game, player, source, choices = tuple_list[0]
     assert player == 0
@@ -843,11 +843,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
-    game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
+    game1A = mover.do_it(game1, 0, game1.active.hand[0], )[0][0]
+    game1B = mover.do_it(game1A, 0, game1.active.hand[0], )[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, 0, game2.active.hand[1])[0][0]
-    game2B = mover.do_it(game2A, 0, game2.active.hand[0])[0][0]
+    game2A = mover.do_it(game2, 0, game2.active.hand[1], )[0][0]
+    game2B = mover.do_it(game2A, 0, game2.active.hand[0], )[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -858,15 +858,15 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.do_it(game1, 0, game1.active.hand[0])[0][0]
+    game1A = mover.do_it(game1, 0, game1.active.hand[0], )[0][0]
     game1A.pass_turn()
     game1A.step_untap()
-    game1B = mover.do_it(game1A, 0, game1.active.hand[0])[0][0]
+    game1B = mover.do_it(game1A, 0, game1.active.hand[0], )[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2, 0, game2.active.hand[1])[0][0]
+    game2A = mover.do_it(game2, 0, game2.active.hand[1], )[0][0]
     game2A.pass_turn()
     game2A.step_untap()
-    game2B = mover.do_it(game2A, 0, game2.active.hand[0])[0][0]
+    game2B = mover.do_it(game2A, 0, game2.active.hand[0], )[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.pass_turn()

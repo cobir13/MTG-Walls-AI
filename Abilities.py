@@ -27,19 +27,24 @@ class Trigger:
     def __init__(self, verb_type: Type[Verbs.Verb],
                  pattern_for_subject: Match.Pattern):
         self.verb_type = verb_type
-        self.pattern = pattern_for_subject
+        self.pattern_for_subject = pattern_for_subject
 
-    def is_triggered(self, verb: Verbs.Verb, state: GameState,
-                     source: Cardboard, trigger_card: Cardboard):
-        """`asking_card` is asking_card of possible trigger.
-        `trigger_card` is the thing which caused the trigger
-        to be checked for viability."""
+    def is_triggered(self,
+                     state: GameState,
+                     source_of_ability: Cardboard,
+                     verb: Verbs.Verb,
+                     player_doing_verb: int,
+                     source_of_verb: Cardboard | None,
+                     inputs_to_verb: Verbs.INPUTS):
+        ability_owner = source_of_ability.player_index
         return (isinstance(verb, self.verb_type)
-                and self.pattern.match(trigger_card, state,
-                                       trigger_card.player_index, source))
+                and self.pattern_for_subject.match(source_of_verb, state,
+                                                   ability_owner,
+                                                   source_of_ability))
 
     def __str__(self):
-        return "Trigger(%s,%s)" % (self.verb_type.__name__, str(self.pattern))
+        return "Trigger(%s,%s)" % (self.verb_type.__name__,
+                                   str(self.pattern_for_subject))
 
 
 # ----------
@@ -53,22 +58,31 @@ class TriggerOnMove(Trigger):
         self.origin: Zone.Zone | None = origin
         self.destination: Zone.Zone | None = destination
 
-    def is_triggered(self, verb: Verbs.Verb, state: GameState,
-                     source: Cardboard, trigger_card: Cardboard):
-        pl = source.player_index
+    def is_triggered(self,
+                     state: GameState,
+                     source_of_ability: Cardboard,
+                     verb: Verbs.Verb,
+                     player_doing_verb: int,
+                     source_of_verb: Cardboard | None,
+                     inputs_to_verb: Verbs.INPUTS):
+        pl = source_of_ability.player_index
         origins: List[Zone] = [self.origin]
         if self.origin is not None and not self.origin.is_fixed:
-            origins = self.origin.get_absolute_zones(state, pl, source)
+            origins = self.origin.get_absolute_zones(state, pl,
+                                                     source_of_ability)
         dests: List[Zone] = [self.destination]
         if self.destination is not None and not self.destination.is_fixed:
-            dests = self.destination.get_absolute_zones(state, pl, source)
-        return (super().is_triggered(verb, state, source, trigger_card)
-                and isinstance(verb, Verbs.MoveToZone)
+            dests = self.destination.get_absolute_zones(state, pl,
+                                                        source_of_ability)
+        card_origin = inputs_to_verb[0]
+        card_dest = inputs_to_verb[1]
+        return (super().is_triggered(state, source_of_ability, verb,
+                                     player_doing_verb, source_of_verb,
+                                     inputs_to_verb)
                 and (self.origin is None
-                     or any([verb.origin.is_contained_in(z) for z in origins]))
+                     or any([card_origin.is_contained_in(z) for z in origins]))
                 and (self.destination is None
-                     or any([verb.destination.is_contained_in(z)
-                             for z in dests]))
+                     or any([card_dest.is_contained_in(z) for z in dests]))
                 )
 
 
@@ -87,8 +101,7 @@ class AlwaysTrigger(Trigger):
     def __str__(self):
         return ""
 
-    def is_triggered(self, verb: Verbs.Verb, state: GameState,
-                     source: Cardboard, trigger_card: Cardboard):
+    def is_triggered(self, *args, **kwargs):
         return True
 
 
@@ -172,24 +185,28 @@ class TriggeredAbility:
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
 
-    def add_any_to_super(self, state: GameState, player: int,
-                         source: Cardboard, verb: Verbs.Verb,
-                         trigger_card: Cardboard | None):
+    def add_any_to_super(self, state: GameState,
+                         source_of_ability: Cardboard,
+                         verb: Verbs.Verb,
+                         player_doing_verb: int,
+                         source_of_verb: Cardboard | None,
+                         inputs_to_verb: Verbs.INPUTS):
         """
         MUTATES.
-        Checks if the given Verb `verb` being performed on the
-        card `trigger_card` meets this ability's trigger
-        condition. `asking_card` is assumed to be the source of this
-        triggered ability. If the ability IS triggered, MUTATES
+        Checks if the given Verb meets this ability's trigger
+        condition. If the ability IS triggered, MUTATES
         the GameState `state` to add a StackTrigger object to
-        the super_stack.  Control of the ability is `player`.
+        the super_stack.
         """
-        if self.trigger.is_triggered(verb, state, source, trigger_card):
+        if self.trigger.is_triggered(state, source_of_ability, verb,
+                                     player_doing_verb, source_of_verb,
+                                     inputs_to_verb):
             caster = Verbs.AddTriggeredAbility()
             if isinstance(self.trigger, AsEnterEffect):
                 caster = Verbs.AddAsEntersAbility()
-            stack_obj = Stack.StackTrigger(player, source, self, trigger_card,
-                                           [], caster)
+            stack_obj = Stack.StackTrigger(source_of_ability.player_index,
+                                           source_of_ability, self,
+                                           source_of_verb, [], caster)
             state.super_stack.append(stack_obj)
 
     def __str__(self):
@@ -205,28 +222,29 @@ class TriggeredAbility:
         return self
 
 
-class TimedAbility(TriggeredAbility):
+class TimedAbility:
     def __init__(self, name, if_condition: Get.Bool, effect: Verbs.Verb):
-        super().__init__(name, AlwaysTrigger(), effect)
+        self.name: str = name
         self.condition: Get.Bool = if_condition
+        self.effect: Verbs.Verb = effect
+        self.num_inputs = effect.num_inputs
 
-    def add_any_to_super(self, state: GameState, player: int,
-                         source: Cardboard,
-                         verb: Verbs.Verb = Verbs.NullVerb(),
-                         trigger_card: Cardboard | None = None):
+    def add_any_to_super(self, state: GameState,
+                         source_of_ability: Cardboard):
         """
         MUTATES.
-        Checks if the given Verb `verb` being performed on the
-        card `trigger_card` meets this ability's trigger
-        condition. `asking_card` is assumed to be the source of this
-        triggered ability. If the ability IS triggered, MUTATES
+        Checks if the given gamestate meets the condition to
+        trigger. If the ability IS triggered, MUTATES
         the GameState `state` to add a StackTrigger object to
-        the super_stack.  Control of the ability is `player`.
+        the super_stack. The controller of the card controls
+        the ability.
         """
-        if self.condition.get(state, player, source):  # if meets condition:
+        player = source_of_ability.player_index
+        # if meets condition:
+        if self.condition.get(state, player, source_of_ability):
             caster = Verbs.AddTriggeredAbility()
-            stack_obj = Stack.StackTrigger(player, source, self, None,
-                                           [], caster)
+            stack_obj = Stack.StackTrigger(player, source_of_ability, self,
+                                           None, [], caster)
             state.super_stack.append(stack_obj)
 
     def __str__(self):

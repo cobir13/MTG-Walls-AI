@@ -64,6 +64,7 @@ class GameState:
         self.trig_attack: List[Tuple[Cardboard, TriggeredAbility]] = []
         self.trig_endstep: List[Tuple[Cardboard, TriggeredAbility]] = []
         self.trig_event: List[Tuple[Cardboard, TriggeredAbility]] = []
+        self.trig_to_remove: List[Tuple[Cardboard, TriggeredAbility]] = []
 
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id
@@ -137,6 +138,8 @@ class GameState:
         # copy each trigger in the various trigger-tracker lists
         state.trig_event = [(s.copy_as_pointer(state), ab.copy())
                             for s, ab in self.trig_event]
+        state.trig_to_remove = [(s.copy_as_pointer(state), ab.copy())
+                                for s, ab in self.trig_to_remove]
         state.trig_upkeep = [(s.copy_as_pointer(state), ab.copy())
                              for s, ab in self.trig_upkeep]
         state.trig_attack = [(s.copy_as_pointer(state), ab.copy())
@@ -219,7 +222,7 @@ class GameState:
             cardboard.owner_index = player_index
         mover = MoveToZone(destination(player_index))
         mover.add_self_to_state_history = lambda *args: None  # silent
-        mover.do_it(self, player_index, cardboard)
+        mover.do_it(self, player_index, cardboard, )
 
     # -------------------------------------------------------------------------
 
@@ -236,7 +239,7 @@ class GameState:
                                                 card)
                 if toughness is not None and toughness <= 0:
                     mover = MoveToZone(Zone.Grave(player.player_index))
-                    mover.do_it(self, player.player_index, card)
+                    mover.do_it(self, player.player_index, card, )
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -338,7 +341,13 @@ class GameState:
         """Returns a list of GameStates where the objects on the super_stack
         have been placed onto the stack in all possible orders or otherwise
         dealt with. If super_stack is empty, returns [self].
-        DOES NOT MUTATE."""
+        DOES NOT MUTATE.
+        # also checks the list of triggers to remove and removes them
+        """
+        if len(self.trig_to_remove) > 0:
+            new_state = self.copy()
+            new_state.trig_to_remove = []
+            return new_state.clear_super_stack()  # recurse
         # base case: no items on super_stack
         if len(self.super_stack) == 0:
             return [self]
@@ -480,19 +489,6 @@ class Player:
         return "|".join([index, turn, life, land, storm, pool,
                          deck, hand, field, grave])
 
-    # def get_zone(self, zone_name) -> List[Cardboard] | List[StackObject]:
-    #     if zone_name == ZONE.DECK or zone_name == ZONE.DECK_BOTTOM:
-    #         zone = self.deck
-    #     elif zone_name == ZONE.HAND:
-    #         zone = self.hand
-    #     elif zone_name == ZONE.FIELD:
-    #         zone = self.field
-    #     elif zone_name == ZONE.GRAVE:
-    #         zone = self.grave
-    #     else:
-    #         raise IndexError
-    #     return zone
-
     def has_type(self, some_type):
         """duck-typed with Cardboard so SOURCE is valid type hint"""
         return isinstance(self, some_type)
@@ -604,6 +600,8 @@ class Player:
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
         # remove mechanism for sensing triggers from this card
+        self.gamestate.trig_to_remove += [t for t in self.gamestate.trig_event
+                                          if t[0] is card]
         self.gamestate.trig_event = [t for t in self.gamestate.trig_event
                                      if t[0] is not card]
         self.gamestate.trig_upkeep = [t for t in self.gamestate.trig_upkeep

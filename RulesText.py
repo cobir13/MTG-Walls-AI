@@ -163,7 +163,8 @@ class Revert(Verbs.AffectSourceCard):
                     other_input: INPUTS = []) -> bool:
         return True
 
-    def do_it(self, state, controller, source: Cardboard, other_input=[]):
+    def do_it(self, state, player, source: Cardboard, other_inputs,
+              check_triggers=True):
         while hasattr(source.rules_text, "former"):
             source.rules_text = getattr(source.rules_text, "former")
         return [(state, controller, source, other_input)]
@@ -178,7 +179,8 @@ class Animate(Verbs.AffectSourceCard):
                     other_input: INPUTS = []) -> bool:
         return source.is_in(Zone.Field)
 
-    def do_it(self, state, controller, source: Cardboard, other_input=[]):
+    def do_it(self, state, player, source: Cardboard, other_inputs,
+              check_triggers=True):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name

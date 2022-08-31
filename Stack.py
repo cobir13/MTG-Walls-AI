@@ -131,9 +131,12 @@ class StackAbility(StackObject):
 
 class StackTrigger(StackAbility):
 
-    def __init__(self, controller: int, source_card: Cardboard,
-                 obj: TriggeredAbility, cause_card: Cardboard | None,
-                 chosen_options: INPUTS, caster_verb: Verb):
+    def __init__(self, controller: int,
+                 source_card: Cardboard,
+                 obj: TriggeredAbility | TimedAbility,
+                 cause_card: Cardboard | None,
+                 chosen_options: INPUTS,
+                 caster_verb: Verb):
         """First entry in `choices` should be the Cardboard that
         caused the ability to trigger."""
         super().__init__(controller, source_card, obj,

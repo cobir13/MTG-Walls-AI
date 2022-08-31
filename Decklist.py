@@ -161,13 +161,13 @@ class Company(RulesText.Instant):
         self.name = "CollectedCompany"
         self.cost = Cost("3G")
         self.effect = Verbs.Defer(
-            Verbs.LookDoAndDo(Get.CardsFrom(Zone.DeckTopN(Get.You(), 6)),
-                              Get.Chooser(Match.CardType(Creature)
+            Verbs.LookDoThenDo(Get.CardsFrom(Zone.DeckTopN(Get.You(), 6)),
+                               Get.Chooser(Match.CardType(Creature)
                                           & Match.ManaValue("<=", 3),
                                           2, can_be_fewer=True),
-                              Verbs.MoveToZone(Zone.Field(Get.You())),
-                              Verbs.MoveToZone(Zone.DeckBottom(Get.You()))
-                              ))
+                               Verbs.MoveToZone(Zone.Field(Get.You())),
+                               Verbs.MoveToZone(Zone.DeckBottom(Get.You()))
+                               ))
 
 
 # =============================================================================
