@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
     from Verbs import INPUTS
 
-from Abilities import ActivatedAbility, TriggeredAbility, Trigger,\
+from Abilities import ActivatedAbility, TriggeredAbility, TriggerOnVerb,\
     AlwaysTrigger
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlayPermanent
@@ -59,7 +59,7 @@ class RulesText:
     def add_activated(self, name: str, cost: Costs.Cost, effect: Verb):
         self.activated.append(ActivatedAbility(name, cost, effect))
 
-    def add_triggered(self, name: str, trigger: Trigger, effect: Verb):
+    def add_triggered(self, name: str, trigger: TriggerOnVerb, effect: Verb):
         self.trig_verb.append(TriggeredAbility(name, trigger, effect))
 
 
@@ -158,7 +158,7 @@ class TapSymbol(Tap):
 
 # ----------
 
-class Revert(Verbs.AffectSourceCard):
+class Revert(Verbs.AffectCard):
     def can_be_done(self, state: GameState, controller, source: Cardboard,
                     other_input: INPUTS = []) -> bool:
         return True
@@ -169,7 +169,7 @@ class Revert(Verbs.AffectSourceCard):
         return [(state, controller, source, other_input)]
 
 
-class Animate(Verbs.AffectSourceCard):
+class Animate(Verbs.AffectCard):
     def __init__(self, creature_type: Creature):
         super().__init__()
         self.creature_type = creature_type

@@ -22,7 +22,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-class Trigger:
+class TriggerOnVerb:
+
+    # pattern_for_verb, pattern_for_subject_, pattern_for_subject, etc...
 
     def __init__(self, verb_type: Type[Verbs.Verb],
                  pattern_for_subject: Match.Pattern):
@@ -46,7 +48,7 @@ class Trigger:
 
 # ----------
 
-class TriggerOnMove(Trigger):
+class TriggerOnMove(TriggerOnVerb):
 
     def __init__(self, pattern_for_subject: Match.Pattern,
                  origin: Zone.Zone | None,
@@ -77,7 +79,7 @@ class TriggerOnMove(Trigger):
                 )
 
 
-class NeverTrigger(Trigger):
+class NeverTrigger(TriggerOnVerb):
     def __init__(self):
         super().__init__(Verbs.NullVerb, Match.Nothing())
 
@@ -85,7 +87,7 @@ class NeverTrigger(Trigger):
         return ""
 
 
-class AlwaysTrigger(Trigger):
+class AlwaysTrigger(TriggerOnVerb):
     def __init__(self):
         super().__init__(Verbs.NullVerb, Match.Nothing())
 
@@ -170,9 +172,9 @@ class ActivatedAbility:
 
 
 class TriggeredAbility:
-    def __init__(self, name, trigger: Trigger, effect: Verbs.Verb):
+    def __init__(self, name, trigger: TriggerOnVerb, effect: Verbs.Verb):
         self.name: str = name
-        self.trigger: Trigger = trigger
+        self.trigger: TriggerOnVerb = trigger
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
 
@@ -187,6 +189,9 @@ class TriggeredAbility:
         the super_stack.
         """
         if self.trigger.is_triggered(state, source_of_ability, verb):
+
+
+
             caster = Verbs.AddTriggeredAbility()
             if isinstance(self.trigger, AsEnterEffect):
                 caster = Verbs.AddAsEntersAbility()

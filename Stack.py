@@ -14,38 +14,27 @@ import tkinter as tk
 
 class StackObject:
 
-    def __init__(self, controller: int, source_card: Cardboard | None,
-                 obj: ActivatedAbility | TriggeredAbility | Cardboard,
-                 chosen_options: INPUTS,
+    def __init__(self, controller: int,
+                 obj: Cardboard | ActivatedAbility | TriggeredAbility,
+
+                 effect: Verb,
                  caster_verb: Verb):
         self.player_index: int = controller
-        self.source_card: Cardboard | None = source_card
-        # the THING which is on the stack.
-        self.obj: ActivatedAbility | TriggeredAbility | Cardboard = obj
-        # list of any modes or targets or other choices made during casting
-        # or activation.  If targets are Cardboards, they are pointers.
-        self.choices: INPUTS = chosen_options
+        # obj is the card on the stack or the ability causing the effect
+        self.obj: Cardboard | ActivatedAbility | TriggeredAbility = obj
+        self.effect: Verb = effect
         self.caster_verb = caster_verb
         self.zone = Zone.Stack(None)
-
 
     @property
     def cost(self) -> Cost | None:
         if hasattr(self.obj, "cost"):
             return self.obj.cost
 
-    @property
-    def effect(self) -> Verb | None:
-        if hasattr(self.obj, "effect"):
-            return self.obj.effect
-
     def get_id(self):
-        s_text = "" if self.source_card is None else self.source_card.get_id()
         obj_text = self.obj.get_id()
-        list_text = ",".join([c.get_id() if hasattr(c, "get_id") else str(c)
-                              for c in self.choices])
-        return "Ob%i(%s - %s,%s)" % (self.player_index, s_text, obj_text,
-                                     list_text)
+        eff_text = self.effect.get_id()
+        return "Ob%i(%s - %s)" % (self.player_index, obj_text, eff_text)
 
     def is_equiv_to(self, other: StackObject):
         return self.get_id() == other.get_id()

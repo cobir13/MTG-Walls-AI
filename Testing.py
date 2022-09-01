@@ -192,7 +192,7 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("5")
             self.set_power_toughness(8, 8)
             self.add_triggered("Orb see tap adds R",
-                               Abilities.Trigger(
+                               Abilities.TriggerOnVerb(
                                    Verbs.Tap,
                                    Match.ControllerControls()
                                ),
