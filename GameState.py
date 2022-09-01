@@ -13,7 +13,7 @@ import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
 from Stack import StackCardboard, StackTrigger, StackObject
-from Verbs import MoveToZone, DrawCard, Untap
+from Verbs import Verb, MoveToZone, DrawCard, Untap
 import Choices
 
 
@@ -166,6 +166,8 @@ class GameState:
             if isinstance(item, Cardboard):
                 new_list.append(item.copy_as_pointer(state_new))
             elif isinstance(item, StackObject):
+                new_list.append(item.copy(state_new))
+            elif isinstance(item, Verb):
                 new_list.append(item.copy(state_new))
             elif isinstance(item, list) or isinstance(item, tuple):
                 new_iterable = GameState.copy_arbitrary_list(state_new, item)
