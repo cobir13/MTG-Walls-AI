@@ -91,6 +91,15 @@ class PlayerList(Getter):
         return state.player_list
 
 
+class StackList(Getter):
+    def __init__(self):
+        super().__init__(True)
+
+    def get(self, state: GameState, player: int, source: Cardboard
+            ) -> List[StackObject]:
+        return state.stack
+
+
 # ---------------------------------------------------------------------------
 
 class You(PlayerList):

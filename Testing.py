@@ -339,10 +339,10 @@ if __name__ == "__main__":
     # COPYING DOESN'T COPY THE RULESTEXT OR ABILITY. ALL POINTERS TO SAME OBJ.
     assert j1.rules_text is j2.rules_text
     assert j1.get_activated()[0] is j2.get_activated()[0]
-    assert (j1.get_activated()[0].effect.destination
-            is j2.get_activated()[0].effect.destination)
-    assert isinstance(j1.get_activated()[0].effect.destination, Zone.Hand)
-    assert isinstance(j1.get_activated()[0].effect.origin, Zone.Unknown)
+    assert (j1.get_activated()[0].do_effect.destination
+            is j2.get_activated()[0].do_effect.destination)
+    assert isinstance(j1.get_activated()[0].do_effect.destination, Zone.Hand)
+    assert isinstance(j1.get_activated()[0].do_effect.origin, Zone.Unknown)
     activs = gameJ1.active.get_valid_activations()
     assert len(activs) == 1
     universes = activs[0].put_on_stack(gameJ1)
@@ -352,13 +352,13 @@ if __name__ == "__main__":
     assert len(universes) == 1
     gameJ4 = universes[0]
     j4 = gameJ4.active.hand[0]
-    assert (j1.get_activated()[0].effect.destination
-            is j4.get_activated()[0].effect.destination)
+    assert (j1.get_activated()[0].do_effect.destination
+            is j4.get_activated()[0].do_effect.destination)
     # WHEN MOVE, ZONE OBJECT IS STILL NOT MUTATED. GOOD.
-    assert not isinstance(j1.get_activated()[0].effect.origin, Zone.Field)
-    assert isinstance(j1.get_activated()[0].effect.origin, Zone.Unknown)
-    assert not isinstance(j4.get_activated()[0].effect.origin, Zone.Field)
-    assert isinstance(j4.get_activated()[0].effect.origin, Zone.Unknown)
+    assert not isinstance(j1.get_activated()[0].do_effect.origin, Zone.Field)
+    assert isinstance(j1.get_activated()[0].do_effect.origin, Zone.Unknown)
+    assert not isinstance(j4.get_activated()[0].do_effect.origin, Zone.Field)
+    assert isinstance(j4.get_activated()[0].do_effect.origin, Zone.Unknown)
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 

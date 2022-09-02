@@ -6,13 +6,16 @@ Created on Mon Dec 28 21:13:59 2020
 """
 from __future__ import annotations
 from typing import List, Tuple, Type, TYPE_CHECKING
+
+import Verbs
+
 if TYPE_CHECKING:
-    from Abilities import TriggeredAbility
+    from Abilities import TriggeredAbility, TimedAbility
 from Cardboard import Cardboard  # actually needs
 import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
-from Stack import StackCardboard, StackTrigger, StackObject
+from Stack import StackObject
 from Verbs import Verb, MoveToZone, DrawCard, Untap
 import Choices
 
@@ -44,7 +47,7 @@ class GameState:
         # the real stack. NOTHING CAN BE EXECUTED WHILE STUFF IS ON
         # THE SUPERSTACK (incl state-based)
         self.stack: List[StackObject] = []
-        self.super_stack: List[StackTrigger] = []
+        self.super_stack: List[Verbs.PlayAbility] = []
         self.player_list: List[Player] = []
         for _ in range(num_players):
             Player(self)  # adds single new asking_player to the player_list
@@ -60,9 +63,9 @@ class GameState:
         self.events_since_previous: str = ""
         # track triggesr. lists are updated when a card changes zones.
         # Format is tuple of (source-Cardboard, triggered ability).
-        self.trig_upkeep: List[Tuple[Cardboard, TriggeredAbility]] = []
-        self.trig_attack: List[Tuple[Cardboard, TriggeredAbility]] = []
-        self.trig_endstep: List[Tuple[Cardboard, TriggeredAbility]] = []
+        self.trig_upkeep: List[Tuple[Cardboard, TimedAbility]] = []
+        self.trig_combat: List[Tuple[Cardboard, TimedAbility]] = []
+        self.trig_endstep: List[Tuple[Cardboard, TimedAbility]] = []
         self.trig_event: List[Tuple[Cardboard, TriggeredAbility]] = []
         self.trig_to_remove: List[Tuple[Cardboard, TriggeredAbility]] = []
 
@@ -142,8 +145,8 @@ class GameState:
                                 for s, ab in self.trig_to_remove]
         state.trig_upkeep = [(s.copy_as_pointer(state), ab.copy())
                              for s, ab in self.trig_upkeep]
-        state.trig_attack = [(s.copy_as_pointer(state), ab.copy())
-                             for s, ab in self.trig_attack]
+        state.trig_combat = [(s.copy_as_pointer(state), ab.copy())
+                             for s, ab in self.trig_combat]
         state.trig_endstep = [(s.copy_as_pointer(state), ab.copy())
                               for s, ab in self.trig_endstep]
         # return!
@@ -289,7 +292,7 @@ class GameState:
         self.phase = GameState.PHASES.index("upkeep")
         for card, ability in self.trig_upkeep:
             # adds triggering abilities to self.super_stack, if meet condition
-            ability.add_any_to_super(self, card, None, self, )
+            ability.add_any_to_super(state=self, source_of_ability=card)
 
     def step_draw(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
@@ -321,11 +324,11 @@ class GameState:
         new_state = self.copy()
         # remove StackObject from the stack
         obj = new_state.stack.pop(-1)
-        if obj.effect is None:
+        if obj.do_effect is None:
             tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
         else:
             # perform the effect (resolve ability, perform spell, etc)
-            tuple_list = obj.effect.do_it(new_state)
+            tuple_list = obj.do_effect.do_it(new_state)
         # if card is on stack (not just a pointer), move it to destination zone
         if (isinstance(obj.obj, Cardboard)
                 and isinstance(obj.obj.zone, Zone.Stack)):
@@ -340,12 +343,16 @@ class GameState:
         return results
 
     def clear_super_stack(self) -> List[GameState]:
-        """Returns a list of GameStates where the objects on the super_stack
-        have been placed onto the stack in all possible orders or otherwise
-        dealt with. If super_stack is empty, returns [self].
+        """Returns a list of GameStates where the caster in the
+        super_stack have been run to put their StackObjects on
+        the stack. Each GameState describes casting them in a
+        different possible order. For all returned GameStates,
+        the list of triggers to remove have been removed.
+        If super_stack is empty, returns [self].
         DOES NOT MUTATE.
-        # also checks the list of triggers to remove and removes them
         """
+        # if there are triggered abilities to remove from the tracking list,
+        # remove them. Just clear the "remove" list and recurse.
         if len(self.trig_to_remove) > 0:
             new_state = self.copy()
             new_state.trig_to_remove = []
@@ -355,30 +362,37 @@ class GameState:
             return [self]
         results: List[GameState] = []
         # active player puts their triggers onto the stack first. So, find the
-        # first player in player-order who has a trigger on the super_stack.
+        # first player in player-order who has a caster on the super_stack.
         player = self.active_player_index
-        theirs = [(ii, trig) for (ii, trig) in enumerate(self.super_stack)
-                  if trig.player_index == player]
+        theirs = [(ii, caster)
+                  for (ii, caster) in enumerate(self.super_stack)
+                  if caster.player == player]
         while len(theirs) == 0:
             player = player + 1 % len(self.player_list)
-            theirs = [(ii, trig) for (ii, trig) in enumerate(self.super_stack)
-                      if trig.player_index == player]
+            theirs = [(ii, caster)
+                      for (ii, caster) in enumerate(self.super_stack)
+                      if caster.player == player]
             # only back to active player if super_stack==[]. breaks base case.
             assert player != self.active_player_index
-        # pick a super_stack StackTrigger to move to the stack
+        # pick a super_stack caster to cast first.
         maker = self.player_list[player].decision_maker
-        for item in Choices.choose_exactly_one(theirs, "Add to stack", maker):
-            ii = item[0]  # index first, then object second
+        for item in Choices.choose_exactly_one(theirs, "Put on stack", maker):
+            ii = item[0]  # index first, then caster_verb second
             state2 = self.copy()
-            obj = state2.super_stack.pop(ii)
-            if not obj.caster_verb.can_be_done(state2):
-                # If can't resolve ability, still use the GameState where it
+            caster2 = state2.super_stack.pop(ii)
+            # put onto the stack of copies of state2. doesn't mutate state2
+            if caster2.can_be_done(state2):
+                # just want gamestates, don't care about verb or tracklist
+                on_stack = [t[0] for t in caster2.do_it(state2)]
+                if len(on_stack) == 0:  # see note re failing to resolve
+                    results.append(state2)
+                else:
+                    results += on_stack
+            else:
+                # If can't resolve ability, still return a GameState where it
                 # was removed from the stack. e.g. invalid targets still
                 # removes the trigger from the super_stack.
-                results += [state2]
-            else:
-                results += [tup[0] for tup in
-                            obj.caster_verb.do_it(state2)]
+                results.append(state2)
         # recurse
         final_results = []
         for state in results:
@@ -516,42 +530,43 @@ class Player:
         new_player.grave = [c.copy() for c in self.grave]
         return new_player
 
-    def get_valid_activations(self) -> List[StackObject]:
+    def get_valid_activations(self) -> List[Verbs.PlayAbility]:
         """
-        Return a list of all abilities that can be put on the
-        stack right now. The form of the return is a tuple of
-        the inputs that Verb.PlayAbility needs in order
-        to put a newly activated ability onto the stack.
+        Find all abilities that can be activated and put on the
+        stack right now. Return them as a list of PlayAbility
+        Verbs, each of which will put one activation on the stack
+        with one choice of payment and target options when run.
         """
-        activatables: List[StackObject] = []
-        active_objects = []  # objects I've already checked through
+        activatables: List[Verbs.PlayAbility] = []
+        active_objects: List[Cardboard] = []  # I already checked these cards
         game = self.gamestate
         for source in self.hand + self.field + self.grave:
             if any([source.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                can_do = ability.valid_stack_objects(game, self.player_index,
-                                                     source)
+                # get a list of stack-objects for this ability
+                can_do = ability.valid_casters(game, self.player_index, source)
                 if len(can_do) > 0:
                     add_object = True
-                activatables += can_do
+                    activatables += can_do
             if add_object:  # track object to not look at any similar again.
                 active_objects.append(source)
         return activatables
 
-    def get_valid_castables(self) -> List[StackObject]:
-        """Return a list of all cast-able cards that can be put
-        on the stack right now, as a list of Cardboard's which
-        have not yet been paid for or moved from their current
-        zones. Think of these like pointers."""
-        castables: List[StackCardboard] = []
-        active_objects = []
+    def get_valid_castables(self) -> List[Verbs.PlayCardboard]:
+        """Find all cast-able cards that can be put on the stack
+        right now. Return them as a list of PlayCardboard Verbs,
+        each of which will put one castable card on the stack with
+        one choice of payment and target options when run."""
+        castables: List[Verbs.PlayCardboard] = []
+        active_objects: List[Cardboard] = []
         game = self.gamestate
         for card in self.hand:
             if any([card.is_equiv_to(ob) for ob in active_objects]):
                 continue  # skip cards equivalent to those already searched
-            can_do = card.valid_stack_objects(game)
+            # get a list of stack-objects for casting this card
+            can_do: List[Verbs.PlayCardboard] = card.valid_casters(game)
             if len(can_do) > 0:
                 active_objects.append(card)
                 castables += can_do
@@ -587,7 +602,7 @@ class Player:
                                       for ab in card.rules_text.trig_verb]
         self.gamestate.trig_upkeep += [(card, ab)
                                        for ab in card.rules_text.trig_upkeep]
-        self.gamestate.trig_attack += [(card, ab)
+        self.gamestate.trig_combat += [(card, ab)
                                        for ab in card.rules_text.trig_attack]
         self.gamestate.trig_endstep += [(card, ab)
                                         for ab in card.rules_text.trig_endstep]
@@ -606,7 +621,7 @@ class Player:
                                      if t[0] is not card]
         self.gamestate.trig_upkeep = [t for t in self.gamestate.trig_upkeep
                                       if t[0] is not card]
-        self.gamestate.trig_attack = [t for t in self.gamestate.trig_attack
+        self.gamestate.trig_combat = [t for t in self.gamestate.trig_combat
                                       if t[0] is not card]
         self.gamestate.trig_endstep = [t for t in self.gamestate.trig_endstep
                                        if t[0] is not card]

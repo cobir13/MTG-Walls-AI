@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
 
+
 # ---------------------------------------------------------------------------
 
 
@@ -26,8 +27,10 @@ class TriggerOnVerb:
 
     # pattern_for_verb, pattern_for_subject_, pattern_for_subject, etc...
 
-    def __init__(self, verb_type: Type[Verbs.Verb],
-                 pattern_for_subject: Match.Pattern):
+    def __init__(self,
+                 verb_type: Type[Verbs.Verb],
+                 pattern_for_subject: Match.Pattern
+                 ):
         self.verb_type = verb_type
         self.pattern_for_subject = pattern_for_subject
 
@@ -36,7 +39,7 @@ class TriggerOnVerb:
                      source_of_ability: Cardboard,
                      verb: Verbs.Verb):
         ability_owner = source_of_ability.player_index
-        return (isinstance(verb, self.verb_type)
+        return (verb.is_type(self.verb_type)  # isinstance can't see sub-verbs
                 and self.pattern_for_subject.match(verb.subject, state,
                                                    ability_owner,
                                                    source_of_ability))
@@ -114,6 +117,7 @@ class AsEnterEffect(TriggerOnMove):
     type bypass the stack and are handled IMMEDIATELY when the super_stack is
     cleared. This can be seen in `GameState.clear_super_stack`.
     """
+
     def __init__(self):
         super().__init__(Match.IsSelf(), None, Zone.Field(Get.Controllers()))
 
@@ -126,37 +130,75 @@ class ActivatedAbility:
         self.cost: Costs.Cost = cost
         self.effect: Verbs.Verb = effect
 
-    def valid_stack_objects(self, state: GameState, player: int,
-                            source: Cardboard) -> List[Stack.StackAbility]:
-        """Create as many valid StackAbilities as possible,
-        one for each valid way to activate this ability.
-        This function doesn't ACTUALLY add them to stack
-        or pay their costs, it just works out the payment
-        _options and target _options and makes usable
-        StackObjects accordingly. If the ability cannot
-        be activated, the empty list is returned."""
+    # def valid_stack_objects(self, state: GameState, player: int,
+    #                         source: Cardboard) -> List[Stack.StackAbility]:
+    #     """Create as many valid StackAbilities as possible,
+    #     one for each valid way to activate this ability.
+    #     This function doesn't ACTUALLY add them to stack
+    #     or pay their costs, it just works out the payment
+    #     _options and target _options and makes usable
+    #     StackObjects accordingly. If the ability cannot
+    #     be activated, the empty list is returned."""
+    #     # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+    #     payments = self.cost.get_payment_plans(state, player, source, None)
+    #     if len(payments) == 0:
+    #         payments = [None]
+    #     # 601.2c: choose targets and modes
+    #     effects = self.effect.populate_options(state, player, source, None)
+    #     effects = [eff for eff in effects if eff.can_be_done(state)]
+    #     # build stack objects for all combinations of these
+    #     obj_list = []
+    #     for pay_verb in payments:
+    #         for effect_verb in effects:
+    #             # figure out which verb can be used to cast this object
+    #             caster: Type[Verbs.UniversalCaster] = Verbs.PlayAbility
+    #             if self.effect.is_type(Verbs.AddMana):
+    #                 caster = Verbs.PlayManaAbility
+    #             obj_list.append(Stack.StackAbility(controller=player,
+    #                                                obj=self,
+    #                                                pay_cost=pay_verb,
+    #                                                do_effect=effect_verb,
+    #                                                caster_type=caster))
+    #     return obj_list
+
+    def valid_casters(self, state: GameState, player: int,
+                      source: Cardboard) -> List[Verbs.PlayAbility]:
+        """Create as many valid PlayAbility Verbs as possible,
+        one for each valid way to activate this ability. This
+        function doesn't ACTUALLY run those verbs to activate
+        the ability and add a StackAbility to the stack and
+        pay its posts, but it fully populates the PlayAbility
+        verbs and the pay_cost and do_effect verbs of the
+        ability so that they will do those things when they
+        are run.
+        If the ability cannot be activated, the empty list is
+        returned."""
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-        payments = self.cost.get_options(state, player, source, None)
-        # keep only the valid ones
-        payments = [ch for ch in payments
-                    if self.cost.can_afford(state, player, source, ch)]
+        payments = self.cost.get_payment_plans(state, player, source, None)
+        if len(payments) == 0:
+            payments = [None]
         # 601.2c: choose targets and modes
-        targets = self.effect.populate_options(state, player, source, None)
-        targets = [ch for ch in targets if
-                   self.effect.can_be_done(state)]
-        # combine all combinations of these
-        obj_list = []
-        for sub_pay in payments:
-            for sub_target in targets:
-                # concatenate sub-lists
-                inputs = sub_pay + sub_target
+        effects = self.effect.populate_options(state, player, source, None)
+        effects = [eff for eff in effects if eff.can_be_done(state)]
+        # build casters and stack objects for all combinations of these
+        caster_list = []
+        for pay_verb in payments:
+            for effect_verb in effects:
+                stack_obj = Stack.StackCardboard(controller=player,
+                                                 obj=self,
+                                                 pay_cost=pay_verb,
+                                                 do_effect=effect_verb)
                 # figure out which verb can be used to cast this object
-                caster: Verbs.UniversalCaster = Verbs.PlayAbility()
+                caster: Verbs.PlayAbility = Verbs.PlayAbility()
                 if self.effect.is_type(Verbs.AddMana):
                     caster = Verbs.PlayManaAbility()
-                obj = Stack.StackAbility(player, source, self, inputs, caster)
-                obj_list.append(obj)
-        return obj_list
+                [caster] = caster.populate_options(state=state,
+                                                   player=player,
+                                                   source=source,
+                                                   cause=None,
+                                                   stack_object=stack_obj)
+                caster_list.append(caster)
+        return caster_list
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))
@@ -185,20 +227,23 @@ class TriggeredAbility:
         MUTATES.
         Checks if the given Verb meets this ability's trigger
         condition. If the ability IS triggered, MUTATES
-        the GameState `state` to add a StackTrigger object to
-        the super_stack.
+        the GameState `state` to add a populated
+        AddTriggeredAbility Verb to the super_stack.
         """
         if self.trigger.is_triggered(state, source_of_ability, verb):
-
-
-
+            player = source_of_ability.player_index
+            stack_obj = Stack.StackTrigger(player, obj=self,
+                                           pay_cost=None, do_effect=None)
+            # Note: pay, effect verbs not yet populated. AddTriggeredAbility
+            # does that later.
             caster = Verbs.AddTriggeredAbility()
             if isinstance(self.trigger, AsEnterEffect):
                 caster = Verbs.AddAsEntersAbility()
-            stack_obj = Stack.StackTrigger(source_of_ability.player_index,
-                                           source_of_ability, self,
-                                           source_of_verb, [], caster)
-            state.super_stack.append(stack_obj)
+            [caster] = caster.populate_options(state, player,
+                                               source=source_of_ability,
+                                               cause=verb.subject,
+                                               stack_object=stack_obj)
+            state.super_stack.append(caster)
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.trigger), str(self.effect))
@@ -226,17 +271,26 @@ class TimedAbility:
         MUTATES.
         Checks if the given gamestate meets the condition to
         trigger. If the ability IS triggered, MUTATES
-        the GameState `state` to add a StackTrigger object to
-        the super_stack. The controller of the card controls
-        the ability.
+        the GameState `state` to add a populated
+        AddTriggeredAbility Verb to the super_stack. The
+        controller of the card controls the ability.
         """
         player = source_of_ability.player_index
         # if meets condition:
         if self.condition.get(state, player, source_of_ability):
+            obj = Stack.StackTrigger(controller=player,
+                                     obj=self,
+                                     pay_cost=None,
+                                     do_effect=None)  # not yet populated
             caster = Verbs.AddTriggeredAbility()
-            stack_obj = Stack.StackTrigger(player, source_of_ability, self,
-                                           None, [], caster)
-            state.super_stack.append(stack_obj)
+            [caster] = caster.populate_options(state, player,
+                                               source=source_of_ability,
+                                               cause=None,
+                                               stack_object=obj)
+            state.super_stack.append(caster)
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.condition), str(self.effect))
+
+    def copy(self):
+        return self

@@ -49,9 +49,10 @@ Notes comparing this program to the real Magic:The Gathering rules:
         zones, do not yet work. Implementing them would require messing with
         the add-to-zone functions in Player so that they report their
         abilities properly.
-    - Drawing a card will not trigger any abilities that care about a card
-        moving into your hand generically or leaving your deck generically. It
-        will only trigger things which explicitly care about "drawing a card".
+    - If two cards are identical EXCEPT that one of them is the source or
+        target of something on the stack, the game will treat them as fully
+        identical. It cannot distinguish cards based on pointers from the
+        stack.
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack

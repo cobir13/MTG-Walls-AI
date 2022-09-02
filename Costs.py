@@ -41,29 +41,17 @@ class Cost:
             mana_verb = PayMana(str(self.mana_cost))
             if len(self.additional) > 0:
                 # noinspection PyTypeChecker
-                return MultiVerb([mana_verb] + self.additional)
+                return MultiVerb([mana_verb] + self.additional[:])
             else:
                 return mana_verb
 
-    def can_afford(self, state: GameState, player: int,
-                   subject: Cardboard, other_inputs: INPUTS) -> bool:
-        if self.mana_cost is None:
-            afford_mana = True
-        else:
-            afford_mana = state.player_list[player].pool.can_afford_mana_cost(
-                self.mana_cost)
-        afford_other = all([v.can_be_done(state)
-                            for v in self.additional])
-        return afford_mana and afford_other
-
-    def pay_cost(self, state: GameState, player: int, subject: Cardboard,
-                 choices: INPUTS) -> List[RESULT]:
-        return self._get_multi_verb().do_it(state)
-
-    def get_options(self, state: GameState, controller: int,
-                    source: Cardboard | None, cause: Cardboard | None):
-        return self._get_multi_verb().populate_options(state, controller,
+    def get_payment_plans(self, state: GameState, controller: int,
+                          source: Cardboard | None, cause: Cardboard | None
+                          ) -> List[Verb]:
+        """Return list of Verbs giving valid ways to pay the cost"""
+        opts = self._get_multi_verb().populate_options(state, controller,
                                                        source, cause)
+        return [v for v in opts if v.can_be_done(state)]
 
     def __str__(self):
         if self.mana_cost is not None and len(self.additional) > 0:

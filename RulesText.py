@@ -5,7 +5,7 @@ Created on Mon Dec 28 21:13:28 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
+from typing import List, TYPE_CHECKING, Type
 
 import Match as Match
 import Costs
@@ -26,7 +26,7 @@ import Zone
 # ------------------------------------------------------------------------------
 
 class RulesText:
-    caster_verb: PlayCardboard = PlayCardboard()
+    caster_verb: Type[PlayCardboard] = PlayCardboard
 
     def __init__(self):
         self.name: str = ""
@@ -67,7 +67,7 @@ class RulesText:
 
 
 class Permanent(RulesText):
-    caster_verb: PlayCardboard = PlayPermanent()
+    caster_verb: Type[PlayCardboard] = PlayPermanent
 
     def __init__(self):
         super().__init__()
@@ -97,7 +97,7 @@ class Creature(Permanent):
 
 
 class Land(Permanent):
-    caster_verb: PlayCardboard = PlayLand()
+    caster_verb: Type[PlayCardboard] = PlayLand
 
     def __init__(self):
         super().__init__()
@@ -107,7 +107,7 @@ class Land(Permanent):
 # ---------------------------------------------------------------------------
 
 class Spell(RulesText):
-    caster_verb: PlayCardboard = PlayCardboard()
+    caster_verb: Type[PlayCardboard] = PlayCardboard
 
     def __init__(self):
         """

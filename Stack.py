@@ -1,10 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Type
 
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility
     from Cardboard import Cardboard
-    from Verbs import Verb, INPUTS
+    from Verbs import Verb, UniversalCaster
     from Costs import Cost
     from GameState import GameState
 
@@ -15,15 +15,31 @@ import tkinter as tk
 class StackObject:
 
     def __init__(self, controller: int,
-                 obj: Cardboard | ActivatedAbility | TriggeredAbility,
-
-                 effect: Verb,
-                 caster_verb: Verb):
+                 obj: (Cardboard | ActivatedAbility | TriggeredAbility
+                       | TimedAbility),
+                 pay_cost: Verb | None, do_effect: Verb | None):
+        """
+        controller: the player controlling this stack object
+        obj:        the card being cast or ability being activated
+                    or triggered. Note that any effect Verbs within
+                    the card or ability are NOT populated with
+                    inputs. That is what `effect` is for.
+        effect:     The Verb that pays the cost for putting this
+                    StackObjectthat onto the stack.
+        effect:     The effect Verb that will be executed when this
+                    StackObject comes off the stack.
+        caster_verb:The Verb which moves this StackObject onto the
+                    stack in the first place. Cast, with all costs
+                    paid, if it is a spell; retrieved from
+                    superstack if it is a triggered ability; put
+                    directly into play if it is a land; etc.
+        """
         self.player_index: int = controller
         # obj is the card on the stack or the ability causing the effect
         self.obj: Cardboard | ActivatedAbility | TriggeredAbility = obj
-        self.effect: Verb = effect
-        self.caster_verb = caster_verb
+        self.pay_cost: Verb | None = pay_cost
+        self.do_effect: Verb | None = do_effect
+        # self.caster_verb: Type[UniversalCaster] = caster_type
         self.zone = Zone.Stack(None)
 
     @property
@@ -33,8 +49,9 @@ class StackObject:
 
     def get_id(self):
         obj_text = self.obj.get_id()
-        eff_text = self.effect.get_id()
-        return "Ob%i(%s - %s)" % (self.player_index, obj_text, eff_text)
+        pay = "" if self.pay_cost is None else "+" + self.pay_cost.get_id()
+        eff = "" if self.do_effect is None else " ->" + self.do_effect.get_id()
+        return "Ob%i(%s%s%s)" % (self.player_index, obj_text, pay, eff)
 
     def is_equiv_to(self, other: StackObject):
         return self.get_id() == other.get_id()
@@ -49,12 +66,18 @@ class StackObject:
     def __repr__(self):
         return self.get_id()
 
-    def put_on_stack(self, state: GameState) -> List[GameState]:
-        """Returns a list of GameStates where this spell has
-        been cast (put onto the stack) and all costs paid.
-        GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
-        # PlayAbility.do_it does not mutate
-        return [t[0] for t in self.caster_verb.do_it(state)]
+    # def put_on_stack(self, state: GameState) -> List[GameState]:
+    #     """Returns a list of GameStates where this StackObject
+    #     has been put onto the stack (cast, with all costs paid,
+    #     if it is a spell; retrieved from superstack if it is a
+    #     triggered ability; put directly into play if it is a
+    #     land; etc.). If can't be done, returns empty list.
+    #     GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
+    #     caster_verb = self.caster_verb(self)  # instantiate object
+    #     if not caster_verb.can_be_done(state):
+    #         return []  # no ways to put this onto the stack
+    #     else:
+    #         return [t[0] for t in caster_verb.do_it(state)]
 
     def copy(self, state_new: GameState):
         """This function assumes that everything except maybe
@@ -72,39 +95,27 @@ class StackObject:
             return new_home[0]
         # If reached here, we need to make a new StackObject ourselves
         controller: int = self.player_index  # copy int directly
-        # asking_card card
-        if self.source_card is None:
-            source = None
-        else:
-            source = self.source_card.copy_as_pointer(state_new)
-        # object card or object ability
         if hasattr(self.obj, "copy_as_pointer"):  # it's a Cardboard
             obj = self.obj.copy_as_pointer(state_new)
         else:
             obj = self.obj.copy()
-        # copy _options
-        options = state_new.copy_arbitrary_list(state_new, self.choices)
-        verb = self.caster_verb
+        effect = self.do_effect  # verbs shouldn't mutate, so pointer is ok
+        pay_cost = self.pay_cost
+        # caster_verb = self.caster_verb
         # initialize into a StackObject, then cast it to the correct subclass
-        new_obj = StackObject(controller, source, obj, options, verb)
+        new_obj = StackObject(controller, obj, pay_cost, effect)
         new_obj.__class__ = self.__class__  # set the class type directly
         return new_obj
 
-    # @property
-    # def zone(self):
-    #     if hasattr(self.obj, "zone"):
-    #         return self.obj.zone
-    #     else:
-    #         return Zone.Stack()
-
     def build_tk_display(self, parentframe, ):
         text = self.name
-        if self.source_card is not None:
-            text += "\nFrom: %s" % self.source_card.name
-        list_chosen = ",".join([c.name if hasattr(c, "name") else str(c)
-                                for c in self.choices])
-        if len(list_chosen) > 0:
-            text += "\n" + list_chosen
+        # if self.effect.source is not None:
+        #     text += "\nFrom: %s" % self.effect.source.name
+        # list_chosen = ",".join([c.name if hasattr(c, "name") else str(c)
+        #                         for c in self.choices])
+        # if len(list_chosen) > 0:
+        #     text += "\n" + list_chosen
+        text += "\n" + str(self.obj) + "\n" + str(self.do_effect)
         return tk.Button(parentframe,
                          text=text,
                          anchor="w",
@@ -120,28 +131,21 @@ class StackAbility(StackObject):
 
 
 class StackTrigger(StackAbility):
+    """
+    Holds a triggered ability on the super_stack.
+    NOTE: effect is None at this point, since the effect Verb
+        is only populated when it is put onto the stack not
+        when it is put onto the superstack. This is because
+        populating a verb can split the GameState into many
+        copies, but putting things onto the superstack should
+        mutate rather than copy.
+    """
 
-    def __init__(self, controller: int,
-                 source_card: Cardboard,
-                 obj: TriggeredAbility | TimedAbility,
-                 cause_card: Cardboard | None,
-                 chosen_options: INPUTS,
-                 caster_verb: Verb):
-        """First entry in `choices` should be the Cardboard that
-        caused the ability to trigger."""
-        super().__init__(controller, source_card, obj,
-                         [cause_card] + chosen_options, caster_verb)
-
-    @property
-    def cause(self):
-        return self.choices[0]
+    def __str__(self):
+        return "Trigger(%s)" % self.name
 
 
 class StackCardboard(StackObject):
-
-    def __init__(self, controller: int, source_card: None,
-                 obj: Cardboard, chosen_options: INPUTS, caster_verb: Verb):
-        super().__init__(controller, obj, obj, chosen_options, caster_verb)
 
     def __str__(self):
         return "Spell: " + self.name

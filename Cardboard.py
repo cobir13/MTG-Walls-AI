@@ -14,7 +14,7 @@ from typing import List, TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from GameState import GameState
-    from Verbs import Verb
+    from Verbs import Verb, PlayCardboard
     from Stack import StackCardboard
 
 from RulesText import RulesText
@@ -170,35 +170,71 @@ class Cardboard:
         self.counters = [c for c in self.counters if
                          c[0] == "$"]  # sticky counters stay
 
-    def valid_stack_objects(self, state: GameState) -> List[StackCardboard]:
-        """Create as many valid StackCardboards as possible,
-        one for each valid way to cast this Cardboard.
-        This function doesn't ACTUALLY add them to stack
-        or pay their costs, it just works out the payment
-        _options and target _options and makes usable
-        StackObjects accordingly. If the card cannot be
-        cast, the empty list is returned."""
+    # def valid_stack_objects(self, state: GameState) -> List[StackCardboard]:
+    #     """Create as many valid StackCardboards as possible,
+    #     one for each valid way to cast this Cardboard.
+    #     This function doesn't ACTUALLY add them to stack
+    #     or pay their costs, it just works out the payment
+    #     verbs and target verbs and makes usable
+    #     StackObjects accordingly. If the card cannot be
+    #     cast, the empty list is returned."""
+    #     # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+    #     player = self.player_index
+    #     payments = self.cost.get_payment_plans(state, player, self, None)
+    #     if len(payments) == 0:
+    #         payments = [None]
+    #     # 601.2c: choose targets and modes
+    #     effects = self.effect.populate_options(state, player, self, None)
+    #     effects = [eff for eff in effects if eff.can_be_done(state)]
+    #     if len(effects) == 0:
+    #         effects = [None]
+    #     # build stack objects for all combinations of these
+    #     obj_list = []
+    #     for pay_verb in payments:
+    #         for effect_verb in effects:
+    #             caster = self.rules_text.caster_verb
+    #             obj_list.append(Stack.StackCardboard(controller=player,
+    #                                                  obj=self,
+    #                                                  pay_cost=pay_verb,
+    #                                                  do_effect=effect_verb,
+    #                                                  caster_type=caster))
+    #     return obj_list
+
+    def valid_casters(self, state: GameState) -> List[PlayCardboard]:
+        """Create as many valid PlayCardboard as possible,
+        one for each valid way to cast this Cardboard. This
+        function doesn't ACTUALLY run those verbs to cast the
+        cardboard and add it to stack and pay its cost, but
+        it fully populates the PlayCardboard verbs and the
+        pay_cost and do_effect verbs of the card so that
+        they will do those things when they are run.
+        If the card cannot be cast, the empty list is returned."""
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
         player = self.player_index
-        payments = self.cost.get_options(state, player, self, None)
-        # keep only the valid ones
-        payments = [ch for ch in payments
-                    if self.cost.can_afford(state, player, self, ch)]
+        payments = self.cost.get_payment_plans(state, player, self, None)
+        if len(payments) == 0:
+            payments = [None]
         # 601.2c: choose targets and modes
-        targets = self.effect.populate_options(state, player, self, None)
-        targets = [ch for ch in targets if
-                   self.effect.can_be_done(state)]
-        # combine all combinations of these
-        obj_list = []
-        for sub_pay in payments:
-            for sub_target in targets:
-                # concatenate sub-lists
-                inputs = sub_pay + sub_target
-                # figure out which verb can be used to cast this object
-                caster = self.rules_text.caster_verb
-                obj = Stack.StackCardboard(player, None, self, inputs, caster)
-                obj_list.append(obj)
-        return obj_list
+        effects = self.effect.populate_options(state, player, self, None)
+        effects = [eff for eff in effects if eff.can_be_done(state)]
+        if len(effects) == 0:
+            effects = [None]
+        # build casters and stack objects for all combinations of these
+        caster_list = []
+        for pay_verb in payments:
+            for effect_verb in effects:
+                stack_obj = Stack.StackCardboard(controller=player,
+                                                 obj=self,
+                                                 pay_cost=pay_verb,
+                                                 do_effect=effect_verb)
+                caster: PlayCardboard = self.rules_text.caster_verb()
+                [caster] = caster.populate_options(state=state,
+                                                   player=player,
+                                                   source=self,
+                                                   cause=None,
+                                                   stack_object=stack_obj)
+                caster_list.append(caster)
+        return caster_list
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
@@ -282,7 +318,7 @@ class Cardboard:
         #     while text.count("\n") < 3:
         #         text += "\n"
         #     text += power_toughness_string
-        #     text += " " * (30 - len(power_toughness_string) - len(cost_string))
+        #     text += " " * (30 - len(power_toughness_string)-len(cost_string))
         #     text += cost_string
         # else:
         #     text = " " * (20 - len(cost_string)) + cost_string + "\n"

@@ -12,7 +12,7 @@ import random
 if TYPE_CHECKING:
     from GameState import GameState, Player
     from Cardboard import Cardboard
-    from Stack import StackObject, StackTrigger, StackCardboard
+    from Stack import StackObject, StackCardboard
     import Zone
     from Getters import Getter
 
@@ -59,12 +59,12 @@ class Verb:
         self.copies: bool = copies  # returns copies of GameStates, not mutate.
 
         # self.subject: int | Cardboard | None = None  # thing to apply Verb to
-        self._source: Cardboard | None = None   # card saying to do the verb
-        self._player: int | None = None         # player doing the Verb
-        self._cause: Cardboard | None = None    # reason why doing Verb NOW
+        self._source: Cardboard | None = None  # card saying to do the verb
+        self._player: int | None = None  # player doing the Verb
+        self._cause: Cardboard | None = None  # reason why doing Verb NOW
         self._subject: Cardboard | int | StackObject | None = None  # apply to.
-        self._sub_verbs: List[Verb] = []        # space for subclasses to grow
-        self._inputs: list = []                 # space for subclasses to grow
+        self._sub_verbs: List[Verb] = []  # space for subclasses to grow
+        self._inputs: list = []  # space for subclasses to grow
 
     @property
     def source(self):
@@ -90,7 +90,6 @@ class Verb:
     def inputs(self):
         return self._inputs
 
-
     def copy(self: V, state_new: GameState | None = None) -> V:
         """
         Build a copy of this Verb. If the new GameState is not
@@ -108,9 +107,9 @@ class Verb:
             new_verb._inputs = self._inputs[:]
         else:
             new_verb._source = (None if self._source is None
-                               else self._source.copy_as_pointer(state_new))
+                                else self._source.copy_as_pointer(state_new))
             new_verb._cause = (None if self._cause is None
-                              else self._cause.copy_as_pointer(state_new))
+                               else self._cause.copy_as_pointer(state_new))
             ins = state_new.copy_arbitrary_list(state_new, self._inputs)
             new_verb._inputs = ins
             if self.subject is None:
@@ -266,9 +265,9 @@ class Verb:
         txt = str(self)
         txt += "(%s, %s, %s)" % (str(self.player), str(self.source),
                                  str(self.cause))
-        if len(self.inputs)>0:
+        if len(self.inputs) > 0:
             txt += "(%s)" % (", ".join([str(i) for i in self.inputs]))
-        if len(self.sub_verbs)>0:
+        if len(self.sub_verbs) > 0:
             txt += "(%s)" % (", ".join([v.get_id() for v in self.sub_verbs]))
         return txt
 
@@ -302,7 +301,7 @@ class MultiVerb(Verb):
             else:
                 ii += 1
         # figure out whether it copies or not based on sub_verbs.
-        super().__init__(0, any([v.copies for v in self.sub_verbs]) )
+        super().__init__(0, any([v.copies for v in self.sub_verbs]))
 
     def populate_options(self: V, state, player, source, cause
                          ) -> List[V]:
@@ -319,7 +318,7 @@ class MultiVerb(Verb):
 
     def can_be_done(self, state) -> bool:
         return (super().can_be_done(state)
-                and all([v.can_be_done(state) for v in self.sub_verbs]) )
+                and all([v.can_be_done(state) for v in self.sub_verbs]))
 
     def do_it(self, state, to_track=[], check_triggers=True):
         tuple_list = [(state, self, to_track)]  # GameState, MultiVerb, list
@@ -353,6 +352,7 @@ class VerbFactory(Verb):
     which subverbs to use, but which boil down into being a
     MultiVerb once those are chosen. This isn't a subclass of
     MultiVerb, it just returns them during `populate_options`."""
+
     class ShouldNeverBeRunError(Exception):
         pass
 
@@ -377,6 +377,7 @@ class AffectPlayer(Verb):
     """An atomic verb which affects a player. By default,
      the affected card is the controller of the Verb, but
      this can be overwritten."""
+
     def __init__(self, num_inputs=0):
         super().__init__(num_inputs, False)  # mutates, doesn't copy
 
@@ -389,8 +390,8 @@ class AffectPlayer(Verb):
 
     def on(self,
            subject_chooser: Get.AllWhich,
-           option_getter: Get.CardsFrom,
-           allowed_to_fail: bool = True ) -> ApplyToTargets:
+           option_getter: Get.PlayerList,
+           allowed_to_fail: bool = True) -> ApplyToTargets:
         return ApplyToTargets(subject_chooser, option_getter,
                               self, allowed_to_fail)
 
@@ -399,6 +400,7 @@ class AffectCard(Verb):
     """An atomic verb which affects a card. By default,
      the affected card is the source of the Verb, but
      this can be overwritten."""
+
     def __init__(self, num_inputs=0):
         super().__init__(num_inputs, False)  # mutates, doesn't copy
 
@@ -413,10 +415,36 @@ class AffectCard(Verb):
     def on(self,
            subject_chooser: Get.AllWhich,
            option_getter: Get.CardsFrom,
-           allowed_to_fail: bool = True ) -> ApplyToTargets:
+           allowed_to_fail: bool = True) -> ApplyToTargets:
         return ApplyToTargets(subject_chooser, option_getter,
                               self, allowed_to_fail)
 
+
+class AffectStack(Verb):
+    """An atomic verb which affects a StackObject. The
+    StackObject must be passed in as an additional option
+    to `populate_options`, or set manually by the user."""
+
+    def __init__(self, num_inputs=0, copies=False):
+        super().__init__(num_inputs, copies)  # mutates, doesn't copy
+
+    def can_be_done(self, state: GameState) -> bool:
+        return (super().can_be_done(state)
+                and isinstance(self.subject, StackObject))
+
+    def populate_options(self, state: GameState, player: int,
+                         source: Cardboard | None, cause: Cardboard | None,
+                         stack_object: StackObject | None = None
+                         ) -> List[Verb]:
+        baselist = super().populate_options(state, player, source, cause)
+        return [v.replace_subject(stack_object) for v in baselist]
+
+    def on(self,
+           subject_chooser: Get.AllWhich,
+           option_getter: Get.StackList,
+           allowed_to_fail: bool = True) -> ApplyToTargets:
+        return ApplyToTargets(subject_chooser, option_getter,
+                              self, allowed_to_fail)
 
 
 class ApplyToTargets(VerbFactory):
@@ -428,8 +456,8 @@ class ApplyToTargets(VerbFactory):
     """
 
     def __init__(self, subject_chooser: Get.AllWhich,
-                 option_getter: Get.CardsFrom | Get.PlayerList,
-                 verb: AffectCard | AffectPlayer,
+                 option_getter: Get.CardsFrom | Get.PlayerList | Get.StackList,
+                 verb: AffectCard | AffectPlayer | AffectStack,
                  allowed_to_fail: bool = True):
         super().__init__(3, copies=verb.copies)
         self._inputs = [subject_chooser, option_getter, allowed_to_fail]
@@ -453,7 +481,6 @@ class ApplyToTargets(VerbFactory):
         if len(choices) == 0:
             return []
         else:
-            v = self.sub_verbs[0]
             multi_list = []
             [subverb] = self.sub_verbs[0].populate_options(state, player,
                                                            source, cause)
@@ -461,7 +488,7 @@ class ApplyToTargets(VerbFactory):
             for target_list in choices:
                 populated = [subverb.replace_subject(t) for t in target_list]
                 # each target now has a populated verb trying to affect it.
-                # MultiVerb contains all those verbs and executes them together
+                # MultiVerb contains those verbs and executes them together
                 multi = MultiVerb(populated)
                 # populate Multi. Verb not MultiVerb to not overwrite subs
                 Verb.populate_options(multi, state, player, source, cause)
@@ -585,7 +612,7 @@ class VerbManyTimes(VerbFactory):
             num: int = self.num_to_repeat.get(state, player, source)
         else:
             num: int = self.num_to_repeat
-        multi = MultiVerb(self.sub_verbs[0:1]*num)  # same verb, n times
+        multi = MultiVerb(self.sub_verbs[0:1] * num)  # same verb, n times
         # populate the MultiVerb. This automatically populates subverbs
         return multi.populate_options(state, player, source, cause)
 
@@ -598,6 +625,7 @@ class LookDoThenDo(VerbFactory):
     the chosen cards and another verb on all non-chosen cards.
     As usual, selection is made at cast-time and should be wrapped
     in a Defer if resolution-time is desired (as it usually is)."""
+
     def __init__(self, look_at: Get.CardsFrom, choose: Get.AllWhich,
                  do_to_chosen: AffectCard,
                  do_to_others: AffectCard):
@@ -924,7 +952,7 @@ class ActivateOncePerTurn(AffectCard):
 
     def __init__(self, ability_name: str):
         super().__init__()
-        self._inputs =["@" + ability_name]  # "@" is invisible counter
+        self._inputs = ["@" + ability_name]  # "@" is invisible counter
 
     @property
     def counter_text(self):
@@ -1051,6 +1079,8 @@ class DrawCard(AffectPlayer):
         top_card_list = Zone.DeckTop(self.subject).get(state)  # 0 or 1 cards
         if len(top_card_list) > 0:
             mover = MoveToZone(Zone.Hand(self.subject))
+            [mover] = mover.populate_options(state, self.player, self.source,
+                                             self.cause)
             mover = mover.replace_subject(top_card_list[0])  # move this card
             mover.do_it(state, check_triggers=False)
             # add mover to sub_verbs, to be visible to triggers for move also
@@ -1108,6 +1138,7 @@ class Destroy(MoveToZone):
     def __str__(self):
         return "Destroy"
 
+
 # ----------
 
 
@@ -1117,6 +1148,7 @@ class SearchDeck(VerbFactory):
     As usual, selection is made at cast-time and should be wrapped
     in a Defer if resolution-time is desired (as it usually is).
     """
+
     def __init__(self, zone_to_move_to: Zone.Zone, num_to_find: int,
                  pattern: Match.Pattern):
         super().__init__(3, True)
@@ -1145,37 +1177,32 @@ class SearchDeck(VerbFactory):
 # ---------------------------------------------------------------------------
 
 
-class UniversalCaster(Verb):
-    def __init__(self):
-        super().__init__(1, copies=True)
+class UniversalCaster(AffectStack):
+    """
+    The Verb which adds a StackObject onto the stack. If there
+    is a cost associated with casting the spell or activating
+    the ability, this pays the cost. If targets need to be
+    chosen for the effect, this chooses the targets. If the
+    action bypasses the stack (like playing a land or mana
+    ability), this executes the card or effect entirely.
+    """
 
-    def populate_options(self, state: GameState, player: Player,
-                         source: Cardboard | None, cause: Cardboard | None
-                         ):
-        """This should never be called. Inputs will be a single
-        element, a StackObject to cast (to pay its costs and move
-        it to the stack)."""
-        raise Exception
+    def __init__(self):
+        super().__init__(0, copies=True)
+
+    @property
+    def subject(self) -> StackObject:
+        return self._subject
 
     def can_be_done(self, state: GameState) -> bool:
-        """Can the given Cardboard or StackObject be put onto
-        the stack?
+        """Can the given StackObject be put onto the stack?
         """
-        if not super().can_be_done(state):
-            return False
-        obj: StackObject = self.inputs[0]
-        num_payments = 0
-        if obj.cost is not None:
-            num_payments = obj.cost.num_inputs
-        # pay_choices = obj.choices[1:num_payments + 1]
-        # target_choices = obj.choices[1 + num_payments:]
-        pay_choices = obj.choices[:num_payments]
-        target_choices = obj.choices[num_payments:]
-        return ((obj.cost is None
-                 or obj.cost.can_afford(state, self.player, self.source,
-                                        pay_choices))
-                and (self.source.effect is None
-                     or self.source.effect.can_be_done(state)))
+        stackobj: StackObject = self.subject
+        return (super().can_be_done(state)
+                and (stackobj.pay_cost is None
+                     or stackobj.pay_cost.can_be_done(state))
+                and (stackobj.do_effect is None
+                     or stackobj.do_effect.can_be_done(state)))
 
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         """Put the StackObject onto the stack, paying any
@@ -1184,40 +1211,45 @@ class UniversalCaster(Verb):
         if not self.can_be_done(state):
             return []
         # 601.2a: add the spell to the stack
-        obj: StackObject = self.inputs[0]
-        state2, [source2, obj2] = state.copy_and_track([source, obj])
-        self._add_to_stack(state2, obj2)
+        state2, things = state.copy_and_track([self] + to_track)
+        self2: UniversalCaster = things[0]
+        to_track2 = things[1:]
+        obj2: StackObject = self2.inputs[0]
+        self2._add_to_stack(state2, obj2)
         # 601.2b: choose costs (additional costs, choose X, choose hybrid. For
         #   me this has already been done by choices.)
         # 601.2c: choose targets and modes -- already done by choices.
         # 601.2f: determine total cost -- part of payment for me, I think?
         # 601.2g: activate mana abilities -- I don't actually permit this.
         # 601.2h: pay costs
-        if source.cost is not None:
-            num_payments = obj2.cost.num_inputs
-            pay_choices = obj2.choices[:num_payments] + [obj2]
-            # keep only the targets.
-            obj2.choices = obj2.choices[num_payments:]
-            tuple_list: List[RESULT] = obj2.cost.pay_cost(state2, player,
-                                                          source2, pay_choices)
+        if obj2.pay_cost is not None:
+            tuple_list: List[RESULT] = obj2.pay_cost.do_it(state2,
+                                                           [self2] + to_track2,
+                                                           check_triggers)
+            # verb in result list needs to be self, not the payment verb
+            tuple_list: List[Tuple[GameState, UniversalCaster, list]] = [
+                (state3, track3[0], track3[1:])
+                for state3, verb, track3 in tuple_list]
+
         else:
-            tuple_list: List[RESULT] = [(state2, player, source, [obj2])]
-        # if necessary, the object will now instantly resolve. We are
-        # guaranteed that the object is be the latest item on the stack, as
-        # triggers go to SUPER-stack. obj was put on stack so early because
-        # then it can be automatically copied by GameState, for ease.
-        new_tuple_list = []
-        for result in tuple_list:
-            # only item remaining in input is the copy_of_obj we added
-            new_tuple_list += self._remove_if_needed(*result)
+            tuple_list: List[Tuple[GameState, UniversalCaster, list]] = [
+                (state2, self2, to_track2)]
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already
         # been added to the superstack during ability.cost.pay. Now add
         # any trigger that trigger off of this activation/casting itself.
-        final_results = []
-        for g2, p2, s2, input2 in new_tuple_list:
-            final_results += super().do_it(g2)
-        return final_results
+        results: List[RESULT] = []
+        for state4, self4, track4 in tuple_list:
+            new_tuple_list = Verb.do_it(self4, state4, track4, check_triggers)
+            # if necessary, the object will now instantly resolve. We are
+            # guaranteed that the object is be the latest item on the stack, as
+            # triggers go on SUPER-stack. obj was put on stack even though it
+            # might be removed because then it can be automatically copied by
+            # GameState and to make subclasses of UniversalCaster nicer.
+            for state5, self5, track5 in new_tuple_list:
+                self5: UniversalCaster
+                results += self5._remove_if_needed(state5, track5)
+        return results
 
     @staticmethod
     def _add_to_stack(game: GameState, obj: StackObject) -> None:
@@ -1226,16 +1258,16 @@ class UniversalCaster(Verb):
         zones if necessary."""
         game.stack.append(obj)
 
-    @staticmethod
-    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
-                          obj_as_input: List[StackObject]) -> List[RESULT]:
+    def _remove_if_needed(self, game: GameState, to_track: list
+                          ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that. MUTATES."""
-        return [(game, player, source, obj_as_input)]
+        resolve instantly, do that. Otherwise, just give back all
+        the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
+        return [(game, self, to_track)]
 
-    def add_self_to_state_history(self, state: GameState):
+    def add_self_to_state_history(self, state: GameState) -> None:
         if state.is_tracking_history:
-            record = "\n*** %s %s ***" % (str(self), other_inputs[0].name)
+            record = "\n*** %s %s ***" % (str(self), self.subject.name)
             state.events_since_previous += record
 
 
@@ -1245,21 +1277,26 @@ class PlayAbility(UniversalCaster):
 
 
 class PlayManaAbility(PlayAbility):
-    @staticmethod
-    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
-                          obj_as_input: List[StackObject]) -> List[RESULT]:
+    def _remove_if_needed(self, game: GameState, to_track: list
+                          ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that."""
+        resolve instantly, do that. Otherwise, just give back all
+        the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.stack.pop(-1)
-        assert stack_obj is obj_as_input[0]
-        # perform the effect (resolve ability, perform spell, etc)
-        if stack_obj.effect is None:
-            return [(game, player, source, obj_as_input)]
+        assert stack_obj is self.inputs[0]  # for debug
+        if stack_obj.do_effect is None:
+            return [(game, self, to_track)]
         else:
-            # add stack_obj to the list of choices needed to perform the
-            # `effect`, so stack_obj will remain once choices are used up.
-            inputs = stack_obj.choices + [stack_obj]
-            return stack_obj.effect.do_it(game)
+            # perform the effect (resolve ability, perform spell, etc)
+            tuple_list = stack_obj.do_effect.do_it(game, [self] + to_track)
+            # add this effect verb to self as a sub_verb that was executed, so
+            # that its triggers are also automatically checked
+            results = []
+            for state2, effect2, things2 in tuple_list:
+                self2: UniversalCaster = things2[0].replace_verb(0, effect2)
+                track2 = things2[1:]
+                results.append((state2, self2, track2))
+            return results
 
 
 class AddTriggeredAbility(UniversalCaster):
@@ -1269,54 +1306,67 @@ class AddTriggeredAbility(UniversalCaster):
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         """Put the StackObject onto the stack, paying any
         necessary costs. Bypass the stack if necessary.
-        Assumes that the triggered ability has already
-        been removed from the super_stack by others."""
+        Assumes that the caster has already been removed
+        from the super_stack by others."""
         # check to make sure the execution is legal
         if not self.can_be_done(state):
             return []
-        # 601.2a: add the spell to the stack
-        trig: StackTrigger = other_inputs[0]
-        targets = [[]]
-        if trig.effect is not None:
-            targets = trig.effect.populate_options(state, player,
-                                                   trig.source_card,
-                                                   trig.cause)
-        # now have targets for the trigger, so can make StackAbility for it
-        final_results = []
-        for choices in targets:
-            abil = Stack.StackAbility(trig.player_index, trig.source_card,
-                                      trig.obj, choices, NullVerb())
-            state2, [abil2] = state.copy_and_track([abil])
-            state2.stack.append(abil2)
+        trig: StackObject = self.subject  # specifically a stacktrigger
+        # 601.2c: choose targets and modes
+        effects = trig.do_effect.populate_options(state, trig.player_index,
+                                                  self.source, self.cause)
+        effects = [eff for eff in effects if eff.can_be_done(state)]
+        if len(effects) == 0:
+            effects = [None]
+        # 601.2a: add the spell to the stack. make StackAbility for each.
+        final_results: List[RESULT] = []
+        for do_effect in effects:
+            abil = Stack.StackAbility(controller=trig.player_index,
+                                      obj=trig.obj,
+                                      pay_cost=None,
+                                      do_effect=do_effect)
+            state2, things = state.copy_and_track([abil, self] + to_track)
+            state2.stack.append(things[0])  # copy of StackAbility `abil`
+            # 601.2i: ability has now "been activated".  Any abilities which
+            # trigger from some aspect of paying the costs have already
+            # been added to the superstack during ability.cost.pay. Now add
+            # any trigger that trigger off of this activation/casting itself.
+            self2: AddTriggeredAbility = things[1]
+            new_tuple_list = Verb.do_it(self2, state2, things[2:],
+                                        check_triggers)
             # if necessary, the object will now instantly resolve. We are
-            # guaranteed that the object is be the latest item on the stack
-            # since triggers go to SUPER-stack.
-            new_tuple_list = self._remove_if_needed(state2, player,
-                                                    abil2.source_card, [abil2])
-            # 601.2i: ability has now "been activated".  Add any triggers
-            # that trigger off of this trigger itself.
-            for st, pl, srce, ins in new_tuple_list:
-                final_results += Verb.do_it(self, st,
-                                            check_triggers=check_triggers)
+            # guaranteed that the object is be the latest item on the stack, as
+            # triggers go on SUPER-stack. obj was put on stack even though it
+            # might be removed because then it can be automatically copied by
+            # GameState and to make subclasses of UniversalCaster nicer.
+            for state3, self3, track3 in new_tuple_list:
+                self3: AddTriggeredAbility
+                final_results += self3._remove_if_needed(state3, track3)
         return final_results
 
 
 class AddAsEntersAbility(AddTriggeredAbility):
-    @staticmethod
-    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
-                          obj_as_input: List[StackObject]) -> List[RESULT]:
+    def _remove_if_needed(self, game: GameState, to_track: list
+                          ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that."""
+        resolve instantly, do that. Otherwise, just give back all
+        the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.stack.pop(-1)
-        assert stack_obj is obj_as_input[0]
+        assert stack_obj is self.subject
         # perform the effect (resolve ability, perform spell, etc)
-        if stack_obj.effect is None:
-            return [(game, player, source, obj_as_input)]
+        if stack_obj.do_effect is None:
+            return [(game, self, to_track)]
         else:
-            # add stack_obj to the list of choices needed to perform the
-            # `effect`, so stack_obj will remain once choices are used up.
-            inputs = stack_obj.choices + obj_as_input
-            return stack_obj.effect.do_it(game)
+            # perform the effect (resolve ability, perform spell, etc)
+            tuple_list = stack_obj.do_effect.do_it(game, [self] + to_track)
+            # add this effect verb to self as a sub_verb that was executed, so
+            # that it's triggers are also automatically checked
+            results = []
+            for state2, effect2, things2 in tuple_list:
+                self2: UniversalCaster = things2[0].replace_verb(0, effect2)
+                track2 = things2[1:]
+                results.append((state2, self2, track2))
+            return results
 
 
 # ----------
@@ -1343,37 +1393,43 @@ class PlayLand(PlayCardboard):
     def __str__(self):
         return "Play"
 
-    @staticmethod
-    def _remove_if_needed(game: GameState, player: int, source: Cardboard,
-                          obj_as_input: List[StackObject]) -> List[RESULT]:
+    def _remove_if_needed(self, game: GameState, to_track: list
+                          ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that."""
+        resolve instantly, do that. Otherwise, just give back all
+        the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.stack.pop(-1)
-        assert stack_obj is obj_as_input[0]
+        assert stack_obj is self.subject
         assert stack_obj.obj.is_in(Zone.Stack)
         # move the land to the `player`'s field instantly
-        mover = MoveToZone(Zone.Field(player))
-        mover.do_it(game)
-        # add stack_obj so that it will remain once choices are used up.
-        inputs = stack_obj.choices + [stack_obj]
-        return stack_obj.effect.do_it(game)
+        mover = MoveToZone(Zone.Field(stack_obj.obj.player_index))
+        [mover] = mover.populate_options(game, self.player, self.source,
+                                         self.cause)
+        mover = mover.replace_subject(stack_obj.obj)
+        mover.do_it(game)  # mutates, so no need to track or anything
+        # add this effect verb to self as a sub_verb that was executed, so
+        # that its triggers are also automatically checked
+        self2: PlayLand = self.replace_verb(0, mover)
+        return [(game, self2, to_track)]
 
 
 # ----------
 class PlaySorcery(PlayCardboard):
-    def can_be_done(self, state, player, source, other_inputs) -> bool:
+    def can_be_done(self, state: GameState) -> bool:
         doable = super().can_be_done(state)
         stack_empty = len(state.stack) == 0
-        card = other_inputs[0].obj
-        has_flash = Match.Keyword("flash").match(card, state, player, card)
+        card = self.subject.obj
+        has_flash = Match.Keyword("flash").match(card, state,
+                                                 self.player, card)
         return doable and (stack_empty or has_flash)
 
 
 # ----------
 class PlayPermanent(PlayCardboard):
-    def can_be_done(self, state, player, source, other_inputs) -> bool:
+    def can_be_done(self, state: GameState) -> bool:
         doable = super().can_be_done(state)
         stack_empty = len(state.stack) == 0
-        card = other_inputs[0].obj
-        has_flash = Match.Keyword("flash").match(card, state, player, card)
+        card = self.subject.obj
+        has_flash = Match.Keyword("flash").match(card, state,
+                                                 self.player, card)
         return doable and (stack_empty or has_flash)
