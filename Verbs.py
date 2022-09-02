@@ -552,6 +552,7 @@ class Defer(Verb):
     Defers any cast-time choices of the given verb to instead
     be chosen only on resolution.
     """
+    # TODO make this a decorator or abstract class to inherit from?
 
     def __init__(self, verb: Verb):
         super().__init__(0, copies=True)
@@ -813,29 +814,25 @@ class GainLife(AffectPlayer, SingleGetterInput):
             state.events_since_previous += text
 
 
-class DamageToPlayer(AffectPlayer, SingleGetterInput):
-    def __init__(self, damage: Get.Integer | int):
-        """The player is dealt the given amount of damage
+class DamageToPlayer(LoseLife):
+    """The subject player is dealt the given amount of damage
         by the source."""
-        super().__init__(1)
-        self._inputs = [damage]
 
     def do_it(self, state, to_track=[], check_triggers=True):
-        # make the subject player lose life
-        loser = LoseLife(self.inputs[0])
-        loser = loser.replace_subject(self.subject)  # just need subject
-        loser.do_it(state, check_triggers=False)  # mutates
-        new_self = self.replace_verb(0, loser)
+        # make the source's controller gain life if source has lifelink
         if "lifelink" in Get.Keywords().get(state, self.source.player_index,
                                             self.source):
-            # make the source's controller gain life
             gainer = GainLife(self.inputs[0])
             gainer = gainer.replace_subject(self.subject)  # just need subject
             gainer.do_it(state, check_triggers=False)  # mutates
+            # add gainer to be a subverb of self, so that triggers will be
+            # checked automatically later on
             new_self = self.replace_verb(1, gainer)
-        # new_self's subverbs are checked automatically in check_triggers.
+        else:
+            new_self = self
+        # super.do_it to make the player actually lose life. Also, as usual,
         # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(new_self, state, to_track, check_triggers)
+        return super(LoseLife, new_self).do_it(state, to_track, check_triggers)
 
     def add_self_to_state_history(self, state):
         if state.is_tracking_history:
@@ -843,6 +840,19 @@ class DamageToPlayer(AffectPlayer, SingleGetterInput):
             state.events_since_previous += str(self.inputs[0])
             state.events_since_previous += " damage to Player"
             state.events_since_previous += str(self.subject)
+
+
+class PayLife(LoseLife):
+    """The subject player pays the given amount of life.
+    Cannot be done if they don't have enough life to pay."""
+    def can_be_done(self, state: GameState) -> bool:
+        return (super().can_be_done(state) and
+                state.player_list[self.player].life >= self.inputs[0])
+
+    def add_self_to_state_history(self, state):
+        if state.is_tracking_history:
+            text = "\nPlayer%i pays %i life" % (self.subject, self.inputs[0])
+            state.events_since_previous += text
 
 
 class LoseTheGame(AffectPlayer):
@@ -1068,6 +1078,17 @@ class MoveToZone(AffectCard):
 
     def __str__(self):
         return "MoveTo" + str(self.dest)
+
+    @staticmethod
+    def move(state: GameState, card: Cardboard, destination: Zone.Zone,
+             check_triggers = False):
+        """Moves the card to the destination zone. Mutates
+        the GameState. Helper function for when you need
+        o move a card quickly and are willing to take
+        responsibility for not breaking the rules."""
+        assert destination.is_fixed and destination.is_single
+        mover = MoveToZone(destination).replace_subject(card)
+        mover.do_it(state, check_triggers=check_triggers)
 
 
 class DrawCard(AffectPlayer):
@@ -1381,7 +1402,7 @@ class PlayCardboard(UniversalCaster):
         """Mutate the GameState to put the given StackObject
         onto the stack. This includes removing it from other
         zones if necessary."""
-        MoveToZone(Zone.Stack()).do_it(game)
+        MoveToZone.move(game, obj.obj, Zone.Stack(), False)
         # for a StackCardboard, obj.source_card and obj.obj are pointers to
         # the same thing. Thus, moving either of them is sufficient.
         game.stack.append(obj)

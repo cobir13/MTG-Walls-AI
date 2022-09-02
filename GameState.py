@@ -212,7 +212,7 @@ class GameState:
             faceup += player.field + player.grave
         return faceup
 
-    def give_to(self, cardboard,
+    def give_to(self, card,
                 destination: Type[Zone.DeckTop | Zone.DeckBottom | Zone.Hand
                                   | Zone.Field],
                 player_index=0):
@@ -223,11 +223,12 @@ class GameState:
         Adds any triggered StackEffects to the super_stack.
         MUTATES.
         """
-        if cardboard.owner_index < 0:
-            cardboard.owner_index = player_index
-        mover = MoveToZone(destination(player_index))
-        mover.add_self_to_state_history = lambda *args: None  # silent
-        mover.do_it(self)
+        if card.owner_index < 0:
+            card.owner_index = player_index
+        mover = MoveToZone(destination(player_index)).replace_subject(card)
+        # mover doesn't have a player or a source or cause. hopefully ok.
+        mover.add_self_to_state_history = lambda *args: None  # make silent.
+        mover.do_it(self, to_track=[], check_triggers=True)
 
     # -------------------------------------------------------------------------
 
@@ -243,8 +244,8 @@ class GameState:
                 toughness = Get.Toughness().get(self, player.player_index,
                                                 card)
                 if toughness is not None and toughness <= 0:
-                    mover = MoveToZone(Zone.Grave(player.player_index))
-                    mover.do_it(self)
+                    MoveToZone.move(self, card, Zone.Grave(card.player_index),
+                                    check_triggers=True)
                     continue  # don't increment counter
                 i += 1
             # legend rule   # TODO
@@ -325,20 +326,20 @@ class GameState:
         # remove StackObject from the stack
         obj = new_state.stack.pop(-1)
         if obj.do_effect is None:
-            tuple_list = [(new_state, obj.player_index, obj.source_card, [])]
+            results = [(new_state, None, [obj])]
         else:
-            # perform the effect (resolve ability, perform spell, etc)
-            tuple_list = obj.do_effect.do_it(new_state)
+            # perform the effect (resolve ability, perform spell, etc).
+            results = obj.do_effect.do_it(new_state, to_track=[obj])
         # if card is on stack (not just a pointer), move it to destination zone
         if (isinstance(obj.obj, Cardboard)
                 and isinstance(obj.obj.zone, Zone.Stack)):
             dest = obj.obj.rules_text.cast_destination.copy()
             dest.player = obj.player_index  # update to give to correct player
-            for gm, pl, cd, ins in tuple_list:
-                MoveToZone(dest).do_it(gm)
+            for state, verb, track in results:
+                MoveToZone.move(state, track[0].obj, dest)
         # clear the superstack and return!
         results = []
-        for tup in tuple_list:
+        for tup in results:
             results += tup[0].clear_super_stack()
         return results
 

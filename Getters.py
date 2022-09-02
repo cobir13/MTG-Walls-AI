@@ -175,6 +175,10 @@ class ConstString(Const, String):
     pass
 
 
+class ConstBool(Const, Bool):
+    pass
+
+
 # ----------
 
 # class GetManaCost(GetTrait):

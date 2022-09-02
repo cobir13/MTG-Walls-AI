@@ -192,7 +192,7 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("5")
             self.set_power_toughness(8, 8)
             self.add_triggered("Orb see tap adds R",
-                               Abilities.TriggerOnVerb(
+                               Abilities.TriggerWhenVerb(
                                    Verbs.Tap,
                                    Match.ControllerControls()
                                ),
@@ -206,7 +206,7 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("1B")
             self.set_power_toughness(0, 1)
             self.add_triggered("Artist drains when dies",
-                               Abilities.TriggerOnMove(
+                               Abilities.TriggerWhenMove(
                                    Match.CardType(RulesText.Creature),
                                    Zone.Field(None),
                                    Zone.Grave(None)
@@ -228,18 +228,21 @@ if __name__ == "__main__":
     gameC = game1.copy()
     chocC = gameC.player_list[0].field[0]
     assert chocC.is_equiv_to(choc0)
-    Verbs.Tap().do_it(gameC)
+    tapper = Verbs.Tap().populate_options(gameC, 0, chocC, None)[0]
+    tapper.do_it(gameC)
     assert chocC.tapped
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 1
     assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
     assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
     # even if player1 taps player0's creature, Orb won't see it
-    Verbs.Tap().do_it(gameC)
+    tapper = Verbs.Tap().populate_options(gameC, 0, chocC, None)[0]
+    tapper.do_it(gameC)
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 2
     assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
     assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
     # now try to tap one of player1's creatures
-    Verbs.Tap().do_it(gameC)
+    tapper = Verbs.Tap().populate_options(gameC, 1, artist1, None)[0]
+    tapper.do_it(gameC)
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 3
     game_list = gameC.clear_super_stack()
     assert len(game_list) == 1  # only one way to clear the superstack
@@ -843,11 +846,12 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.do_it(game1)[0][0]
-    game1B = mover.do_it(game1A)[0][0]
+
+    game1A = mover.replace_subject(game1.active.field[0]).do_it(game1)[0][0]
+    game1B = mover.replace_subject(game1A.active.field[0]).do_it(game1A)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2)[0][0]
-    game2B = mover.do_it(game2A)[0][0]
+    game2A = mover.replace_subject(game2.active.field[1]).do_it(game2)[0][0]
+    game2B = mover.replace_subject(game2A.active.field[0]).do_it(game2A)[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -858,15 +862,15 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.do_it(game1)[0][0]
+    game1A = mover.replace_subject(game1.active.field[0]).do_it(game1)[0][0]
     game1A.pass_turn()
     game1A.step_untap()
-    game1B = mover.do_it(game1A)[0][0]
+    game1B = mover.replace_subject(game1A.active.field[0]).do_it(game1A)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.do_it(game2)[0][0]
+    game2A = mover.replace_subject(game2.active.field[1]).do_it(game2)[0][0]
     game2A.pass_turn()
     game2A.step_untap()
-    game2B = mover.do_it(game2A)[0][0]
+    game2B = mover.replace_subject(game2A.active.field[0]).do_it(game2A)[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.pass_turn()

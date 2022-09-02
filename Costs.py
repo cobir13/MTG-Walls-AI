@@ -7,7 +7,6 @@ from Verbs import Verb, PayMana, MultiVerb, NullVerb
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
-    from Verbs import INPUTS, RESULT
 
 
 class Cost:

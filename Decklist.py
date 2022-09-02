@@ -11,7 +11,7 @@ import Match as Match
 import Verbs
 from Costs import Cost
 
-from Abilities import TriggerOnMove, AsEnterEffect, TriggerOnSelfEnter
+from Abilities import TriggerWhenMove, AsEnterEffect, TriggerOnSelfEnter
 import Getters as Get
 
 
@@ -85,7 +85,7 @@ class Battlement(Creature):
                     "G",
                     Get.Count(Match.Keyword("defender"),
                               Zone.Field(Get.You()))))
-            )
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -106,7 +106,7 @@ class Axebane(Creature):
                     "A",
                     Get.Count(Match.Keyword("defender"),
                               Zone.Field(Get.You()))))
-            )
+        )
 
 
 # -----------------------------------------------------------------------------
@@ -148,8 +148,8 @@ class Arcades(Creature):
         self.add_keywords(["flying", "vigilance"])
         self.set_power_toughness(3, 5)
         self.add_triggered("Arcades draw trigger",
-                           TriggerOnMove(Match.Keyword("defender"), None,
-                                         Zone.Field(Get.Controllers())),
+                           TriggerWhenMove(Match.Keyword("defender"), None,
+                                           Zone.Field(Get.Controllers())),
                            Verbs.DrawCard())
 
 
@@ -161,13 +161,14 @@ class Company(RulesText.Instant):
         self.name = "CollectedCompany"
         self.cost = Cost("3G")
         self.effect = Verbs.Defer(
-            Verbs.LookDoThenDo(Get.CardsFrom(Zone.DeckTopN(Get.You(), 6)),
-                               Get.Chooser(Match.CardType(Creature)
-                                          & Match.ManaValue("<=", 3),
-                                          2, can_be_fewer=True),
-                               Verbs.MoveToZone(Zone.Field(Get.You())),
-                               Verbs.MoveToZone(Zone.DeckBottom(Get.You()))
-                               ))
+            Verbs.LookDoThenDo(
+                Get.CardsFrom(Zone.DeckTopN(Get.You(), 6)),
+                Get.Chooser(Match.CardType(Creature)
+                            & Match.ManaValue("<=", 3),
+                            2, can_be_fewer=True),
+                Verbs.MoveToZone(Zone.Field(Get.You())),
+                Verbs.MoveToZone(Zone.DeckBottom(Get.You()))
+            ))
 
 
 # =============================================================================
@@ -230,7 +231,7 @@ class TempleGarden(Forest, Plains):
         self.add_triggered("shock",
                            AsEnterEffect(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
-                                                    Verbs.LoseLife(2)]))
+                                                    Verbs.PayLife(2)]))
                            )
 
 
@@ -243,7 +244,7 @@ class BreedingPool(Forest, Island):
         self.add_triggered("shock",
                            AsEnterEffect(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
-                                                    Verbs.LoseLife(2)]))
+                                                    Verbs.PayLife(2)]))
                            )
 
 
@@ -256,7 +257,7 @@ class HallowedFountain(Plains, Island):
         self.add_triggered("shock",
                            AsEnterEffect(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
-                                                    Verbs.LoseLife(2)]))
+                                                    Verbs.PayLife(2)]))
                            )
 
 
@@ -270,12 +271,13 @@ class WindsweptHeath(Land):
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
-                           Verbs.LoseLife(1)
+                           Verbs.PayLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.SearchDeck(Zone.Field(Get.You()),
-                                              1,
-                                              Match.CardType(Forest)
-                                              | Match.CardType(Plains))
+                           + Verbs.Defer(
+                               Verbs.SearchDeck(Zone.Field(Get.You()),
+                                                1,
+                                                Match.CardType(Forest)
+                                                | Match.CardType(Plains)))
                            )
 
 
@@ -287,12 +289,13 @@ class MistyRainforest(Land):
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
-                           Verbs.LoseLife(1)
+                           Verbs.PayLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.SearchDeck(Zone.Field(Get.You()),
-                                              1,
-                                              Match.CardType(Forest)
-                                              | Match.CardType(Island))
+                           + Verbs.Defer(
+                               Verbs.SearchDeck(Zone.Field(Get.You()),
+                                                1,
+                                                Match.CardType(Forest)
+                                                | Match.CardType(Island)))
                            )
 
 
@@ -304,12 +307,13 @@ class FloodedStrand(Land):
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),
-                           Verbs.LoseLife(1)
+                           Verbs.PayLife(1)
                            + Verbs.Sacrifice()
-                           + Verbs.SearchDeck(Zone.Field(Get.You()),
-                                              1,
-                                              Match.CardType(Island)
-                                              | Match.CardType(Plains))
+                           + Verbs.Defer(
+                               Verbs.SearchDeck(Zone.Field(Get.You()),
+                                                1,
+                                                Match.CardType(Island)
+                                                | Match.CardType(Plains)))
                            )
 
 # =============================================================================

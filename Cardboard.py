@@ -15,7 +15,6 @@ from typing import List, TYPE_CHECKING, Type
 if TYPE_CHECKING:
     from GameState import GameState
     from Verbs import Verb, PlayCardboard
-    from Stack import StackCardboard
 
 from RulesText import RulesText
 import Costs
@@ -233,7 +232,8 @@ class Cardboard:
                                                    source=self,
                                                    cause=None,
                                                    stack_object=stack_obj)
-                caster_list.append(caster)
+                if caster.can_be_done(state):
+                    caster_list.append(caster)
         return caster_list
 
     def build_tk_display(self, parent_frame):
@@ -361,7 +361,7 @@ class CardNull(Cardboard):
     def add_counter(self, addition):
         return
 
-    def valid_stack_objects(self, state: GameState) -> List[StackCardboard]:
+    def valid_casters(self, state: GameState) -> List[PlayCardboard]:
         return []
 
     @property

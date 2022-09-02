@@ -1,10 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Type
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility
     from Cardboard import Cardboard
-    from Verbs import Verb, UniversalCaster
+    from Verbs import Verb
     from Costs import Cost
     from GameState import GameState
 

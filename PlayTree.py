@@ -6,6 +6,9 @@ Created on Mon Dec 28 21:13:59 2020
 """
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Set
+
+import Verbs
+
 if TYPE_CHECKING:
     import GameState
 
@@ -62,13 +65,19 @@ class PlayTree:
         while len(self._active_states[turn]) > 0:
             # remove a random GameState from the active list and explore it
             state: GameState = self._active_states[turn].pop()
-            # _options are: cast spell, activate ability, let stack resolve
+            # options are: cast spell, activate ability, let stack resolve
             activables = state.priority.get_valid_activations()
             castables = state.priority.get_valid_castables()
+            doables: List[Verbs.UniversalCaster] = activables + castables
             # if there are valid actions, make new nodes by taking them
             new_nodes = []
-            for stack_object in activables + castables:
-                for state2 in stack_object.put_on_stack(state):
+            for caster in doables:
+                if caster.copies:
+                    results = caster.do_it(state)
+                else:
+                    new_state, [new_caster] = state.copy([caster])
+                    results = new_caster.do_it(new_state)
+                for state2 in results:
                     new_nodes += state2.clear_super_stack()
             if len(state.stack) > 0:
                 # list of GameStates with the top effect on the stack resolved

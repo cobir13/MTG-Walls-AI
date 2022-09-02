@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import types
-from typing import TYPE_CHECKING, List, TypeVar
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from GameState import GameState, Player

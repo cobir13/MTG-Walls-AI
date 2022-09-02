@@ -7,17 +7,16 @@ Created on Mon Dec 28 21:13:28 2020
 from __future__ import annotations
 from typing import List, TYPE_CHECKING, Type
 
+import Getters
 import Match as Match
 import Costs
 import Verbs
 
 if TYPE_CHECKING:
     from GameState import GameState
-    from Cardboard import Cardboard
-    from Verbs import INPUTS
 
-from Abilities import ActivatedAbility, TriggeredAbility, TriggerOnVerb,\
-    AlwaysTrigger
+from Abilities import ActivatedAbility, TriggeredAbility, TriggerWhenVerb,\
+    TimedAbility
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlayPermanent
 import Zone
@@ -59,7 +58,7 @@ class RulesText:
     def add_activated(self, name: str, cost: Costs.Cost, effect: Verb):
         self.activated.append(ActivatedAbility(name, cost, effect))
 
-    def add_triggered(self, name: str, trigger: TriggerOnVerb, effect: Verb):
+    def add_triggered(self, name: str, trigger: TriggerWhenVerb, effect: Verb):
         self.trig_verb.append(TriggeredAbility(name, trigger, effect))
 
 
@@ -142,15 +141,14 @@ class Sorcery(Spell):
 class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
-    def can_be_done(self, state: GameState, controller, source: Cardboard,
-                    other_input: INPUTS = []) -> bool:
+    def can_be_done(self, state: GameState) -> bool:
+        is_critter = Match.CardType(Creature).match(self.subject, state,
+                                                    self.player, self.source)
+        is_sick = self.subject.summon_sick
+        has_haste = Match.Keyword("haste").match(self.subject, state,
+                                                 self.player, self.source)
         return (super().can_be_done(state)
-                and not (Match.CardType(Creature).match(source, state,
-                                                        controller, source)
-                         and source.summon_sick
-                         and not Match.Keyword("haste").match(source, state,
-                                                              controller,
-                                                              source)))
+                and (not is_critter or not is_sick or has_haste))
 
     def __str__(self):
         return "{T}"
@@ -159,45 +157,45 @@ class TapSymbol(Tap):
 # ----------
 
 class Revert(Verbs.AffectCard):
-    def can_be_done(self, state: GameState, controller, source: Cardboard,
-                    other_input: INPUTS = []) -> bool:
-        return True
 
     def do_it(self, state, to_track=[], check_triggers=True):
-        while hasattr(source.rules_text, "former"):
-            source.rules_text = getattr(source.rules_text, "former")
-        return [(state, controller, source, other_input)]
+        """Reset the subject card back to its previous state. Mutates."""
+        card = self.subject
+        while hasattr(card.rules_text, "former"):
+            card.rules_text = getattr(card.rules_text, "former")
+        # add history. maybe check_triggers (add to super_stack, trim inputs)
+        return Verb.do_it(self, state, to_track, check_triggers)
 
 
 class Animate(Verbs.AffectCard):
+    """Changes the subject card's RulesText to make it be a
+    creature in addition to whatever else it was."""
     def __init__(self, creature_type: Creature):
         super().__init__()
         self.creature_type = creature_type
 
-    def can_be_done(self, state, controller, source: Cardboard,
-                    other_input: INPUTS = []) -> bool:
-        return source.is_in(Zone.Field)
+    def can_be_done(self, state: GameState) -> bool:
+        return super().can_be_done(state) and self.subject.is_in(Zone.Field)
 
     def do_it(self, state, to_track=[], check_triggers=True):
         # make the new RulesText
         rules = self.creature_type.__init__()
         # overwrite the name
-        rules.name = source.name
+        rules.name = self.subject.name
         # add the previous keywords and abilities in addition to the new ones
-        rules.keywords += source.rules_text.keywords
-        rules.activated += source.rules_text.activated
-        rules.trig_verb += source.rules_text.trig_verb
-        rules.trig_upkeep += source.rules_text.trig_upkeep
-        rules.trig_attack += source.rules_text.trig_attack
-        rules.trig_endstep += source.rules_text.trig_endstep
+        rules.keywords += self.subject.rules_text.keywords
+        rules.activated += self.subject.rules_text.activated
+        rules.trig_verb += self.subject.rules_text.trig_verb
+        rules.trig_upkeep += self.subject.rules_text.trig_upkeep
+        rules.trig_attack += self.subject.rules_text.trig_attack
+        rules.trig_endstep += self.subject.rules_text.trig_endstep
         # add a "revert at end of turn" ability
-        rules.former = source.rules_text
-        rules.trig_endstep.append(TriggeredAbility("revert " + source.name,
-                                                   AlwaysTrigger(), Revert()))
+        rules.former = self.subject.rules_text
+        abil_name = "revert " + self.subject.name,
+        rules.trig_endstep.append(TimedAbility(abil_name,
+                                               Getters.ConstBool(True),
+                                               Revert()))
         # overwrite with new RulesText
-        source.rules_text = rules
-        return super().do_it(state)
-
-    @property
-    def mutates(self):
-        return True
+        self.subject.rules_text = rules
+        # add history. maybe check_triggers (add to super_stack, trim inputs)
+        return Verb.do_it(self, state, to_track, check_triggers)

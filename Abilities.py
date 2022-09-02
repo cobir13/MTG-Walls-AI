@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-class TriggerOnVerb:
+class TriggerWhenVerb:
 
     # pattern_for_verb, pattern_for_subject_, pattern_for_subject, etc...
 
@@ -51,7 +51,7 @@ class TriggerOnVerb:
 
 # ----------
 
-class TriggerOnMove(TriggerOnVerb):
+class TriggerWhenMove(TriggerWhenVerb):
 
     def __init__(self, pattern_for_subject: Match.Pattern,
                  origin: Zone.Zone | None,
@@ -82,7 +82,7 @@ class TriggerOnMove(TriggerOnVerb):
                 )
 
 
-class NeverTrigger(TriggerOnVerb):
+class NeverTrigger(TriggerWhenVerb):
     def __init__(self):
         super().__init__(Verbs.NullVerb, Match.Nothing())
 
@@ -90,7 +90,7 @@ class NeverTrigger(TriggerOnVerb):
         return ""
 
 
-class AlwaysTrigger(TriggerOnVerb):
+class AlwaysTrigger(TriggerWhenVerb):
     def __init__(self):
         super().__init__(Verbs.NullVerb, Match.Nothing())
 
@@ -101,7 +101,7 @@ class AlwaysTrigger(TriggerOnVerb):
         return True
 
 
-class TriggerOnSelfEnter(TriggerOnMove):
+class TriggerOnSelfEnter(TriggerWhenMove):
     def __init__(self):
         super().__init__(Match.IsSelf(), None, Zone.Field(Get.Controllers()))
 
@@ -111,7 +111,7 @@ class TriggerOnSelfEnter(TriggerOnMove):
 
 # ----------
 
-class AsEnterEffect(TriggerOnMove):
+class AsEnterEffect(TriggerWhenMove):
     """A specific subcategory of TriggerOnMove.  This is an
     enters-the-battlefield effect except more so: triggered abilities of this
     type bypass the stack and are handled IMMEDIATELY when the super_stack is
@@ -197,7 +197,8 @@ class ActivatedAbility:
                                                    source=source,
                                                    cause=None,
                                                    stack_object=stack_obj)
-                caster_list.append(caster)
+                if caster.can_be_done(state):
+                    caster_list.append(caster)
         return caster_list
 
     def __str__(self):
@@ -214,9 +215,9 @@ class ActivatedAbility:
 
 
 class TriggeredAbility:
-    def __init__(self, name, trigger: TriggerOnVerb, effect: Verbs.Verb):
+    def __init__(self, name, trigger: TriggerWhenVerb, effect: Verbs.Verb):
         self.name: str = name
-        self.trigger: TriggerOnVerb = trigger
+        self.trigger: TriggerWhenVerb = trigger
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
 
@@ -243,7 +244,8 @@ class TriggeredAbility:
                                                source=source_of_ability,
                                                cause=verb.subject,
                                                stack_object=stack_obj)
-            state.super_stack.append(caster)
+            if caster.can_be_done(state):
+                state.super_stack.append(caster)
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.trigger), str(self.effect))

@@ -62,18 +62,12 @@ Notes on actually-correct things:
 -------------------------------------------------------------------------------
 
 Notes for future improvements or speedups:
-    - Maintain list of all currently-triggerable abilities within the
-        GameState and update whenever a card is moved. Saves on checking
-        through all cards every time a Verb is performed.
-    - Make a Player class and distinguish Players from GameStates. A game can
-        have many players but only one stack, etc. I can then write different
-        "brain" modules for different players -- manual user control, choose
-        first option every time, goldfish always passes, try all possible
-        as a giant tree, etc.
+    - Can maybe stop using num_inputs. is it doing anything real?
     - Some sort of 'animate' or 'change form' Verb which creates a new
         RulesText and swaps the Cardboard's pointer to point at the new
         RulesText. This effectively turns the Cardboard into the new thing.
         The new thing will have a pointer back to the original so that it can
         revert at end of turn, and an end-of-turn trigger to revert it. Make
         sure reversion is recursive in case something is animated twice!
-    - GameState needs a zone to hold delayed triggers?
+    - Add delayed triggers, hook them into the timed trigger lists
+    - Add field to abilities to say what zones they are active from?
