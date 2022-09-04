@@ -181,10 +181,13 @@ if __name__ == "__main__":
     assert choc0 is chocB.zone.get(game1)[0]
     assert chocB is choc0.zone.get(gameB)[0]
 
+
     # -----------------------------------------------------------------------
 
     # define two cards which can "listen" for triggers. One cares about
     # tapping creatures, the other about moving them from field
+
+
     class WeirdOrb(RulesText.Creature):
         def __init__(self):
             super().__init__()
@@ -198,6 +201,7 @@ if __name__ == "__main__":
                                ),
                                Verbs.AddMana("R")
                                )
+
 
     class BloodArtist(RulesText.Creature):
         def __init__(self):
@@ -216,33 +220,50 @@ if __name__ == "__main__":
                                                       Get.Opponents())
                                )
 
+
     # give both of these creatures to player1
     orb1 = Cardboard(WeirdOrb())
     game1.give_to(orb1, Zone.Field, 1)
     artist1 = Cardboard(BloodArtist())
+    assert len(artist1.rules_text.trig_verb[0].effect.sub_verbs) == 2
     game1.give_to(artist1, Zone.Field, 1)
     assert len(game1.player_list[1].field) == 3
     assert artist1.zone.location == 0  # BloodArtist comes 1st alphabetically
+    # gamestate right now for game1:
+    # Player0: Chocolate, Vanilla.    Player1: BloodArtist, Vanilla, WeirdOrb
 
     # copy the game and start doing verbs and see what happens!
     gameC = game1.copy()
     chocC = gameC.player_list[0].field[0]
     assert chocC.is_equiv_to(choc0)
-    tapper = Verbs.Tap().populate_options(gameC, 0, chocC, None)[0]
-    tapper.do_it(gameC)
+    tapper = Verbs.Tap()
+    assert not tapper.can_be_done(gameC)  # missing important parameters
+    [tapper2] = tapper.populate_options(gameC, 0, chocC, None)
+    # check that populate didn't mutate original tapper object
+    assert not tapper.can_be_done(gameC)
+    assert tapper is not tapper2
+    assert tapper2.can_be_done(gameC)
+    # now actually run the verb. Tap mutates.
+    [(game_tap, verb_tap, list_tap)] = tapper2.do_it(gameC)
+    assert list_tap == []
+    assert verb_tap is tapper2  # output may be new, or not. but never mutated.
+    assert verb_tap is not tapper
+    assert game_tap is gameC
     assert chocC.tapped
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 1
     assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
     assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
     # even if player1 taps player0's creature, Orb won't see it
-    tapper = Verbs.Tap().populate_options(gameC, 0, chocC, None)[0]
+    vanil0C = gameC.player_list[0].field[1]
+    tapper = Verbs.Tap().populate_options(gameC, 1, vanil0C, None)[0]
     tapper.do_it(gameC)
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 2
     assert len(gameC.stack) == 0  # no trigger because Orb only sees OWN
     assert len(gameC.super_stack) == 0  # creatures, and this was player0's.
-    # now try to tap one of player1's creatures
-    tapper = Verbs.Tap().populate_options(gameC, 1, artist1, None)[0]
-    tapper.do_it(gameC)
+    # now player0 tries to tap one of player1's creatures. should trigger Orb,
+    # even though it's player0 doing the action.
+    vanil1C = gameC.player_list[1].field[1]
+    Verbs.Tap().populate_options(gameC, 0, vanil1C, None)[0].do_it(gameC)
     assert sum([c.tapped for c in Zone.Field(None).get(gameC)]) == 3
     game_list = gameC.clear_super_stack()
     assert len(game_list) == 1  # only one way to clear the superstack
@@ -263,8 +284,11 @@ if __name__ == "__main__":
     assert chocE.player_index == 0
     artist = gameE.player_list[1].field[0]
     s = artist.rules_text.trig_verb[0].trigger
-    assert s.pattern.match(chocE, gameE, 0, artist)
-    Verbs.Destroy().do_it(gameE)
+    assert s.pattern_for_subject.match(chocE, gameE, 0, artist)
+    [destroyer] = Verbs.Destroy().populate_options(gameE, 0, chocE, None)
+    assert destroyer.can_be_done(gameE)
+    assert destroyer.subject is chocE
+    destroyer.do_it(gameE)
     assert not chocE.tapped  # not tapped, because dead and in grave
     assert len(Zone.Field(None).get(gameE)) == 4
     assert len(gameE.super_stack) == 1
@@ -282,11 +306,11 @@ if __name__ == "__main__":
     assert [g.player_list[1].life
             for g in [gameE, gameF, gameG]] == [20, 20, 21]
     # try to destroy the world!
-    wrath = Verbs.Defer(Verbs.Destroy().on(Get.AllWhich(
-        Match.CardType(RulesText.Creature)),
-                                           Get.CardsFrom(Zone.Field(None))
-                                           ))
+    wrath = Verbs.Defer(
+        Verbs.Destroy().on(Get.AllWhich(Match.CardType(RulesText.Creature)),
+                           Get.CardsFrom(Zone.Field(None))))
     assert wrath.copies
+    [wrath] = wrath.populate_options(gameG, 0, None, None)
     gameH = wrath.do_it(gameG)[0][0]
     assert len(gameH.super_stack) == 4
     assert len(Zone.Field(None).get(gameH)) == 0
@@ -295,19 +319,22 @@ if __name__ == "__main__":
     assert len(outcomes) == 4 * 3 * 2 * 1  # actually distinct on the stack!
     assert all([len(g.stack) == 4 and len(g.super_stack) == 0
                 for g in outcomes])
-    # trigger doesn't track "cause" on stack, so these aren't distinct!
-    assert len(set(outcomes)) == 1
-    final_game = outcomes[0]
-    while len(final_game.stack) > 0:
-        next_steps = final_game.resolve_top_of_stack()
-        assert len(next_steps) == 1
-        final_game = next_steps[0]
-    assert final_game.player_list[0].life == 19 - 4
-    assert final_game.player_list[1].life == 21 + 4
-    assert len(final_game.stack) == 0
-    assert len(final_game.super_stack) == 0
-    assert len(Zone.Field(None).get(final_game)) == 0
-    assert len(Zone.Grave(None).get(final_game)) == 5
+    # trigger tracks "cause" on stack, so these are distinct!
+    assert len(set(outcomes)) == 4 * 3 * 2 * 1
+    final_games = set()
+    for f_game in outcomes:
+        while len(f_game.stack) > 0:
+            next_steps = f_game.resolve_top_of_stack()
+            assert len(next_steps) == 1
+            f_game = next_steps[0]
+        assert f_game.player_list[0].life == 19 - 4
+        assert f_game.player_list[1].life == 21 + 4
+        assert len(f_game.stack) == 0
+        assert len(f_game.super_stack) == 0
+        assert len(Zone.Field(None).get(f_game)) == 0
+        assert len(Zone.Grave(None).get(f_game)) == 5
+        final_games.add(f_game)
+    assert len(final_games) == 1  # after triggers resolve, all identical
 
     # try to pass turn
     assert game1.active_player_index == 0
@@ -320,8 +347,9 @@ if __name__ == "__main__":
     assert choc0 not in game1.active.field  # because active has changed
     assert choc0 in game1.player_list[0].field  # but choc0 hasn't moved
 
-    # some additional tests for Verbs.MoveToZone in particular
+
     class Jumper(RulesText.Creature):
+        # some additional tests for Verbs.MoveToZone in particular
         def __init__(self):
             super().__init__()
             self.name = "Jumper"
@@ -342,26 +370,27 @@ if __name__ == "__main__":
     # COPYING DOESN'T COPY THE RULESTEXT OR ABILITY. ALL POINTERS TO SAME OBJ.
     assert j1.rules_text is j2.rules_text
     assert j1.get_activated()[0] is j2.get_activated()[0]
-    assert (j1.get_activated()[0].do_effect.destination
-            is j2.get_activated()[0].do_effect.destination)
-    assert isinstance(j1.get_activated()[0].do_effect.destination, Zone.Hand)
-    assert isinstance(j1.get_activated()[0].do_effect.origin, Zone.Unknown)
+    assert (j1.get_activated()[0].effect.destination
+            is j2.get_activated()[0].effect.destination)
+    assert isinstance(j1.get_activated()[0].effect.destination, Zone.Hand)
+    assert j1.get_activated()[0].effect.origin is None
     activs = gameJ1.active.get_valid_activations()
     assert len(activs) == 1
-    universes = activs[0].put_on_stack(gameJ1)
+    assert activs[0].can_be_done(gameJ1)
+    universes = activs[0].do_it(gameJ1)
     assert len(universes) == 1
-    gameJ3 = universes[0]
+    gameJ3 = universes[0][0]
     universes = gameJ3.resolve_top_of_stack()
     assert len(universes) == 1
     gameJ4 = universes[0]
     j4 = gameJ4.active.hand[0]
-    assert (j1.get_activated()[0].do_effect.destination
-            is j4.get_activated()[0].do_effect.destination)
+    assert (j1.get_activated()[0].effect.destination
+            is j4.get_activated()[0].effect.destination)
     # WHEN MOVE, ZONE OBJECT IS STILL NOT MUTATED. GOOD.
-    assert not isinstance(j1.get_activated()[0].do_effect.origin, Zone.Field)
-    assert isinstance(j1.get_activated()[0].do_effect.origin, Zone.Unknown)
-    assert not isinstance(j4.get_activated()[0].do_effect.origin, Zone.Field)
-    assert isinstance(j4.get_activated()[0].do_effect.origin, Zone.Unknown)
+    assert not isinstance(j1.get_activated()[0].effect.origin, Zone.Field)
+    assert j1.get_activated()[0].effect.origin is None
+    assert not isinstance(j4.get_activated()[0].effect.origin, Zone.Field)
+    assert j4.get_activated()[0].effect.origin is None
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -380,19 +409,24 @@ if __name__ == "__main__":
 
     roots_on_stack = Cardboard(Decklist.Roots())
     roots_on_stack.zone = Zone.Stack()
-    stack_cardboard = Stack.StackCardboard(0, None, roots_on_stack,
-                                           [1, "a", caryatid_in_play],
-                                           Verbs.PlayCardboard())
-    game1.stack.append(stack_cardboard)
+    stack_cardboard = Stack.StackCardboard(0, roots_on_stack, None, None)
+    [caster] = Verbs.PlayCardboard().populate_options(game1, 0,
+                                                      roots_on_stack, None,
+                                                      stack_cardboard)
+    game1.player_list[0].pool.add_mana("GG")
+    assert caster.can_be_done(game1)
+    game1 = caster.do_it(game1)[0][0]
+    affecter = Verbs.AffectStack().on(Get.All(), Get.StackList(), False)
     fake_ability = Abilities.ActivatedAbility("fake", Costs.Cost(),
-                                              Verbs.NullVerb())
-    stack_ability = Stack.StackAbility(0, caryatid_in_play, fake_ability,
-                                       [(stack_cardboard, caryatid_in_play)],
-                                       Verbs.PlayAbility())
-    game1.stack.append(stack_ability)
+                                              affecter)
+    [caster] = fake_ability.valid_casters(game1, 0, caryatid_in_play)
+    assert caster.can_be_done(game1)
+    game1 = caster.do_it(game1)[0][0]
+    assert len(game1.stack) == 2
+    stack_ability = game1.stack[-1]
 
-    # test game has: caryatid in play, roots on stack pointing at random stuff,
-    # and an ability on stack pointing at roots and also random stuff.
+    # test game has: caryatid in play, roots on stack, and an ability pointing
+    # at the roots on the stack coming from the caryatid in play.
     # try a copy_and_track
     game2, [card2, obj2] = game1.copy_and_track([caryatid_in_play,
                                                  stack_ability])
@@ -400,24 +434,28 @@ if __name__ == "__main__":
     assert obj2 is not stack_ability
     assert card2 is not caryatid_in_play
     assert caryatid_in_play.copy_as_pointer(game2) is game2.active.field[0]
-
     assert caryatid_in_play in caryatid_in_play.zone.get(game1)
     assert card2 in card2.zone.get(game2)
-    assert obj2.source_card in obj2.source_card.zone.get(game2)
+    assert card2 not in card2.zone.get(game1)
+    assert card2 not in game1.active.field
+    assert card2 is not caryatid_in_play
+    assert card2.is_equiv_to(caryatid_in_play)
+
+    assert obj2 is game2.stack[-1]
+    assert obj2 is not game1.stack[-1]
+    assert obj2.do_effect is not stack_ability.do_effect
+    assert obj2.do_effect.source is card2
+
     assert game1.stack[0].obj.is_equiv_to(game2.stack[0].obj)
     assert game1.stack[0].obj is not game2.stack[0].obj
-    assert game1.stack[0].source_card.is_equiv_to(game2.stack[0].source_card)
-    assert game1.stack[0].source_card is not game2.stack[0].source_card
-    assert game1.stack[1].source_card.is_equiv_to(
-        game2.stack[1].source_card)
-    assert game1.stack[1].source_card is not game2.stack[1].source_card
-    assert game1.stack[1].source_card is game1.active.field[0]
-    assert game2.stack[1].source_card is game2.active.field[0]
-    assert game2.stack[1].choices[0][0] is game2.stack[0]
-    assert game2.stack[1].choices[0][1] is game2.active.field[0]
-    assert game2.stack[1].choices[0][1] is not game1.active.field[0]
-    assert game2.stack[1].choices[0][1] is game2.stack[1].source_card
-    assert game2.stack[0].choices[:2] == [1, "a"]
+    assert game1.stack[1].do_effect.source.is_equiv_to(
+        game2.stack[1].do_effect.source)
+    assert (game1.stack[1].do_effect.source
+            is not game2.stack[1].do_effect.source)
+    assert game1.stack[1].do_effect.subject is game1.stack[0]
+    assert game1.stack[1].do_effect.subject is not game2.stack[0]
+    assert game2.stack[1].do_effect.subject is not game1.stack[0]
+    assert game2.stack[1].do_effect.subject is game2.stack[0]
 
     game_orig = GameState(1)
     game_orig.is_tracking_history = False  # True
@@ -1149,6 +1187,7 @@ if __name__ == "__main__":
     print("Testing Collected Company and simultaneous ETBs")
     start_clock = time.perf_counter()
 
+
     def cast_and_resolve_company(state):
         # cast Collected Company
         state.active.pool.add_mana("GGGG")
@@ -1161,6 +1200,7 @@ if __name__ == "__main__":
         assert len(on_stack.super_stack) == 0
         assert len(on_stack.stack) == 1
         return on_stack.resolve_top_of_stack()
+
 
     game = GameState()
     # deck of 6 cards

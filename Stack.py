@@ -48,10 +48,11 @@ class StackObject:
             return self.obj.cost
 
     def get_id(self):
+        type_text = "%s%i" % (type(self).__name__, self.player_index)
         obj_text = self.obj.get_id()
         pay = "" if self.pay_cost is None else "+" + self.pay_cost.get_id()
         eff = "" if self.do_effect is None else " ->" + self.do_effect.get_id()
-        return "Ob%i(%s%s%s)" % (self.player_index, obj_text, pay, eff)
+        return "%s(%s%s%s)" % (type_text, obj_text, pay, eff)
 
     def is_equiv_to(self, other: StackObject):
         return self.get_id() == other.get_id()
@@ -61,7 +62,7 @@ class StackObject:
         return self.obj.name
 
     def __str__(self):
-        return "Ob(%s)" % self.name
+        return "%s \"%s\"" % (type(self).__name__, self.name)
 
     def __repr__(self):
         return self.get_id()
@@ -125,9 +126,7 @@ class StackObject:
 
 
 class StackAbility(StackObject):
-
-    def __str__(self):
-        return "Effect(%s)" % self.name
+    pass
 
 
 class StackTrigger(StackAbility):
@@ -140,15 +139,10 @@ class StackTrigger(StackAbility):
         copies, but putting things onto the superstack should
         mutate rather than copy.
     """
-
-    def __str__(self):
-        return "Trigger(%s)" % self.name
+    pass
 
 
 class StackCardboard(StackObject):
-
-    def __str__(self):
-        return "Spell: " + self.name
 
     def build_tk_display(self, parentframe, ):
         return tk.Button(parentframe,

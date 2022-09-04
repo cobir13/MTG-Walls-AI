@@ -321,7 +321,6 @@ class GameState:
             been placed on the stack."""
         if len(self.stack) == 0:
             return []
-        assert (isinstance(self.stack[-1], StackObject))
         new_state = self.copy()
         # remove StackObject from the stack
         obj = new_state.stack.pop(-1)
@@ -338,10 +337,10 @@ class GameState:
             for state, verb, track in results:
                 MoveToZone.move(state, track[0].obj, dest)
         # clear the superstack and return!
-        results = []
+        final_results = []
         for tup in results:
-            results += tup[0].clear_super_stack()
-        return results
+            final_results += tup[0].clear_super_stack()
+        return final_results
 
     def clear_super_stack(self) -> List[GameState]:
         """Returns a list of GameStates where the caster in the
@@ -377,8 +376,7 @@ class GameState:
             assert player != self.active_player_index
         # pick a super_stack caster to cast first.
         maker = self.player_list[player].decision_maker
-        for item in Choices.choose_exactly_one(theirs, "Put on stack", maker):
-            ii = item[0]  # index first, then caster_verb second
+        for ii, v in Choices.choose_exactly_one(theirs, "Put on stack", maker):
             state2 = self.copy()
             caster2 = state2.super_stack.pop(ii)
             # put onto the stack of copies of state2. doesn't mutate state2
@@ -480,11 +478,11 @@ class Player:
         txt += "  Deck:%2i" % len(self.deck)
         txt += "  Mana:(%6s)" % str(self.pool)
         if len(self.hand) > 0:
-            txt += "\nHAND:   " + ",".join([str(card) for card in self.hand])
+            txt += "\n  HAND:  " + ",".join([str(card) for card in self.hand])
         if len(self.field) > 0:
-            txt += "\nFIELD:  " + ",".join([str(card) for card in self.field])
+            txt += "\n  FIELD: " + ",".join([str(card) for card in self.field])
         if len(self.grave) > 0:
-            txt += "\nGRAVE:  " + ",".join([str(card) for card in self.grave])
+            txt += "\n  GRAVE: " + ",".join([str(card) for card in self.grave])
         return txt
 
     def get_id(self):

@@ -78,7 +78,8 @@ class TriggerWhenMove(TriggerWhenVerb):
                 and (self.origin is None
                      or any([verb.origin.is_contained_in(z) for z in origins]))
                 and (self.destination is None
-                     or any([verb.dest.is_contained_in(z) for z in dests]))
+                     or any([verb.destination.is_contained_in(z)
+                             for z in dests]))
                 )
 
 
