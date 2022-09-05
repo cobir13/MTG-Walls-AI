@@ -46,11 +46,18 @@ class Cost:
 
     def get_payment_plans(self, state: GameState, controller: int,
                           source: Cardboard | None, cause: Cardboard | None
-                          ) -> List[Verb]:
-        """Return list of Verbs giving valid ways to pay the cost"""
-        opts = self._get_multi_verb().populate_options(state, controller,
-                                                       source, cause)
-        return [v for v in opts if v.can_be_done(state)]
+                          ) -> List[Verb] | [None]:
+        """Return list of Verbs giving valid ways to pay the cost.
+        If there is no cost to pay, return [None] to mean that
+        nothing needs to be done. If the cost cannot be paid,
+        return [] to mean that there is no valid way in which to
+        pay the cost."""
+        if self.mana_cost is None and len(self.additional) == 0:
+            return [None]
+        else:
+            opts = self._get_multi_verb().populate_options(state, controller,
+                                                           source, cause)
+            return [v for v in opts if v.can_be_done(state)]
 
     def __str__(self):
         if self.mana_cost is not None and len(self.additional) > 0:

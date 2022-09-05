@@ -39,7 +39,6 @@ class StackObject:
         self.obj: Cardboard | ActivatedAbility | TriggeredAbility = obj
         self.pay_cost: Verb | None = pay_cost
         self.do_effect: Verb | None = do_effect
-        # self.caster_verb: Type[UniversalCaster] = caster_type
         self.zone = Zone.Stack(None)
 
     @property
@@ -49,6 +48,9 @@ class StackObject:
 
     def get_id(self):
         type_text = "%s%i" % (type(self).__name__, self.player_index)
+        assert self.zone.is_contained_in(Zone.Stack())
+        if self.zone.location is not None:
+            type_text += str(self.zone.location)
         obj_text = self.obj.get_id()
         pay = "" if self.pay_cost is None else "+" + self.pay_cost.get_id()
         eff = "" if self.do_effect is None else " ->" + self.do_effect.get_id()
@@ -89,22 +91,23 @@ class StackObject:
         # if this StackObject is a pointer to a DIFFERENT StackObject on the
         # stack which already has a copy, then just return that new copied
         # object. (Relevant for e.g. counterspell, which targets a StackObject)
-        new_home = self.zone.get(state_new)
-        if len(new_home) == 1 and new_home[0].is_equiv_to(self):
-            # An identical StackObject is in the new game at the location self
-            # expects to live. Return pointer to this StackObject
-            return new_home[0]
+        if state_new is not None:
+            new_home = self.zone.get(state_new)
+            if len(new_home) == 1 and new_home[0].is_equiv_to(self):
+                # An identical StackObject is in the new game at the location
+                # self expects to live. Return pointer to this StackObject.
+                return new_home[0]
         # If reached here, we need to make a new StackObject ourselves
         controller: int = self.player_index  # copy int directly
-        if hasattr(self.obj, "copy_as_pointer"):  # it's a Cardboard
-            obj = self.obj.copy_as_pointer(state_new)
+        if hasattr(self.obj, "copy"):  # it's a Cardboard
+            obj = self.obj.copy(state_new)
         else:
             obj = self.obj.copy()
-        effect = self.do_effect  # verbs shouldn't mutate, so pointer is ok
-        pay_cost = self.pay_cost
-        # caster_verb = self.caster_verb
+        cst = None if self.pay_cost is None else self.pay_cost.copy(state_new)
+        ef = None if self.do_effect is None else self.do_effect.copy(state_new)
         # initialize into a StackObject, then cast it to the correct subclass
-        new_obj = StackObject(controller, obj, pay_cost, effect)
+        new_obj = StackObject(controller, obj, cst, ef)
+        new_obj.zone = self.zone.copy(None)
         new_obj.__class__ = self.__class__  # set the class type directly
         return new_obj
 

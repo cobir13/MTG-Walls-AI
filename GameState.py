@@ -11,7 +11,7 @@ import Verbs
 
 if TYPE_CHECKING:
     from Abilities import TriggeredAbility, TimedAbility
-from Cardboard import Cardboard  # actually needs
+from Cardboard import Cardboard, CardNull  # actually needs
 import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
@@ -139,15 +139,15 @@ class GameState:
         # finally, copy the track_list, which can contain any types
         new_track_list = GameState.copy_arbitrary_list(state, track_list)
         # copy each trigger in the various trigger-tracker lists
-        state.trig_event = [(s.copy_as_pointer(state), ab.copy())
+        state.trig_event = [(s.copy(state), ab.copy(state))
                             for s, ab in self.trig_event]
-        state.trig_to_remove = [(s.copy_as_pointer(state), ab.copy())
+        state.trig_to_remove = [(s.copy(state), ab.copy(state))
                                 for s, ab in self.trig_to_remove]
-        state.trig_upkeep = [(s.copy_as_pointer(state), ab.copy())
+        state.trig_upkeep = [(s.copy(state), ab.copy(state))
                              for s, ab in self.trig_upkeep]
-        state.trig_combat = [(s.copy_as_pointer(state), ab.copy())
+        state.trig_combat = [(s.copy(state), ab.copy(state))
                              for s, ab in self.trig_combat]
-        state.trig_endstep = [(s.copy_as_pointer(state), ab.copy())
+        state.trig_endstep = [(s.copy(state), ab.copy(state))
                               for s, ab in self.trig_endstep]
         # return!
         return state, new_track_list
@@ -166,15 +166,11 @@ class GameState:
         # lists / tuples / iterables, and immutable types
         new_list = []
         for item in list_to_copy:
-            if isinstance(item, Cardboard):
-                new_list.append(item.copy_as_pointer(state_new))
-            elif isinstance(item, StackObject):
-                new_list.append(item.copy(state_new))
-            elif isinstance(item, Verb):
-                new_list.append(item.copy(state_new))
-            elif isinstance(item, list) or isinstance(item, tuple):
+            if isinstance(item, list) or isinstance(item, tuple):
                 new_iterable = GameState.copy_arbitrary_list(state_new, item)
                 new_list.append(new_iterable)  # recurse!
+            elif hasattr(item, "copy"):  # Verb, StackObject, Cardboard, Zone
+                new_list.append(item.copy(state_new))
             else:
                 new_list.append(item)  # immutable and passed by value, I hope
         return list_to_copy.__class__(new_list)
@@ -202,9 +198,16 @@ class GameState:
 
     def add_to_stack(self, obj: StackObject):
         if hasattr(obj.obj, "zone"):
-            obj.obj.zone = Zone.Stack()
+            obj.obj.zone = Zone.Stack(len(self.stack))
         obj.zone = Zone.Stack(len(self.stack))
         self.stack.append(obj)
+
+    def pop_from_stack(self, index: int = -1) -> StackObject:
+        obj = self.stack.pop(index)
+        for ii in range(index, len(self.stack) - 1):
+            self.stack[ii].zone.location = ii
+        return obj
+
 
     def get_all_public_cards(self):
         faceup = []
@@ -282,7 +285,9 @@ class GameState:
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
-            Untap().do_it(self)
+            untapper = Untap().populate_options(self, self.active_player_index,
+                                                card, None)[0]
+            untapper.do_it(self, check_triggers=True)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
@@ -304,7 +309,9 @@ class GameState:
         self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
-        DrawCard().do_it(self)
+        [drawer] = DrawCard().populate_options(self, self.active_player_index,
+                                               CardNull(), None)
+        drawer.do_it(self)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def resolve_top_of_stack(self) -> List[GameState]:
@@ -323,7 +330,7 @@ class GameState:
             return []
         new_state = self.copy()
         # remove StackObject from the stack
-        obj = new_state.stack.pop(-1)
+        obj = new_state.pop_from_stack(-1)
         if obj.do_effect is None:
             results = [(new_state, None, [obj])]
         else:
@@ -337,7 +344,7 @@ class GameState:
             for state, verb, track in results:
                 MoveToZone.move(state, track[0].obj, dest)
         # clear the superstack and return!
-        final_results = []
+        final_results: List[GameState] = []
         for tup in results:
             final_results += tup[0].clear_super_stack()
         return final_results
@@ -522,7 +529,9 @@ class Player:
         # copy mana pool
         new_player.pool = self.pool.copy()
         # for the lists of Cardboards (hand, deck, field, grave), spin
-        # through making copies as I go. The ordering will be maintained
+        # through making copies as I go. The ordering will be maintained. Note
+        # this doesn't supply a GameState to copy() because there should be
+        # no pointers within any of these zones. they're real Cardboards.
         new_player.hand = [c.copy() for c in self.hand]
         new_player.deck = [c.copy() for c in self.deck]
         new_player.field = [c.copy() for c in self.field]

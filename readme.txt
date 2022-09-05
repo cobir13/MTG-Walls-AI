@@ -62,7 +62,6 @@ Notes on actually-correct things:
 -------------------------------------------------------------------------------
 
 Notes for future improvements or speedups:
-    - Can maybe stop using num_inputs. is it doing anything real?
     - Some sort of 'animate' or 'change form' Verb which creates a new
         RulesText and swaps the Cardboard's pointer to point at the new
         RulesText. This effectively turns the Cardboard into the new thing.
@@ -71,3 +70,6 @@ Notes for future improvements or speedups:
         sure reversion is recursive in case something is animated twice!
     - Add delayed triggers, hook them into the timed trigger lists
     - Add field to abilities to say what zones they are active from?
+    - I am copying abilities and verbs when I might not need to? I should
+        go through carefully later, for speedup, if I want.
+

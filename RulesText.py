@@ -42,7 +42,7 @@ class RulesText:
         # self.static = []     #static effects
         # NOTE: cast_destination.player=None, as don't know which player yet
         self.cast_destination: Zone.Zone = Zone.Unknown()
-        self.effect: Verb = NullVerb()
+        self.effect: Verb | None = None
 
     @property
     def mana_value(self):

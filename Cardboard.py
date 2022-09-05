@@ -65,31 +65,27 @@ class Cardboard:
             s += "_[" + ",".join(self.counters) + "]"
         return s
 
-    def copy(self):
-        new_card = Cardboard(self.rules_text)
-        # RulesText never mutates so it's ok that they're both pointing at the
-        # same instance of a RulesText
-        new_card.rules_text = self.rules_text
-        # safe to copy by reference since they're all ints, str, etc
-        new_card.tapped = self.tapped
-        new_card.summon_sick = self.summon_sick
-        new_card.owner_index = self.owner_index
-        # counters is a LIST so it needs to be copied without reference
-        new_card.counters = self.counters.copy()
-        # zone can mutate, I think? Rare but possible. safer to copy not refer
-        new_card.zone = self.zone.copy()
-        return new_card
-
-    def copy_as_pointer(self, state_new: GameState):
+    def copy(self, state_new: GameState | None = None):
         """A more careful version of copy. This one first
         checks to see if the card is secretly a "pointer"
         to a card which already exists in the new GameState.
         If it is, returns the card in the new GameState. If
         it is not, returns a fresh copy of the card.
         Useful when copying spells on the stack."""
-        if self.is_in(Zone.Stack):
-            # TODO: on-cast trigger would have a asking_card pointing to stack
-            return self.copy()  # if on stack, can't be a pointer.
+        if state_new is None:
+            new_card = Cardboard(self.rules_text)
+            # RulesText never mutates so it's ok that they're both pointing
+            # at the same instance of a RulesText
+            new_card.rules_text = self.rules_text
+            # safe to copy by reference since they're all ints, str, etc
+            new_card.tapped = self.tapped
+            new_card.summon_sick = self.summon_sick
+            new_card.owner_index = self.owner_index
+            # counters is a LIST so it needs to be copied without reference
+            new_card.counters = self.counters.copy()
+            # zone can mutate, I think?  safer to copy not refer
+            new_card.zone = self.zone.copy()
+            return new_card
         else:
             assert self.zone.location is not None  # for debug
             new_home = self.zone.get(state_new)
@@ -98,7 +94,7 @@ class Cardboard:
                 # where this card expects to be. Return the new card
                 return new_home[0]
             else:  # empty list, or card doesn't match...
-                return self.copy()  # couldn't find, so copy.
+                return self.copy(state_new=None)  # couldn't find. new copy.
 
     def add_counter(self, addition):
         self.counters = sorted(self.counters + [addition])
@@ -117,7 +113,7 @@ class Cardboard:
         return self.rules_text.cost
 
     @property
-    def effect(self) -> Verb:
+    def effect(self) -> Verb | None:
         return self.rules_text.effect
 
     def get_activated(self):
@@ -209,15 +205,18 @@ class Cardboard:
         they will do those things when they are run.
         If the card cannot be cast, the empty list is returned."""
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+        # Note: if cost is free, payments is [None]. If cost cannot be paid,
+        # payments is [] so loops won't loop and no caster is returned.
         player = self.player_index
         payments = self.cost.get_payment_plans(state, player, self, None)
-        if len(payments) == 0:
-            payments = [None]
         # 601.2c: choose targets and modes
-        effects = self.effect.populate_options(state, player, self, None)
-        effects = [eff for eff in effects if eff.can_be_done(state)]
-        if len(effects) == 0:
-            effects = [None]
+        if self.effect is None:
+            effects = [None]  # no effects so no targets to choose, etc
+        else:
+            # Note: if no effects can legally be done, then `effects` is
+            # empty list and loops won't loop and no caster is returned.
+            effects = self.effect.populate_options(state, player, self, None)
+            effects = [eff for eff in effects if eff.can_be_done(state)]
         # build casters and stack objects for all combinations of these
         caster_list = []
         for pay_verb in payments:

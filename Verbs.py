@@ -106,17 +106,15 @@ class Verb:
             new_verb._inputs = self._inputs[:]
         else:
             new_verb._source = (None if self._source is None
-                                else self._source.copy_as_pointer(state_new))
+                                else self._source.copy(state_new))
             new_verb._cause = (None if self._cause is None
-                               else self._cause.copy_as_pointer(state_new))
+                               else self._cause.copy(state_new))
             ins = state_new.copy_arbitrary_list(state_new, self._inputs)
             new_verb._inputs = ins
-            if self.subject is None:
-                new_verb._subject = None
-            elif isinstance(self._subject, Stack.StackObject):
+            if self.subject is None or isinstance(self._subject, int):
+                new_verb._subject = self._subject
+            else:  # Cardboard, StackObject:
                 new_verb._subject = self._subject.copy(state_new)
-            else:  # Cardboard
-                new_verb._subject = self._subject.copy_as_pointer(state_new)
         new_verb._sub_verbs = [v.copy(state_new) for v in self._sub_verbs]
         new_verb._player = self._player  # None and int are both atomic
         new_verb.__class__ = self.__class__  # set the sub-class type directly
@@ -401,8 +399,8 @@ class AffectPlayer(Verb):
      the affected card is the controller of the Verb, but
      this can be overwritten."""
 
-    def __init__(self, num_inputs=0):
-        super().__init__(num_inputs, False)  # mutates, doesn't copy
+    def __init__(self, num_inputs=0, copies=False):
+        super().__init__(num_inputs, copies)  # mutates, doesn't copy
 
     def replace_subject(self: V, new_subject: Player | int) -> V:
         """Returns a copy of the verb but with a new subject."""
@@ -433,8 +431,8 @@ class AffectCard(Verb):
      the affected card is the source of the Verb, but
      this can be overwritten."""
 
-    def __init__(self, num_inputs=0):
-        super().__init__(num_inputs, False)  # mutates, doesn't copy
+    def __init__(self, num_inputs=0, copies=False):
+        super().__init__(num_inputs, copies)  # mutates, doesn't copy
 
     def can_be_done(self, state: GameState) -> bool:
         # I'd like to check that subject is a Cardboard, but I can't import
@@ -542,9 +540,10 @@ class Modal(VerbFactory):
     def __init__(self, list_of_verbs: List[Verb],
                  num_to_choose: Get.Integer | int = 1, can_be_less=False):
         super().__init__(2, any([v.copies for v in list_of_verbs]))
+        self._inputs = [num_to_choose, can_be_less]
         assert (len(list_of_verbs) > 1)
         self._sub_verbs = list_of_verbs
-        self._inputs = [num_to_choose, can_be_less]
+
 
     @property
     def num_to_choose(self) -> Get.Integer | int:
@@ -977,7 +976,7 @@ class AddCounter(AffectCard):
     """Adds the given counter string to the subject card"""
 
     def __init__(self, counter_text: str):
-        super().__init__()
+        super().__init__(1)
         self._inputs = [counter_text]
 
     @property
@@ -1005,7 +1004,7 @@ class ActivateOncePerTurn(AffectCard):
     per turn"""
 
     def __init__(self, ability_name: str):
-        super().__init__()
+        super().__init__(1)
         self._inputs = ["@" + ability_name]  # "@" is invisible counter
 
     @property
@@ -1267,12 +1266,11 @@ class UniversalCaster(AffectStack):
         Note: the StackObject's pay_cost and do_effect Verbs
         are already populated.
         """
-        stackobj: StackObject = self.subject
         return (super().can_be_done(state)
-                and (stackobj.pay_cost is None
-                     or stackobj.pay_cost.can_be_done(state))
-                and (stackobj.do_effect is None
-                     or stackobj.do_effect.can_be_done(state)))
+                and (self.subject.pay_cost is None
+                     or self.subject.pay_cost.can_be_done(state))
+                and (self.subject.do_effect is None
+                     or self.subject.do_effect.can_be_done(state)))
 
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         """Put the StackObject onto the stack, populating
@@ -1327,7 +1325,7 @@ class UniversalCaster(AffectStack):
         """Mutate the GameState to put the given StackObject
         onto the stack. This includes removing it from other
         zones if necessary."""
-        game.stack.append(obj)
+        game.add_to_stack(obj)
 
     def _remove_if_needed(self, game: GameState, to_track: list
                           ) -> List[RESULT]:
@@ -1355,8 +1353,8 @@ class PlayManaAbility(PlayAbility):
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
-        stack_obj = game.stack.pop(-1)
-        assert stack_obj is self.inputs[0]  # for debug
+        stack_obj = game.pop_from_stack(-1)
+        assert stack_obj is self.subject  # for debug
         if stack_obj.do_effect is None:
             return [(game, self, to_track)]
         else:
@@ -1409,7 +1407,7 @@ class AddTriggeredAbility(UniversalCaster):
                                            pay_cost=None,
                                            do_effect=do_effect)
             state2, things = state.copy_and_track([stack_obj, self] + to_track)
-            state2.stack.append(things[0])  # copy of stack_obj
+            state2.add_to_stack(things[0])  # copy of stack_obj
             # 601.2i: ability has now "been activated".  Any abilities which
             # trigger from some aspect of paying the costs have already
             # been added to the superstack during ability.cost.pay. Now add
@@ -1434,7 +1432,7 @@ class AddAsEntersAbility(AddTriggeredAbility):
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
-        stack_obj = game.stack.pop(-1)
+        stack_obj = game.pop_from_stack(-1)
         assert stack_obj is self.subject
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.do_effect is None:
@@ -1467,7 +1465,7 @@ class PlayCardboard(UniversalCaster):
         MoveToZone.move(game, obj.obj, Zone.Stack(), False)
         # for a StackCardboard, obj.source_card and obj.obj are pointers to
         # the same thing. Thus, moving either of them is sufficient.
-        game.stack.append(obj)
+        game.add_to_stack(obj)
 
 
 # ----------
@@ -1481,7 +1479,7 @@ class PlayLand(PlayCardboard):
         """If the thing we just put on the stack is supposed to
         resolve instantly, do that. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
-        stack_obj = game.stack.pop(-1)
+        stack_obj = game.pop_from_stack(-1)
         assert stack_obj is self.subject
         assert stack_obj.obj.is_in(Zone.Stack)
         # move the land to the `player`'s field instantly

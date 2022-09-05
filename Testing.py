@@ -392,6 +392,89 @@ if __name__ == "__main__":
     assert not isinstance(j4.get_activated()[0].effect.origin, Zone.Field)
     assert j4.get_activated()[0].effect.origin is None
 
+    # let's do a full copy test, since copying is rather critical
+    game1 = GameState()
+    # caryatid in play
+    Verbs.MoveToZone.move(game1, Cardboard(Decklist.Caryatid()), Zone.Field(0))
+    assert game1.active.field[0].zone.player == 0
+    assert game1.active.field[0].zone.location == 0
+
+    # Wall of Roots currently on the stack
+    roots_on_stack = Cardboard(Decklist.Roots())
+    roots_on_stack.zone = Zone.Stack()
+    stack_cardboard = Stack.StackCardboard(0, roots_on_stack, None, None)
+    roots_on_stack.zone.location = 0
+    [caster] = Verbs.PlayCardboard().populate_options(game1, 0,
+                                                      roots_on_stack, None,
+                                                      stack_cardboard)
+    game1.player_list[0].pool.add_mana("GG")
+    assert caster.can_be_done(game1)
+    game1 = caster.do_it(game1)[0][0]
+    assert len(game1.stack) == 1
+    assert game1.stack[0].do_effect is None
+    assert game1.stack[0].obj is not roots_on_stack
+    assert game1.stack[0].obj.is_equiv_to(roots_on_stack)
+    assert game1.stack[0].zone.location == 0
+    assert game1.stack[0].zone.player is None  # stack has no player
+    assert game1.stack[0].obj.zone.location == 0  # card is on stack too
+    assert game1.stack[0].obj.zone.player is None  # stack has no player
+
+    # make ability on stack pointing at Roots on stack. "from" Caryatid.
+    affecter = Verbs.AffectStack().on(Get.All(), Get.StackList(), False)
+    fake_ability = Abilities.ActivatedAbility("fake", Costs.Cost(),
+                                              affecter)
+    [caster] = fake_ability.valid_casters(game1, 0, game1.active.field[0])
+    assert caster.can_be_done(game1)
+    game1 = caster.do_it(game1)[0][0]
+    assert len(game1.stack) == 2
+    assert game1.stack[1].obj.get_id() == fake_ability.get_id()
+    assert game1.stack[1].obj is not fake_ability  # copy happened in between
+    assert game1.stack[1].zone.player is None  # stack has no player
+    assert game1.stack[1].zone.location == 1
+    assert isinstance(game1.stack[1].do_effect, Verbs.MultiVerb)
+    assert game1.stack[1].do_effect.player == 0
+    assert game1.stack[1].do_effect.source is game1.active.field[0]
+    assert game1.stack[1].do_effect.subject is None  # because multi-verb
+    subverb = game1.stack[1].do_effect.sub_verbs[0]
+    assert isinstance(subverb, Verbs.AffectStack)
+    assert subverb.player == 0
+    assert subverb.source is game1.active.field[0]
+    assert subverb.subject is game1.stack[0]
+
+    # test game has: caryatid in play, roots on stack, and an ability pointing
+    # at the roots on the stack coming from the caryatid in play.
+    obj1 = game1.stack[-1]
+    cary1 = game1.active.field[0]
+    # try a copy_and_track
+    game2, [cary2, obj2] = game1.copy_and_track([cary1, obj1])
+    assert game2 == game1
+    assert cary2 is not cary1
+    assert cary2.is_equiv_to(cary1)
+    assert cary2.copy(game1) is cary1
+    assert cary1 in cary1.zone.get(game1)
+    assert cary2 in cary2.zone.get(game2)
+    assert cary2 not in cary2.zone.get(game1)
+
+    assert obj2 is not obj1
+    assert obj2.is_equiv_to(obj1)
+    assert obj2.copy(game1) is obj1
+    assert obj2 is game2.stack[1]
+    assert obj2.do_effect is not obj1.do_effect
+    assert obj2.do_effect.source is game2.active.field[0]
+    assert obj2.do_effect.source is cary2
+    assert obj2.do_effect.source is not obj1.do_effect.source
+    assert obj2.do_effect.player == 0
+    assert obj2.do_effect.subject is None  # as MultiVerb subject always is
+    subverb2 = obj2.do_effect.sub_verbs[0]
+    assert isinstance(subverb2, Verbs.AffectStack)
+    assert subverb2.player == 0
+    assert subverb2.source is game2.active.field[0]
+    assert subverb2.subject is game2.stack[0]
+    assert game1.stack[1].do_effect.sub_verbs[0].subject is game1.stack[0]
+    assert game1.stack[1].do_effect.sub_verbs[0].subject is not game2.stack[0]
+    assert game2.stack[1].do_effect.sub_verbs[0].subject is not game1.stack[0]
+    assert game2.stack[1].do_effect.sub_verbs[0].subject is game2.stack[0]
+
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
@@ -399,64 +482,7 @@ if __name__ == "__main__":
     print("Testing Wall of Roots and basic GameState...")
     start_clock = time.perf_counter()
 
-    # let's do a full copy test, since copying is rather critical
-    game1 = GameState()
-    caryatid_in_play = Cardboard(Decklist.Caryatid())
-    caryatid_in_play.zone = Zone.Field(1)
-    game1.active.add_to_field(caryatid_in_play)
-    assert game1.active.field[0].zone.player == 0
-    assert game1.active.field[0].zone.location == 0
-
-    roots_on_stack = Cardboard(Decklist.Roots())
-    roots_on_stack.zone = Zone.Stack()
-    stack_cardboard = Stack.StackCardboard(0, roots_on_stack, None, None)
-    [caster] = Verbs.PlayCardboard().populate_options(game1, 0,
-                                                      roots_on_stack, None,
-                                                      stack_cardboard)
-    game1.player_list[0].pool.add_mana("GG")
-    assert caster.can_be_done(game1)
-    game1 = caster.do_it(game1)[0][0]
-    affecter = Verbs.AffectStack().on(Get.All(), Get.StackList(), False)
-    fake_ability = Abilities.ActivatedAbility("fake", Costs.Cost(),
-                                              affecter)
-    [caster] = fake_ability.valid_casters(game1, 0, caryatid_in_play)
-    assert caster.can_be_done(game1)
-    game1 = caster.do_it(game1)[0][0]
-    assert len(game1.stack) == 2
-    stack_ability = game1.stack[-1]
-
-    # test game has: caryatid in play, roots on stack, and an ability pointing
-    # at the roots on the stack coming from the caryatid in play.
-    # try a copy_and_track
-    game2, [card2, obj2] = game1.copy_and_track([caryatid_in_play,
-                                                 stack_ability])
-    assert game2 == game1
-    assert obj2 is not stack_ability
-    assert card2 is not caryatid_in_play
-    assert caryatid_in_play.copy_as_pointer(game2) is game2.active.field[0]
-    assert caryatid_in_play in caryatid_in_play.zone.get(game1)
-    assert card2 in card2.zone.get(game2)
-    assert card2 not in card2.zone.get(game1)
-    assert card2 not in game1.active.field
-    assert card2 is not caryatid_in_play
-    assert card2.is_equiv_to(caryatid_in_play)
-
-    assert obj2 is game2.stack[-1]
-    assert obj2 is not game1.stack[-1]
-    assert obj2.do_effect is not stack_ability.do_effect
-    assert obj2.do_effect.source is card2
-
-    assert game1.stack[0].obj.is_equiv_to(game2.stack[0].obj)
-    assert game1.stack[0].obj is not game2.stack[0].obj
-    assert game1.stack[1].do_effect.source.is_equiv_to(
-        game2.stack[1].do_effect.source)
-    assert (game1.stack[1].do_effect.source
-            is not game2.stack[1].do_effect.source)
-    assert game1.stack[1].do_effect.subject is game1.stack[0]
-    assert game1.stack[1].do_effect.subject is not game2.stack[0]
-    assert game2.stack[1].do_effect.subject is not game1.stack[0]
-    assert game2.stack[1].do_effect.subject is game2.stack[0]
-
+    # start new game, try to cast some Walls of Roots
     game_orig = GameState(1)
     game_orig.is_tracking_history = False  # True
     assert len(game_orig.player_list) == 1
@@ -472,23 +498,11 @@ if __name__ == "__main__":
     assert (len(game_orig.active.hand) == 4)
     assert (len(game_orig.active.field) == 0)
 
-    # make sure the AddMana Verb works properly
-    tuple_list = Decklist.Verbs.AddMana("R").do_it(game_orig)
-    assert len(tuple_list) == 1
-    mana_game, player, source, choices = tuple_list[0]
-    assert player == 0
-    assert source is None
-    assert len(choices) == 0
-    assert mana_game.active.pool == ManaHandler.ManaPool("R")
-    # because AddMana mutates, returned game IS original game
-    assert game_orig.active.pool == ManaHandler.ManaPool("R")
-    assert mana_game is game_orig
-
     # check the abilities of Wall of Roots in hand. it has 1 but can't be used.
     roots = game_orig.active.hand[0]
     assert len(roots.get_activated()) == 1
     roots_abil = roots.get_activated()[0]
-    assert len(roots_abil.valid_stack_objects(game_orig, 0, roots)) == 0
+    assert len(roots_abil.valid_casters(game_orig, 0, roots)) == 0
 
     # move a Wall of Roots to field and try again
     game_orig.give_to(game_orig.active.hand[0], Zone.Field)
@@ -498,31 +512,35 @@ if __name__ == "__main__":
     assert len(roots.get_activated()) == 1
     assert len(roots.counters) == 0  # no counters on it yet
     roots_abil = roots.get_activated()[0]
-    valid = roots_abil.valid_stack_objects(game_orig, 0, roots)
+    valid = roots_abil.valid_casters(game_orig, 0, roots)
     assert len(valid) == 1
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
     cost_roots = cost_game.active.field[0]
-    assert roots_abil.cost.can_afford(cost_game, 0, cost_roots, [])
-    tuple_list = roots_abil.cost.pay_cost(cost_game, 0, cost_roots, [])
+    plans = roots_abil.cost.get_payment_plans(cost_game, 0, cost_roots, None)
+    assert len(plans) == 1 and plans[0] is not None
+    assert plans[0].can_be_done(cost_game)
+    assert not plans[0].copies  # will mutate, not copy, when executed
+    tuple_list = plans[0].do_it(cost_game)
     assert len(tuple_list) == 1
-    assert cost_game is tuple_list[0][0]  # so output is same as original
+    assert cost_game is tuple_list[0][0]  # mutated so output is original obj.
     assert len(cost_roots.counters) == 2
     for value in cost_roots.counters:
         assert "-0/-1" == value or "@" in value
     # should no longer be possible to do
-    assert not roots_abil.cost.can_afford(cost_game, 0, cost_roots, [])
+    plans = roots_abil.cost.get_payment_plans(cost_game, 0, cost_roots, None)
+    assert plans == []
     assert len(cost_game.active.get_valid_activations()) == 0
 
     # untap to reset things, then try to activate the ability "properly"
     game_orig.pass_turn()  # increments turn
     game_orig.step_untap()
-    activations = game_orig.active.get_valid_activations()
-    assert len(activations) == 1
-    game_list = activations[0].put_on_stack(game_orig)
+    casters = game_orig.active.get_valid_activations()
+    assert len(casters) == 1
+    game_list = casters[0].do_it(game_orig)
     assert len(game_list) == 1
-    activ_game = game_list[0]
+    activ_game = game_list[0][0]
     assert activ_game is not game_orig
     new_roots = activ_game.active.field[0]
     assert roots is not new_roots
@@ -543,9 +561,9 @@ if __name__ == "__main__":
     assert (len(copygame.active.get_valid_castables()) == 1)
     # cast the newly castable spell
     castable = copygame.active.get_valid_castables()[0]
-    assert ([o is castable.obj for o in copygame.active.hand]
+    assert ([o is castable.subject.obj for o in copygame.active.hand]
             == [True, False, False])
-    [copygame3] = castable.put_on_stack(copygame)
+    [(copygame3, _, _)] = castable.do_it(copygame)
     assert (copygame3.active.pool == ManaHandler.ManaPool(""))  # no mana left
     assert (len(copygame3.stack) == 1)  # one spell on the stack
     assert (len(copygame3.active.hand) == 2)  # two cards in hand
@@ -554,14 +572,11 @@ if __name__ == "__main__":
     assert copygame3 is not copygame
     for c in copygame.active.hand:
         assert c is not copygame3.stack[0].obj
-        assert c is not copygame3.stack[0].source_card
         for c3 in copygame3.active.hand:
             assert c is not c3
     further_copy = copygame3.copy()
     assert further_copy.stack[0] is not copygame3.stack[0]
     assert further_copy.stack[0].obj is not copygame3.stack[0].obj
-    assert further_copy.stack[0].obj is not copygame3.stack[0].source_card
-    assert further_copy.stack[0].source_card is not copygame3.stack[0].obj
 
     # resolve the spell from the stack
     [copygame4] = copygame3.resolve_top_of_stack()

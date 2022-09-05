@@ -175,20 +175,21 @@ class ActivatedAbility:
         If the ability cannot be activated, the empty list is
         returned."""
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
+        # Note: if cost is free, payments is [None]. If cost cannot be paid,
+        # payments is [] so loops won't loop and no caster is returned.
         payments = self.cost.get_payment_plans(state, player, source, None)
-        if len(payments) == 0:
-            payments = [None]
-        # 601.2c: choose targets and modes
+        # 601.2c: choose targets and modes. Note: if there are no effects,
+        # then loops won't loop and no caster is returned.
         effects = self.effect.populate_options(state, player, source, None)
         effects = [eff for eff in effects if eff.can_be_done(state)]
         # build casters and stack objects for all combinations of these
         caster_list = []
-        for pay_verb in payments:
+        for pay_verb in payments:  # pay_verb already populated
             for effect_verb in effects:
-                stack_obj = Stack.StackCardboard(controller=player,
-                                                 obj=self,
-                                                 pay_cost=pay_verb,
-                                                 do_effect=effect_verb)
+                stack_obj = Stack.StackAbility(controller=player,
+                                               obj=self,
+                                               pay_cost=pay_verb,
+                                               do_effect=effect_verb)
                 # figure out which verb can be used to cast this object
                 caster: Verbs.PlayAbility = Verbs.PlayAbility()
                 if self.effect.is_type(Verbs.AddMana):
@@ -211,8 +212,11 @@ class ActivatedAbility:
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)
 
-    def copy(self):
-        return self
+    def copy(self, new_state: GameState | None = None):
+        abil = ActivatedAbility(self.name, self.cost,
+                                self.effect.copy(new_state))
+        abil.__class__ = self.__class__
+        return abil
 
 
 class TriggeredAbility:
@@ -257,8 +261,11 @@ class TriggeredAbility:
     def is_type(self, verb_type):
         return self.effect.is_type(verb_type)
 
-    def copy(self):
-        return self
+    def copy(self, new_state: GameState | None = None):
+        abil = TriggeredAbility(self.name, self.trigger,
+                                self.effect.copy(new_state))
+        abil.__class__ = self.__class__
+        return abil
 
 
 class TimedAbility:
@@ -295,5 +302,8 @@ class TimedAbility:
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.condition), str(self.effect))
 
-    def copy(self):
-        return self
+    def copy(self, new_state: GameState | None = None):
+        abil = TimedAbility(self.name, self.condition,
+                            self.effect.copy(new_state))
+        abil.__class__ = self.__class__
+        return abil
