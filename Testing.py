@@ -1222,8 +1222,7 @@ if __name__ == "__main__":
         castables = state.active.get_valid_castables()
         assert len(castables) == 1
         # Defer tracks cause, which is None since this is a card being cast.
-        assert castables[0].choices == [None]
-        [on_stack] = castables[0].put_on_stack(state)
+        [(on_stack, _, _)] = castables[0].do_it(state)
         assert len(on_stack.super_stack) == 0
         assert len(on_stack.stack) == 1
         return on_stack.resolve_top_of_stack()

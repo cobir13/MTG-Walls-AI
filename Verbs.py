@@ -615,6 +615,8 @@ class Defer(Verb):
         return (self.player is not None
                 and self.source is not None
                 and self.is_populated is True
+                and all([not v.is_populated for v in self.sub_verbs])
+                and len(self.inputs) == self.num_inputs
                 )
 
     def do_it(self, state: GameState, to_track=[], check_triggers=True):

@@ -16,7 +16,7 @@ import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
 from Stack import StackObject
-from Verbs import Verb, MoveToZone, DrawCard, Untap
+from Verbs import MoveToZone, DrawCard, Untap
 import Choices
 
 

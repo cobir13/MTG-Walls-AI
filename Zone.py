@@ -83,7 +83,7 @@ class Zone:
         text += str(self.player) if self.player is not None else ""
         return text
 
-    def copy(self, state_new: GameState | None = None):
+    def copy(self, *args):
         new_zone = Zone(self.player, self.location)
         new_zone.__class__ = self.__class__  # set the class type directly
         return new_zone

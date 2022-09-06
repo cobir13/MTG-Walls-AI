@@ -354,7 +354,7 @@ class CardNull(Cardboard):
     def __repr__(self):
         return "NullCard"
 
-    def copy(self):
+    def copy(self, *args):
         return CardNull()
 
     def add_counter(self, addition):
