@@ -77,7 +77,7 @@ class PlayTree:
                 else:
                     new_state, [new_caster] = state.copy([caster])
                     results = new_caster.do_it(new_state)
-                for state2 in results:
+                for state2, _, _ in results:
                     new_nodes += state2.clear_super_stack()
             if len(state.stack) > 0:
                 # list of GameStates with the top effect on the stack resolved

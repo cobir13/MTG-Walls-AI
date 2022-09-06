@@ -230,8 +230,10 @@ class GameState:
             card.owner_index = player_index
         mover = MoveToZone(destination(player_index)).replace_subject(card)
         # mover doesn't have a player or a source or cause. hopefully ok.
-        mover.add_self_to_state_history = lambda *args: None  # make silent.
+        prev_tracking = self.is_tracking_history
+        self.is_tracking_history = False  # don't track this move
         mover.do_it(self, to_track=[], check_triggers=True)
+        self.is_tracking_history = prev_tracking  # reset tracking
 
     # -------------------------------------------------------------------------
 

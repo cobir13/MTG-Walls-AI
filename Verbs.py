@@ -259,7 +259,7 @@ class Verb:
         return type(self).__name__
 
     def get_id(self):
-        txt = str(self)
+        txt = type(self).__name__
         pl = "N/A" if self.player is None else "%i" % self.player
         sc = "N/A" if self.source is None else self.source.get_id()
         cs = "N/A" if self.cause is None else self.cause.get_id()
@@ -328,12 +328,12 @@ class MultiVerb(Verb):
                          ) -> List[V]:
         # fill in basic info for this multi-verb and its sub_verbs
         [base] = Verb.populate_options(self, state, player, source, cause)
-        options = [base]
+        options: List[MultiVerb] = [base]
         # still need subjects,
         for ii, v in enumerate(self.sub_verbs):
             new_opts = []
             for populated in v.populate_options(state, player, source, cause):
-                new_opts += [b.replace_verb(ii, populated) for b in options]
+                new_opts += [m.replace_verb(ii, populated) for m in options]
             options = new_opts
         return options
 
@@ -415,7 +415,7 @@ class AffectPlayer(Verb):
         return super().can_be_done(state) and isinstance(self.subject, int)
 
     def populate_options(self: V, state, player, source, cause) -> List[V]:
-        baselist = super().populate_options(state, player, source, cause)
+        baselist = Verb.populate_options(self, state, player, source, cause)
         return [v.replace_subject(player) for v in baselist]
 
     def on(self,
@@ -440,7 +440,7 @@ class AffectCard(Verb):
         return super().can_be_done(state) and self.subject is not None
 
     def populate_options(self, state, player, source, cause):
-        baselist = super().populate_options(state, player, source, cause)
+        baselist = Verb.populate_options(self, state, player, source, cause)
         return [v.replace_subject(source) for v in baselist]
 
     def on(self,
@@ -467,7 +467,7 @@ class AffectStack(Verb):
                          source: Cardboard | None, cause: Cardboard | None,
                          stack_object: StackObject | None = None
                          ) -> List[Verb]:
-        baselist = super().populate_options(state, player, source, cause)
+        baselist = Verb.populate_options(self, state, player, source, cause)
         return [v.replace_subject(stack_object) for v in baselist]
 
     def on(self,
@@ -597,6 +597,19 @@ class Defer(Verb):
         super().__init__(0, copies=True)
         self._sub_verbs = [verb]
 
+    def can_be_done(self, state: GameState) -> bool:
+        """
+        Returns whether this Verb can be done. The sub-verbs are
+        NOT filled in (populated) yet, so Defer checks only if
+        the parent verb contains the info necessary for the
+        subverbs to be populated later.
+        """
+        # note: parent class doesn't care about subject or cause
+        return (self.player is not None
+                and self.source is not None
+                and self.cause is not None
+                )
+
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         # list of verbs now WITH their options properly chosen
         populated = self.sub_verbs[0].populate_options(state, self.player,
@@ -628,10 +641,7 @@ class Defer(Verb):
         return self.sub_verbs[0].is_type(verb_type)
 
     def __str__(self):
-        return "Defer" + str(self.sub_verbs[0])
-
-    def get_id(self):
-        return "Defer" + self.sub_verbs[0].get_id()
+        return "Defer(%s)" % str(self.sub_verbs[0])
 
 
 class VerbManyTimes(VerbFactory):
@@ -672,8 +682,6 @@ class LookDoThenDo(VerbFactory):
         super().__init__(2, ((not choose.single_output)
                              or do_to_chosen.copies or do_to_others.copies))
         self._inputs = [look_at, choose]
-        assert do_to_chosen.num_inputs == 0
-        assert do_to_others.num_inputs == 0
         self._sub_verbs = [do_to_chosen, do_to_others]
 
     @property
@@ -686,10 +694,10 @@ class LookDoThenDo(VerbFactory):
 
     def populate_options(self: V, state, player, source, cause
                          ) -> List[MultiVerb]:
-        do_to_chosen = self.sub_verbs[0].populate_options(state, player,
-                                                          source, cause)[0]
-        do_to_others = self.sub_verbs[1].populate_options(state, player,
-                                                          source, cause)[0]
+        [do_to_chosen] = self.sub_verbs[0].populate_options(state, player,
+                                                            source, cause)
+        [do_to_others] = self.sub_verbs[1].populate_options(state, player,
+                                                            source, cause)
         # These verbs are populated, but subject is still source. Now fix that
         options = self.option_getter.get(state, player, source)
         choices = self.chooser.pick(options, state, player, source)
@@ -697,16 +705,10 @@ class LookDoThenDo(VerbFactory):
         for chosen_list in choices:
             others_list = [c for c in options if c not in chosen_list]
             populated = []
-            # Populate the verb which will act on this chosen card
-            for chosen in chosen_list:
-                populated += [v.replace_subject(chosen) for v in do_to_chosen]
-
-                populated += do_to_chosen.populate_options(state, player,
-                                                           source, cause)
-            # Populate the verb which will act on this non-chosen card
-            for other in others_list:
-                populated += do_to_others.populate_options(state, player,
-                                                           other, source)
+            # target a copy of the populated verb on each chosen card
+            populated += [do_to_chosen.replace_subject(c) for c in chosen_list]
+            # target a copy of the populated verb on each non-chosen card
+            populated += [do_to_others.replace_subject(c) for c in others_list]
             # each card now has a populated verb trying to affect it.
             # MultiVerb contains all those verbs and executes them together
             multi = MultiVerb(populated)
@@ -1213,6 +1215,8 @@ class SearchDeck(VerbFactory):
     move those cards to the specified zone. Then shuffle.
     As usual, selection is made at cast-time and should be wrapped
     in a Defer if resolution-time is desired (as it usually is).
+    To be specific: searches the deck of the player index passed
+    into `populate_options`.
     """
 
     def __init__(self, zone_to_move_to: Zone.Zone, num_to_find: int,
@@ -1222,21 +1226,32 @@ class SearchDeck(VerbFactory):
 
     def populate_options(self: V, state, player, source, cause
                          ) -> List[MultiVerb]:
-        # figure out the absolute destination zone
+        # figure out the absolute destination zone and build a mover Verb
         [dest] = self.inputs[0].get_absolute_zones(state, player, source)
+        [mover] = MoveToZone(dest).populate_options(state, player,
+                                                    source, cause)
         # set up chooser
         num_to_find = self.inputs[1]
         pattern = self.inputs[2]
         chooser = Get.Chooser(pattern, num_to_find, can_be_fewer=True)
-        # build the LookDoThenDo to do all the heavy lifting
-        # noinspection PyTypeChecker
-        do_er = LookDoThenDo(look_at=Get.CardsFrom(Zone.Deck(player, None)),
-                             choose=chooser,
-                             do_to_chosen=MoveToZone(dest),
-                             do_to_others=NullVerb())  # wrong type. eh.
-        # then shuffle
-        multi = MultiVerb([do_er, Shuffle()])
-        return multi.populate_options(state, player, source, cause)
+        decklist = list(Zone.Deck(player, None).get(state))
+        choices = chooser.pick(decklist, state, player, source)
+        # set up shuffler
+        [shuffler] = Shuffle().populate_options(state, player, source, cause)
+
+        # for each selected target, move it to the specified zone and then
+        # shuffle the deck. Build a MultiVerb which does these things.
+        multi_list: List[MultiVerb] = []
+        for chosen_list in choices:
+            populated = []
+            # target a copy of the populated verb on each chosen card
+            populated += [mover.replace_subject(c) for c in chosen_list]
+            # MultiVerb contains all those verbs and executes them together
+            multi = MultiVerb(populated + [shuffler])
+            # populate Multi. Verb not MultiVerb to not overwrite subverbs
+            Verb.populate_options(multi, state, player, source, cause)
+            multi_list.append(multi)
+        return multi_list
 
 
 # ---------------------------------------------------------------------------
@@ -1336,15 +1351,17 @@ class UniversalCaster(AffectStack):
 
     def add_self_to_state_history(self, state: GameState) -> None:
         if state.is_tracking_history:
-            record = "\n*** add %s %s ***" % (str(self), str(self.subject))
+            record = "\n*** %s ***" % (str(self))
             state.events_since_previous += record
 
     def __str__(self):
-        return "Add" + str(self.subject)
+        return "Add " + str(self.subject)
 
 
 class PlayAbility(UniversalCaster):
-    pass
+
+    def __str__(self):
+        return "Activate " + str(self.subject.name)
 
 
 class PlayManaAbility(PlayAbility):
@@ -1433,7 +1450,14 @@ class AddAsEntersAbility(AddTriggeredAbility):
         resolve instantly, do that. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.pop_from_stack(-1)
-        assert stack_obj is self.subject
+        # print(self)
+        # print(type(self))
+        # print("")
+        # print(self.subject.get_id())
+        # print("")
+        # print(stack_obj.get_id())
+        # print("\n", stack_obj.do_effect.get_id())
+        # assert stack_obj is self.subject
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.do_effect is None:
             return [(game, self, to_track)]
@@ -1455,7 +1479,7 @@ class AddAsEntersAbility(AddTriggeredAbility):
 class PlayCardboard(UniversalCaster):
 
     def __str__(self):
-        return "Cast" + super().__str__()
+        return "Cast " + str(self.subject.name)
 
     @staticmethod
     def _add_to_stack(game: GameState, obj: StackCardboard) -> None:
@@ -1472,7 +1496,7 @@ class PlayCardboard(UniversalCaster):
 class PlayLand(PlayCardboard):
 
     def __str__(self):
-        return "Play" + super().__str__()
+        return "Play " + str(self.subject.name)
 
     def _remove_if_needed(self, game: GameState, to_track: list
                           ) -> List[RESULT]:
@@ -1482,8 +1506,10 @@ class PlayLand(PlayCardboard):
         stack_obj = game.pop_from_stack(-1)
         assert stack_obj is self.subject
         assert stack_obj.obj.is_in(Zone.Stack)
-        # move the land to the `player`'s field instantly
-        mover = MoveToZone(Zone.Field(stack_obj.obj.player_index))
+        # move the land to the player's field instantly. Remember: the card
+        # in stackobj.obj has no player because player_index of a Cardboard
+        # checks the controller of the zone it's in.
+        mover = MoveToZone(Zone.Field(stack_obj.player_index))
         [mover] = mover.populate_options(game, self.player, self.source,
                                          self.cause)
         mover = mover.replace_subject(stack_obj.obj)

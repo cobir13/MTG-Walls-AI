@@ -622,16 +622,18 @@ if __name__ == "__main__":
     carygame1.step_upkeep()
     assert len(carygame1.active.get_valid_castables()) == 0  # no castables
     gameN = carygame1
-    options: List[Stack.StackObject] = (gameN.active.get_valid_activations()
-                                        + gameN.active.get_valid_castables())
+    options: List[Verbs.UniversalCaster] = []
+    options += gameN.active.get_valid_activations()
+    options += gameN.active.get_valid_castables()
     assert len(options) == 2
     # as long as there are things to do, do them! auto-choose 1st option
     while len(options) > 0:
-        gameN = options[0].put_on_stack(gameN)[0]
+        gameN = options[0].do_it(gameN)[0][0]
         while len(gameN.stack) > 0:
             gameN = gameN.resolve_top_of_stack()[0]
-        options = (gameN.active.get_valid_activations()
-                   + gameN.active.get_valid_castables())
+        options: List[Verbs.UniversalCaster] = []
+        options += gameN.active.get_valid_activations()
+        options += gameN.active.get_valid_castables()
     # result should be Caryatid and two Roots in play
     assert len(gameN.active.hand) == 2
     assert len(gameN.active.field) == 3
@@ -639,7 +641,6 @@ if __name__ == "__main__":
 
     # check if the history tracker worked
     historyN = gameN.get_all_history()
-    # print(historyN)
     assert historyN.count("*** Activate Roots add G ***") == 2
     assert historyN.count("*** Activate Caryatid add Au ***") == 1
     assert historyN.count("*** Cast Roots ***") == 1
@@ -727,7 +728,7 @@ if __name__ == "__main__":
     assert len(tree2.get_states_no_options()) == 17  # 20
     assert len(tree2.get_states_no_stack()) == 85  # 88
     n = len(tree2.get_intermediate())
-    assert n == 123  # empirical. I didn't theory
+    assert n == 129  # empirical. I didn't theory. used to be 123...
     id_list = [g.get_id() for g in tree2.get_intermediate()]
     assert n == len(id_list)
     assert n == len(set(id_list))  # making sure set hash is still working
@@ -1341,5 +1342,9 @@ if __name__ == "__main__":
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
+
+
+    # build a card that grants haste, see if caryatid taps when it enters.
+    # this is a good test of "granting" and also checking like "haste" does.
 
     print("\n\npasses all tests!")

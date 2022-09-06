@@ -72,4 +72,5 @@ Notes for future improvements or speedups:
     - Add field to abilities to say what zones they are active from?
     - I am copying abilities and verbs when I might not need to? I should
         go through carefully later, for speedup, if I want.
+    - Make Defer a decorator or abstract class to inherit from?
 
