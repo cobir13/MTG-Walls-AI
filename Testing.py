@@ -877,12 +877,12 @@ if __name__ == "__main__":
     assert forest is not forest2
     assert (game == cp)
     # tap both of these forests for mana
-    obj = forest.get_activated()[0].valid_stack_objects(game, 0, forest)[0]
-    cp3 = obj.put_on_stack(game)[0]
+    caster = forest.get_activated()[0].valid_casters(game, 0, forest)[0]
+    [(cp3, _, _)] = caster.do_it(game)
     assert (game != cp3)
     assert (cp != cp3)
-    obj2 = forest2.get_activated()[0].valid_stack_objects(cp, 0, forest2)[0]
-    cp4 = obj2.put_on_stack(cp)[0]
+    caster2 = forest2.get_activated()[0].valid_casters(cp, 0, forest2)[0]
+    [(cp4, _, _)] = caster2.do_it(cp)
     assert (game != cp4)
     assert (cp3 == cp4)
     assert (not (cp3 is cp4))
@@ -900,12 +900,11 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-
-    game1A = mover.replace_subject(game1.active.field[0]).do_it(game1)[0][0]
-    game1B = mover.replace_subject(game1A.active.field[0]).do_it(game1A)[0][0]
+    game1A = mover.replace_subject(game1.active.hand[0]).do_it(game1)[0][0]
+    game1B = mover.replace_subject(game1A.active.hand[0]).do_it(game1A)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.replace_subject(game2.active.field[1]).do_it(game2)[0][0]
-    game2B = mover.replace_subject(game2A.active.field[0]).do_it(game2A)[0][0]
+    game2A = mover.replace_subject(game2.active.hand[1]).do_it(game2)[0][0]
+    game2B = mover.replace_subject(game2A.active.hand[0]).do_it(game2A)[0][0]
     assert (game1B == game2B)
 
     # but they would NOT be equivalent if I untapped between plays, since
@@ -916,15 +915,15 @@ if __name__ == "__main__":
     game2 = game1.copy()
     # game 1: [0] into play, then the other
     mover = Verbs.MoveToZone(Zone.Field(0))
-    game1A = mover.replace_subject(game1.active.field[0]).do_it(game1)[0][0]
+    game1A = mover.replace_subject(game1.active.hand[0]).do_it(game1)[0][0]
     game1A.pass_turn()
     game1A.step_untap()
-    game1B = mover.replace_subject(game1A.active.field[0]).do_it(game1A)[0][0]
+    game1B = mover.replace_subject(game1A.active.hand[0]).do_it(game1A)[0][0]
     # game 2: [1] into play, then the other
-    game2A = mover.replace_subject(game2.active.field[1]).do_it(game2)[0][0]
+    game2A = mover.replace_subject(game2.active.hand[1]).do_it(game2)[0][0]
     game2A.pass_turn()
     game2A.step_untap()
-    game2B = mover.replace_subject(game2A.active.field[0]).do_it(game2A)[0][0]
+    game2B = mover.replace_subject(game2A.active.hand[0]).do_it(game2A)[0][0]
     assert (game1B != game2B)
     # if untap both, then should be equivalent again
     game1B.pass_turn()
@@ -976,12 +975,24 @@ if __name__ == "__main__":
     # Rewind to before casting 2nd Caretaker. Give 1st TWO things to tap.
     game.give_to(game.active.hand[0], Zone.Field)
     # only one ability, but two _options to activate it
-    stack_abilities = game.active.get_valid_activations()
-    assert len(stack_abilities) == 2
-    assert stack_abilities[0].player_index == stack_abilities[1].player_index
-    assert stack_abilities[0].source_card is stack_abilities[1].source_card
-    assert stack_abilities[0].obj is stack_abilities[1].obj
-    assert stack_abilities[0].choices != stack_abilities[1].choices
+    ability_casters = game.active.get_valid_activations()
+    assert len(ability_casters) == 2
+    assert ability_casters[0].player == ability_casters[1].player
+    assert ability_casters[0].source is ability_casters[1].source
+    # subject of the caster-verb is a StackObject
+    stackobj0 = ability_casters[0].subject
+    stackobj1 = ability_casters[1].subject
+    assert stackobj0.obj is stackobj1.obj  # both point to same ability
+    assert stackobj0.do_effect.get_id() == stackobj1.do_effect.get_id()
+    # right now, verbs are same pointer (not just copy). see valid_casters
+    assert stackobj0.do_effect is stackobj1.do_effect
+    assert stackobj0.pay_cost.get_id() != stackobj1.pay_cost.get_id()
+    # first subverb is tapsymbol (taps self). second is tap another.
+    assert stackobj0.pay_cost.sub_verbs[0].subject is game.active.field[1]
+    assert stackobj1.pay_cost.sub_verbs[0].subject is game.active.field[1]
+    assert stackobj0.pay_cost.sub_verbs[1].subject is game.active.field[0]
+    assert stackobj1.pay_cost.sub_verbs[1].subject is game.active.field[2]
+
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
     [univ2, univ3] = tree.get_states_no_options()
@@ -999,13 +1010,13 @@ if __name__ == "__main__":
     game3.step_untap()
     # 2 Caretakers plus Caryatid in play. 5 possibilities. But Caretakers are
     # equivalent so we only see 3 _options. Good.
-    game3_abils = game3.active.get_valid_activations()
-    assert len(game3_abils) == 3
-    care3_abils = [obj for obj in game3_abils
-                   if obj.source_card.name == "Caretaker"]
+    game3_casters = game3.active.get_valid_activations()
+    assert len(game3_casters) == 3
+    game3_casters = [obj for obj in game3_casters
+                     if obj.source.name == "Caretaker"]
     universes = []
-    for stack_ability in care3_abils:
-        for g in stack_ability.put_on_stack(game3):
+    for caster in game3_casters:
+        for g, _, _ in caster.do_it(game3):
             universes += g.clear_super_stack()
     assert (len(universes) == 2)
     [univ4, univ5] = universes
@@ -1083,9 +1094,9 @@ if __name__ == "__main__":
     tree.beginning_phase_for_all_valid_states()
     assert len(tree.get_active(1)) == 3  # played nothing, forest, or caretaker
     tree.main_phase_for_all_active_states(1)
-    assert len(tree.get_intermediate(1)) == 42  # 53
+    assert len(tree.get_intermediate(1)) == 44  # 42  # 53
     assert len(tree.get_states_no_options(1)) == 6  # 7
-    assert tree.traverse_counter == 59  # 74
+    assert tree.traverse_counter == 62  # 59  # 74
 
     # Turn 3.
     tree.beginning_phase_for_all_valid_states()
@@ -1095,10 +1106,10 @@ if __name__ == "__main__":
           % (time.perf_counter() - start_clock))
     intermed = tree.get_intermediate(2)
     no_opts = tree.get_states_no_options(2)
-    assert len(intermed) == 980  # 1638
+    assert len(intermed) == 1144  # 980  # 1638
     assert len(intermed) == len(set(intermed))
     assert len(no_opts) == 30  # 62
-    assert tree.traverse_counter == 2338  # 3716
+    assert tree.traverse_counter == 2718  # 2338  # 3716
     assert max([g.active.pool.cmc() for g in no_opts]) == 8
     print("      ...done checking, %0.2f sec. (~0.70 2022-07-22)"
           % (time.perf_counter() - start_clock))
@@ -1109,7 +1120,6 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
     game = GameState(1)
-    game.is_tracking_history = False
     # field
     game.give_to(Cardboard(Decklist.Plains()), Zone.Field)
     # hand
@@ -1120,6 +1130,7 @@ if __name__ == "__main__":
     for x in range(10):
         game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
 
+    game.is_tracking_history = True
     tree = PlayTree([game], 5)
     # only option is play Forest, play Blossoms, draw Island
     tree.main_phase_for_all_active_states()

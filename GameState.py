@@ -344,7 +344,7 @@ class GameState:
             dest = obj.obj.rules_text.cast_destination.copy()
             dest.player = obj.player_index  # update to give to correct player
             for state, verb, track in results:
-                MoveToZone.move(state, track[0].obj, dest)
+                MoveToZone.move(state, track[0].obj, dest, check_triggers=True)
         # clear the superstack and return!
         final_results: List[GameState] = []
         for tup in results:

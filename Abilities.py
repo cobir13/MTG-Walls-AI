@@ -131,37 +131,6 @@ class ActivatedAbility:
         self.cost: Costs.Cost = cost
         self.effect: Verbs.Verb = effect
 
-    # def valid_stack_objects(self, state: GameState, player: int,
-    #                         source: Cardboard) -> List[Stack.StackAbility]:
-    #     """Create as many valid StackAbilities as possible,
-    #     one for each valid way to activate this ability.
-    #     This function doesn't ACTUALLY add them to stack
-    #     or pay their costs, it just works out the payment
-    #     _options and target _options and makes usable
-    #     StackObjects accordingly. If the ability cannot
-    #     be activated, the empty list is returned."""
-    #     # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-    #     payments = self.cost.get_payment_plans(state, player, source, None)
-    #     if len(payments) == 0:
-    #         payments = [None]
-    #     # 601.2c: choose targets and modes
-    #     effects = self.effect.populate_options(state, player, source, None)
-    #     effects = [eff for eff in effects if eff.can_be_done(state)]
-    #     # build stack objects for all combinations of these
-    #     obj_list = []
-    #     for pay_verb in payments:
-    #         for effect_verb in effects:
-    #             # figure out which verb can be used to cast this object
-    #             caster: Type[Verbs.UniversalCaster] = Verbs.PlayAbility
-    #             if self.effect.is_type(Verbs.AddMana):
-    #                 caster = Verbs.PlayManaAbility
-    #             obj_list.append(Stack.StackAbility(controller=player,
-    #                                                obj=self,
-    #                                                pay_cost=pay_verb,
-    #                                                do_effect=effect_verb,
-    #                                                caster_type=caster))
-    #     return obj_list
-
     def valid_casters(self, state: GameState, player: int,
                       source: Cardboard) -> List[Verbs.PlayAbility]:
         """Create as many valid PlayAbility Verbs as possible,

@@ -64,6 +64,7 @@ class Verb:
         self._subject: Cardboard | int | StackObject | None = None  # apply to.
         self._sub_verbs: List[Verb] = []  # space for subclasses to grow
         self._inputs: list = []  # space for subclasses to grow
+        self.is_populated: bool = False  # set to true once `populate_options`
 
     @property
     def source(self) -> Cardboard | None:
@@ -117,6 +118,7 @@ class Verb:
                 new_verb._subject = self._subject.copy(state_new)
         new_verb._sub_verbs = [v.copy(state_new) for v in self._sub_verbs]
         new_verb._player = self._player  # None and int are both atomic
+        new_verb.is_populated = self.is_populated
         new_verb.__class__ = self.__class__  # set the sub-class type directly
         return new_verb
 
@@ -187,6 +189,7 @@ class Verb:
         new_verb._player = player
         new_verb._source = source
         new_verb._cause = cause
+        new_verb.is_populated = True
         return [new_verb]
 
     def can_be_done(self, state: GameState) -> bool:
@@ -197,6 +200,7 @@ class Verb:
         # note: parent class doesn't care about subject or cause
         return (self.player is not None
                 and self.source is not None
+                and self.is_populated is True
                 and all([v.can_be_done(state) for v in self.sub_verbs])
                 and len(self.inputs) == self.num_inputs
                 )
@@ -280,6 +284,9 @@ class Verb:
         if state.is_tracking_history:
             record = "\n%s %s" % (str(self), str(self.subject))
             state.events_since_previous += record
+
+    def is_equiv_to(self, other: Verb):
+        return isinstance(other, Verb) and self.get_id() == other.get_id()
 
 
 if TYPE_CHECKING:
@@ -415,7 +422,7 @@ class AffectPlayer(Verb):
         return super().can_be_done(state) and isinstance(self.subject, int)
 
     def populate_options(self: V, state, player, source, cause) -> List[V]:
-        baselist = Verb.populate_options(self, state, player, source, cause)
+        baselist = super().populate_options(state, player, source, cause)
         return [v.replace_subject(player) for v in baselist]
 
     def on(self,
@@ -440,7 +447,7 @@ class AffectCard(Verb):
         return super().can_be_done(state) and self.subject is not None
 
     def populate_options(self, state, player, source, cause):
-        baselist = Verb.populate_options(self, state, player, source, cause)
+        baselist = super().populate_options(state, player, source, cause)
         return [v.replace_subject(source) for v in baselist]
 
     def on(self,
@@ -467,7 +474,7 @@ class AffectStack(Verb):
                          source: Cardboard | None, cause: Cardboard | None,
                          stack_object: StackObject | None = None
                          ) -> List[Verb]:
-        baselist = Verb.populate_options(self, state, player, source, cause)
+        baselist = super().populate_options(state, player, source, cause)
         return [v.replace_subject(stack_object) for v in baselist]
 
     def on(self,
@@ -607,7 +614,7 @@ class Defer(Verb):
         # note: parent class doesn't care about subject or cause
         return (self.player is not None
                 and self.source is not None
-                and self.cause is not None
+                and self.is_populated is True
                 )
 
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
@@ -739,7 +746,9 @@ class NullVerb(Verb):
         return True
 
     def populate_options(self, state, player, source, cause) -> List[Verb]:
-        return [self]
+        new_copy = self.copy()
+        new_copy.is_populated = True
+        return [new_copy]
 
     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
         return [(state, self, to_track)]
@@ -759,7 +768,7 @@ class NullVerb(Verb):
 
 class SingleGetterInput(Verb):
     def populate_options(self, state, player, source, cause) -> List[Verb]:
-        [base] = Verb.populate_options(self, state, player, source, cause)
+        [base] = super().populate_options(state, player, source, cause)
         if isinstance(base.inputs[0], Get.Getter):
             value = base.inputs[0].get(state, player, source)
             return [base.replace_input(0, value)]
@@ -1165,7 +1174,8 @@ class MarkAsPlayedLand(AffectPlayer):
     played a land this turn"""
 
     def can_be_done(self, state: GameState) -> bool:
-        return state.player_list[self.subject].land_drops_left > 0
+        return (super().can_be_done(state)
+                and state.player_list[self.subject].land_drops_left > 0)
 
     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
         state.player_list[self.subject].num_lands_played += 1
@@ -1238,7 +1248,6 @@ class SearchDeck(VerbFactory):
         choices = chooser.pick(decklist, state, player, source)
         # set up shuffler
         [shuffler] = Shuffle().populate_options(state, player, source, cause)
-
         # for each selected target, move it to the specified zone and then
         # shuffle the deck. Build a MultiVerb which does these things.
         multi_list: List[MultiVerb] = []
