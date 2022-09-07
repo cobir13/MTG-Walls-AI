@@ -195,45 +195,38 @@ class Cardboard:
     #                                                  caster_type=caster))
     #     return obj_list
 
-    def valid_casters(self, state: GameState) -> List[PlayCardboard]:
-        """Create as many valid PlayCardboard as possible,
-        one for each valid way to cast this Cardboard. This
-        function doesn't ACTUALLY run those verbs to cast the
-        cardboard and add it to stack and pay its cost, but
-        it fully populates the PlayCardboard verbs and the
-        pay_cost and do_effect verbs of the card so that
-        they will do those things when they are run.
-        If the card cannot be cast, the empty list is returned."""
-        # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-        # Note: if cost is free, payments is [None]. If cost cannot be paid,
-        # payments is [] so loops won't loop and no caster is returned.
+    def valid_caster(self, state: GameState) -> PlayCardboard | None:
+        """
+        If this card can be cast right now (there are valid
+        ways to pay its costs and choose its targets), return
+        a PlayCardboard Verb. That Verb, when run, will
+        ask its controller to choose those payment options and
+        targets and will put a StackCardboard for this card on
+        the stack.
+        If the card cannot be cast, None is returned.
+        Note: the PlayCardboard's StackObject has no populated
+        pay_cost or do_effect yet.
+        """
         player = self.player_index
         payments = self.cost.get_payment_plans(state, player, self, None)
-        # 601.2c: choose targets and modes
-        if self.effect is None:
-            effects = [None]  # no effects so no targets to choose, etc
-        else:
-            # Note: if no effects can legally be done, then `effects` is
-            # empty list and loops won't loop and no caster is returned.
+        if len(payments) == 0:
+            return None  # no valid way to pay costs
+        if self.effect is not None:
             effects = self.effect.populate_options(state, player, self, None)
-            effects = [eff for eff in effects if eff.can_be_done(state)]
-        # build casters and stack objects for all combinations of these
-        caster_list = []
-        for pay_verb in payments:
-            for effect_verb in effects:
-                stack_obj = Stack.StackCardboard(controller=player,
-                                                 obj=self,
-                                                 pay_cost=pay_verb,
-                                                 do_effect=effect_verb)
-                caster: PlayCardboard = self.rules_text.caster_verb()
-                [caster] = caster.populate_options(state=state,
-                                                   player=player,
-                                                   source=self,
-                                                   cause=None,
-                                                   stack_object=stack_obj)
-                if caster.can_be_done(state):
-                    caster_list.append(caster)
-        return caster_list
+            if len([eff for eff in effects if eff.can_be_done(state)]) == 0:
+                return None  # no valid way to choose effects
+        # if reached here, ability can be done!  build a caster for it
+        stack_obj = Stack.StackAbility(controller=player, obj=self,
+                                       pay_cost=None, do_effect=None)
+        # figure out which verb can be used to cast this object
+        stack_obj = Stack.StackCardboard(controller=player, obj=self,
+                                         pay_cost=None, do_effect=None)
+        caster: PlayCardboard = self.rules_text.caster_verb()
+        [caster] = caster.populate_options(state=state, player=player,
+                                           source=self, cause=None,
+                                           stack_object=stack_obj)
+        return caster
+
 
     def build_tk_display(self, parent_frame):
         """Returns a tkinter button representing the Cardboard.
@@ -357,7 +350,7 @@ class CardNull(Cardboard):
     def add_counter(self, addition):
         return
 
-    def valid_casters(self, state: GameState) -> List[PlayCardboard]:
+    def valid_caster(self, state: GameState) -> List[PlayCardboard]:
         return []
 
     @property

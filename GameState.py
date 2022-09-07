@@ -540,46 +540,52 @@ class Player:
         new_player.grave = [c.copy() for c in self.grave]
         return new_player
 
-    def get_valid_activations(self) -> List[Verbs.PlayAbility]:
+    def get_valid_activations(self, hide_equivalent=True
+                              ) -> List[Verbs.PlayAbility]:
         """
         Find all abilities that can be activated and put on the
         stack right now. Return them as a list of PlayAbility
-        Verbs, each of which will put one activation on the stack
-        with one choice of payment and target options when run.
+        Verbs, each of which will let the user choose payments
+        and targets for that ability and put it onto the stack.
         """
         activatables: List[Verbs.PlayAbility] = []
         active_objects: List[Cardboard] = []  # I already checked these cards
         game = self.gamestate
         for source in self.hand + self.field + self.grave:
-            if any([source.is_equiv_to(ob) for ob in active_objects]):
+            if (any([source.is_equiv_to(ob) for ob in active_objects])
+                    and hide_equivalent):
                 continue  # skip cards equivalent to those already searched
             add_object = False
             for ability in source.get_activated():
-                # get a list of stack-objects for this ability
-                can_do = ability.valid_casters(game, self.player_index, source)
-                if len(can_do) > 0:
+                caster = ability.valid_caster(game, self.player_index, source)
+                if caster is not None:
                     add_object = True
-                    activatables += can_do
-            if add_object:  # track object to not look at any similar again.
+                    activatables.append(caster)
+            # track object to not look at any similar again.
+            if add_object and hide_equivalent:
                 active_objects.append(source)
         return activatables
 
-    def get_valid_castables(self) -> List[Verbs.PlayCardboard]:
-        """Find all cast-able cards that can be put on the stack
+    def get_valid_castables(self, hide_equivalent=True
+                            ) -> List[Verbs.PlayCardboard]:
+        """
+        Find all cast-able cards that can be put on the stack
         right now. Return them as a list of PlayCardboard Verbs,
-        each of which will put one castable card on the stack with
-        one choice of payment and target options when run."""
+        each of which will let the user choose payments and
+        targets for that card and put it onto the stack.
+        """
         castables: List[Verbs.PlayCardboard] = []
         active_objects: List[Cardboard] = []
         game = self.gamestate
         for card in self.hand:
-            if any([card.is_equiv_to(ob) for ob in active_objects]):
+            if (any([card.is_equiv_to(ob) for ob in active_objects])
+                    and hide_equivalent):
                 continue  # skip cards equivalent to those already searched
             # get a list of stack-objects for casting this card
-            can_do: List[Verbs.PlayCardboard] = card.valid_casters(game)
-            if len(can_do) > 0:
+            caster = card.valid_caster(game)
+            if caster is not None:
                 active_objects.append(card)
-                castables += can_do
+                castables.append(caster)
         return castables
 
     def add_to_hand(self, card: Cardboard):

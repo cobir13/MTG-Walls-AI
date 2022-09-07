@@ -131,46 +131,37 @@ class ActivatedAbility:
         self.cost: Costs.Cost = cost
         self.effect: Verbs.Verb = effect
 
-    def valid_casters(self, state: GameState, player: int,
-                      source: Cardboard) -> List[Verbs.PlayAbility]:
-        """Create as many valid PlayAbility Verbs as possible,
-        one for each valid way to activate this ability. This
-        function doesn't ACTUALLY run those verbs to activate
-        the ability and add a StackAbility to the stack and
-        pay its posts, but it fully populates the PlayAbility
-        verbs and the pay_cost and do_effect verbs of the
-        ability so that they will do those things when they
-        are run.
-        If the ability cannot be activated, the empty list is
-        returned."""
-        # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-        # Note: if cost is free, payments is [None]. If cost cannot be paid,
-        # payments is [] so loops won't loop and no caster is returned.
+    def valid_caster(self, state: GameState, player: int,
+                     source: Cardboard) -> Verbs.PlayAbility | None:
+        """
+        If this ability can be activated right now (there are
+        valid ways to pay its costs and choose its targets),
+        return a PlayAbility Verb. That Verb, when run, will
+        ask its controller to choose those payment options and
+        targets and will put a StackAbility for this ability
+        on the stack.
+        If the ability cannot be activated, None is returned.
+        Note: the PlayAbility's StackObject has no populated
+        pay_cost or do_effect yet.
+        """
         payments = self.cost.get_payment_plans(state, player, source, None)
-        # 601.2c: choose targets and modes. Note: if there are no effects,
-        # then loops won't loop and no caster is returned.
+        if len(payments) == 0:
+            return None  # no valid way to pay costs
         effects = self.effect.populate_options(state, player, source, None)
-        effects = [eff for eff in effects if eff.can_be_done(state)]
-        # build casters and stack objects for all combinations of these
-        caster_list = []
-        for pay_verb in payments:  # pay_verb already populated
-            for effect_verb in effects:  # effect_verb already populated
-                stack_obj = Stack.StackAbility(controller=player,
-                                               obj=self,
-                                               pay_cost=pay_verb,
-                                               do_effect=effect_verb)
-                # figure out which verb can be used to cast this object
-                caster: Verbs.PlayAbility = Verbs.PlayAbility()
-                if self.effect.is_type(Verbs.AddMana):
-                    caster = Verbs.PlayManaAbility()
-                [caster] = caster.populate_options(state=state,
-                                                   player=player,
-                                                   source=source,
-                                                   cause=None,
-                                                   stack_object=stack_obj)
-                if caster.can_be_done(state):
-                    caster_list.append(caster)
-        return caster_list
+        if len([eff for eff in effects if eff.can_be_done(state)]) == 0:
+            return None  # no valid way to choose effects
+        # if reached here, ability can be done!  build a caster for it
+        stack_obj = Stack.StackAbility(controller=player, obj=self,
+                                       pay_cost=None, do_effect=None)
+        # figure out which verb can be used to cast this object
+        caster: Verbs.PlayAbility = Verbs.PlayAbility()
+        if self.effect.is_type(Verbs.AddMana):
+            caster = Verbs.PlayManaAbility()
+        [caster] = caster.populate_options(state=state, player=player,
+                                           source=source, cause=None,
+                                           stack_object=stack_obj)
+        return caster
+
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))

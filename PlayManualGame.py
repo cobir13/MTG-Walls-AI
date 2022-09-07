@@ -224,17 +224,17 @@ class ManualGame(tk.Tk):
         # clear previous
         for widgets in self.caster_frame.winfo_children():
             widgets.destroy()
-        activables = self.game.priority.get_valid_activations()
-        castables = self.game.priority.get_valid_castables()
+        activables = self.game.priority.get_valid_activations(False)
+        castables = self.game.priority.get_valid_castables(False)
         doables: List[UniversalCaster] = activables + castables
         for ii, caster in enumerate(doables):
-            text = "Player: %i" % caster.player
+            text = str(caster)
+            text += "\n\nPlayer: %i" % caster.player
             text += "\nSource:  %s" % caster.source.name
             text += "\nCost: %s" % str(caster.subject.obj.cost)
-            text += "\nObject: %s" % caster.subject.obj.name
             button = tk.Button(self.caster_frame,
                                text=text, anchor="w", justify="left",
-                               height=5,
+                               height=6,
                                width=30,
                                wraplength=200,
                                padx=3, pady=3,
@@ -242,10 +242,6 @@ class ManualGame(tk.Tk):
                                command=lambda c=caster: self.cast_it(c)
                                )
             button.grid(row=0 + ii//2, column=ii % 2)
-
-
-
-
 
     def rebuild_display(self):
         for player in self.game.player_list:
@@ -329,14 +325,7 @@ if __name__ == "__main__":
     for _ in range(5):
         game.give_to(Cardboard.Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
 
-    for d in game.active.get_valid_activations():
-        print(d)
-    for d in game.active.get_valid_castables():
-        print(d)
-
     gui = ManualGame(game, 0)
-
-    need to fix that get_valid is using manual questions on how to pay cost
 
     # game.player_list[0].pool.add_mana("GGGG")
     # game.player_list[0].decision_maker = "manual"

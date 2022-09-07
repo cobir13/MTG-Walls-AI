@@ -24,15 +24,10 @@ class StackObject:
                     or triggered. Note that any effect Verbs within
                     the card or ability are NOT populated with
                     inputs. That is what `effect` is for.
-        effect:     The Verb that pays the cost for putting this
+        pay_cost:   The Verb that pays the cost for putting this
                     StackObjectthat onto the stack.
-        effect:     The effect Verb that will be executed when this
+        do_effect:  The effect Verb that will be executed when this
                     StackObject comes off the stack.
-        caster_verb:The Verb which moves this StackObject onto the
-                    stack in the first place. Cast, with all costs
-                    paid, if it is a spell; retrieved from
-                    superstack if it is a triggered ability; put
-                    directly into play if it is a land; etc.
         """
         self.player_index: int = controller
         # obj is the card on the stack or the ability causing the effect
@@ -69,20 +64,7 @@ class StackObject:
     def __repr__(self):
         return self.get_id()
 
-    # def put_on_stack(self, state: GameState) -> List[GameState]:
-    #     """Returns a list of GameStates where this StackObject
-    #     has been put onto the stack (cast, with all costs paid,
-    #     if it is a spell; retrieved from superstack if it is a
-    #     triggered ability; put directly into play if it is a
-    #     land; etc.). If can't be done, returns empty list.
-    #     GUARANTEED NOT TO MUTATE THE ORIGINAL STATE"""
-    #     caster_verb = self.caster_verb(self)  # instantiate object
-    #     if not caster_verb.can_be_done(state):
-    #         return []  # no ways to put this onto the stack
-    #     else:
-    #         return [t[0] for t in caster_verb.do_it(state)]
-
-    def copy(self, state_new: GameState):
+    def copy(self, state_new: GameState | None = None):
         """This function assumes that everything except maybe
         the stack and superstack have already been copied
         correctly. In other words, all Cardboards have already

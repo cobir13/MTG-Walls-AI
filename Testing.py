@@ -423,7 +423,7 @@ if __name__ == "__main__":
     affecter = Verbs.AffectStack().on(Get.All(), Get.StackList(), False)
     fake_ability = Abilities.ActivatedAbility("fake", Costs.Cost(),
                                               affecter)
-    [caster] = fake_ability.valid_casters(game1, 0, game1.active.field[0])
+    caster = fake_ability.valid_caster(game1, 0, game1.active.field[0])
     assert caster.can_be_done(game1)
     game1 = caster.do_it(game1)[0][0]
     assert len(game1.stack) == 2
@@ -502,7 +502,7 @@ if __name__ == "__main__":
     roots = game_orig.active.hand[0]
     assert len(roots.get_activated()) == 1
     roots_abil = roots.get_activated()[0]
-    assert len(roots_abil.valid_casters(game_orig, 0, roots)) == 0
+    assert roots_abil.valid_caster(game_orig, 0, roots) is None
 
     # move a Wall of Roots to field and try again
     game_orig.give_to(game_orig.active.hand[0], Zone.Field)
@@ -512,8 +512,8 @@ if __name__ == "__main__":
     assert len(roots.get_activated()) == 1
     assert len(roots.counters) == 0  # no counters on it yet
     roots_abil = roots.get_activated()[0]
-    valid = roots_abil.valid_casters(game_orig, 0, roots)
-    assert len(valid) == 1
+    valid = roots_abil.valid_caster(game_orig, 0, roots)
+    assert valid is not None
 
     # make sure the cost can actually be paid
     cost_game = game_orig.copy()
@@ -559,6 +559,8 @@ if __name__ == "__main__":
     copygame.active.pool.add_mana("G")  # add mana directly
     # all 3 roots in hand only generate 1 option--to cast Roots
     assert (len(copygame.active.get_valid_castables()) == 1)
+    assert (len(copygame.active.get_valid_castables(hide_equivalent=False))
+            == 3)
     # cast the newly castable spell
     castable = copygame.active.get_valid_castables()[0]
     assert ([o is castable.subject.obj for o in copygame.active.hand]
@@ -703,7 +705,7 @@ if __name__ == "__main__":
 
     # HAND: Roots, Roots, Roots, Caryatid
     # FIELD: Caryatid, Roots
-    # Life: 20 vs 20, Deck: [Caryatid]x4, Mana: ()
+    # Life: 20, Deck: [Caryatid]x4, Mana: ()
     tree2.main_phase_for_all_active_states()
     assert len(tree2.get_active()) == 0
     assert len(tree2.get_active(1)) == 1
@@ -726,7 +728,7 @@ if __name__ == "__main__":
     assert all([len(tree2.get_active(t)) == 0 for t in [0, 2, 3]])
     # These next several are empirical. I didn't theory. Too hard to count.
     assert len(tree2.get_states_no_options()) == 17  # 20
-    assert len(tree2.get_states_no_stack()) == 85  # 88
+    assert len(tree2.get_states_no_stack()) == 85  # 85  # 88
     n = len(tree2.get_intermediate())
     assert n == 129  # empirical. I didn't theory. used to be 123...
     id_list = [g.get_id() for g in tree2.get_intermediate()]
@@ -877,11 +879,11 @@ if __name__ == "__main__":
     assert forest is not forest2
     assert (game == cp)
     # tap both of these forests for mana
-    caster = forest.get_activated()[0].valid_casters(game, 0, forest)[0]
+    caster = forest.get_activated()[0].valid_caster(game, 0, forest)
     [(cp3, _, _)] = caster.do_it(game)
     assert (game != cp3)
     assert (cp != cp3)
-    caster2 = forest2.get_activated()[0].valid_casters(cp, 0, forest2)[0]
+    caster2 = forest2.get_activated()[0].valid_caster(cp, 0, forest2)
     [(cp4, _, _)] = caster2.do_it(cp)
     assert (game != cp4)
     assert (cp3 == cp4)
@@ -974,24 +976,19 @@ if __name__ == "__main__":
 
     # Rewind to before casting 2nd Caretaker. Give 1st TWO things to tap.
     game.give_to(game.active.hand[0], Zone.Field)
-    # only one ability, but two _options to activate it
+    # one caretaker is summoning-sick, the other is not
+    # only one ability, but two options to activate it
     ability_casters = game.active.get_valid_activations()
-    assert len(ability_casters) == 2
-    assert ability_casters[0].player == ability_casters[1].player
-    assert ability_casters[0].source is ability_casters[1].source
-    # subject of the caster-verb is a StackObject
-    stackobj0 = ability_casters[0].subject
-    stackobj1 = ability_casters[1].subject
-    assert stackobj0.obj is stackobj1.obj  # both point to same ability
-    assert stackobj0.do_effect.get_id() == stackobj1.do_effect.get_id()
-    # right now, verbs are same pointer (not just copy). see valid_casters
-    assert stackobj0.do_effect is stackobj1.do_effect
-    assert stackobj0.pay_cost.get_id() != stackobj1.pay_cost.get_id()
-    # first subverb is tapsymbol (taps self). second is tap another.
-    assert stackobj0.pay_cost.sub_verbs[0].subject is game.active.field[1]
-    assert stackobj1.pay_cost.sub_verbs[0].subject is game.active.field[1]
-    assert stackobj0.pay_cost.sub_verbs[1].subject is game.active.field[0]
-    assert stackobj1.pay_cost.sub_verbs[1].subject is game.active.field[2]
+    assert len(ability_casters) == 1
+    universes = ability_casters[0].do_it(game)
+    assert len(universes) == 2
+    for univ, _, _ in universes:
+        assert [int(c.summon_sick) for c in univ.active.field] == [1, 0, 1]
+        assert univ.active.field[1].tapped
+        assert univ.active.field[0].tapped or univ.active.field[2].tapped
+        assert not (univ.active.field[0].tapped
+                    and univ.active.field[2].tapped)
+        assert univ.active.pool == ManaHandler.ManaPool("A")
 
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
@@ -1008,10 +1005,11 @@ if __name__ == "__main__":
     game3 = univ3
     game3.pass_turn()
     game3.step_untap()
-    # 2 Caretakers plus Caryatid in play. 5 possibilities. But Caretakers are
-    # equivalent so we only see 3 _options. Good.
+    # 2 Caretakers plus Caryatid in play. 3 possibilities. But Caretakers are
+    # equivalent so we only see 2 options (caretaker, caryatid). Good.
+    assert len(game3.active.get_valid_activations(hide_equivalent=False)) == 3
     game3_casters = game3.active.get_valid_activations()
-    assert len(game3_casters) == 3
+    assert len(game3_casters) == 2
     game3_casters = [obj for obj in game3_casters
                      if obj.source.name == "Caretaker"]
     universes = []
@@ -1038,8 +1036,9 @@ if __name__ == "__main__":
     assert len(game6.active.get_valid_activations()) == 0  # still summon_sick
     game6.pass_turn()  # increments turn
     game6.step_untap()
-    # axebane; battlement; caryatid; caretaker with 4 targets to tap
-    assert len(game6.active.get_valid_activations()) == 7
+    # axebane; battlement; caryatid; caretaker x 2
+    assert len(game6.active.get_valid_activations(hide_equivalent=False)) == 5
+    assert len(game6.active.get_valid_activations()) == 4
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_for_all_active_states()
     collector = set()

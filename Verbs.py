@@ -1292,11 +1292,10 @@ class UniversalCaster(AffectStack):
         Note: the StackObject's pay_cost and do_effect Verbs
         are already populated.
         """
+        stackobj: StackObject = self.subject
         return (super().can_be_done(state)
-                and (self.subject.pay_cost is None
-                     or self.subject.pay_cost.can_be_done(state))
-                and (self.subject.do_effect is None
-                     or self.subject.do_effect.can_be_done(state)))
+                and stackobj.pay_cost is None
+                and stackobj.do_effect is None)
 
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         """Put the StackObject onto the stack, populating
@@ -1305,30 +1304,48 @@ class UniversalCaster(AffectStack):
         # check to make sure the execution is legal
         if not self.can_be_done(state):
             return []
-        # 601.2a: add the spell to the stack
-        state2, things = state.copy_and_track([self] + to_track)
-        self2: UniversalCaster = things[0]
-        to_track2 = things[1:]
-        obj2: StackObject = self2.subject
-        self2._add_to_stack(state2, obj2)
         # 601.2b: choose costs (additional costs, choose X, choose hybrid)
-        # Already done when the StackObject was built.
-        # 601.2c: choose targets and modes -- already done.
-        # 601.2f: determine total cost -- already done when StackObject built.
-        # 601.2g: activate mana abilities -- I don't actually permit this.
-        # 601.2h: pay costs
-        if obj2.pay_cost is not None:
-            tuple_list: List[RESULT] = obj2.pay_cost.do_it(state2,
-                                                           [self2] + to_track2,
-                                                           check_triggers)
-            # verb in result list needs to be self, not the payment verb
-            tuple_list: List[Tuple[GameState, UniversalCaster, list]] = [
-                (state3, track3[0], track3[1:])
-                for state3, verb, track3 in tuple_list]
-
+        # Note: if cost is free, payments is [None]. If list of payments is
+        # empty, then nothing is done and no results are returned.
+        if self.subject.cost is None:
+            payments = [None]
         else:
-            tuple_list: List[Tuple[GameState, UniversalCaster, list]] = [
-                (state2, self2, to_track2)]
+            # 601.2f: determine total cost -- hidden inside get_payment_plans
+            payments = self.subject.cost.get_payment_plans(state, self.player,
+                                                           self.source,
+                                                           self.cause)
+        # 601.2c: choose targets and modes.  If list of effects is empty,
+        # then nothing is done and no results are returned.
+        if self.subject.obj.effect is None:
+            effects = [None]
+        else:
+            obj_effect = self.subject.obj.effect
+            effects = obj_effect.populate_options(state, self.player,
+                                                  self.source, self.cause)
+            effects = [eff for eff in effects if eff.can_be_done(state)]
+        # build stack objects for all combinations of these
+        tuple_list: List[Tuple[GameState, UniversalCaster, list]] = []
+        for pay_verb in payments:
+            for effect_verb in effects:
+                stack_obj = self.subject.copy()
+                stack_obj.pay_cost = pay_verb  # already populated
+                stack_obj.do_effect = effect_verb  # already populated
+                # make new caster object with this stack_object attached
+                self_new = self.replace_subject(stack_obj)
+                # 601.2a: add the spell to the stack
+                state2, track2 = state.copy_and_track([self_new] + to_track)
+                self2 = track2[0]
+                obj2: StackObject = self2.subject
+                self._add_to_stack(state2, obj2)
+                # 601.2g: activate mana abilities -- not a thing that I allow
+                # 601.2h: pay costs
+                if obj2.pay_cost is not None:
+                    tupes = obj2.pay_cost.do_it(state2, track2, check_triggers)
+                    # verb in result list needs to be self2, not pay_verb
+                    tuple_list += [(state3, track3[0], track3[1:])
+                                   for state3, verb, track3 in tupes]
+                else:
+                    tuple_list += [(state2, self2, track2[1:])]
         # 601.2i: ability has now "been activated".  Any abilities which
         # trigger from some aspect of paying the costs have already
         # been added to the superstack during ability.cost.pay. Now add
@@ -1400,17 +1417,6 @@ class PlayManaAbility(PlayAbility):
 
 class AddTriggeredAbility(UniversalCaster):
 
-    def can_be_done(self, state: GameState) -> bool:
-        """Can the subject StackObject be put onto the stack?
-        Note: the StackObject's pay_cost and do_effect Verbs
-        are NOT expected to be populated. They are expected to
-        be None. They are populated during do_it.
-        """
-        stackobj: StackObject = self.subject
-        return (super().can_be_done(state)
-                and stackobj.pay_cost is None
-                and stackobj.do_effect is None)
-
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         """Put the StackObject onto the stack. Bypass the
             stack if necessary. Assumes that the caster has
@@ -1461,14 +1467,6 @@ class AddAsEntersAbility(AddTriggeredAbility):
         resolve instantly, do that. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.pop_from_stack(-1)
-        # print(self)
-        # print(type(self))
-        # print("")
-        # print(self.subject.get_id())
-        # print("")
-        # print(stack_obj.get_id())
-        # print("\n", stack_obj.do_effect.get_id())
-        # assert stack_obj is self.subject
         # perform the effect (resolve ability, perform spell, etc)
         if stack_obj.do_effect is None:
             return [(game, self, to_track)]
