@@ -1102,8 +1102,6 @@ if __name__ == "__main__":
     tree.beginning_phase_for_all_valid_states()
     assert len(tree.get_active(2)) == 12
     tree.main_phase_for_all_active_states(2)
-    print("      ...done running, %0.2f sec. (~0.63 2022-07-22)"
-          % (time.perf_counter() - start_clock))
     intermed = tree.get_intermediate(2)
     no_opts = tree.get_states_no_options(2)
     assert len(intermed) == 1144  # 980  # 1638
@@ -1111,8 +1109,11 @@ if __name__ == "__main__":
     assert len(no_opts) == 30  # 62
     assert tree.traverse_counter == 2718  # 2338  # 3716
     assert max([g.active.pool.cmc() for g in no_opts]) == 8
-    print("      ...done checking, %0.2f sec. (~0.70 2022-07-22)"
+    print("      ...done, %0.2f sec."
           % (time.perf_counter() - start_clock))
+    print("         (~1.20 2022-09-06)")
+    print("         (~0.70 2022-07-22)")
+
 
     # -----------------------------------------------------------------------
 

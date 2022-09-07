@@ -154,7 +154,7 @@ class ActivatedAbility:
         # build casters and stack objects for all combinations of these
         caster_list = []
         for pay_verb in payments:  # pay_verb already populated
-            for effect_verb in effects:
+            for effect_verb in effects:  # effect_verb already populated
                 stack_obj = Stack.StackAbility(controller=player,
                                                obj=self,
                                                pay_cost=pay_verb,

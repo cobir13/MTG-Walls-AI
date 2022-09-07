@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from Stack import StackObject
+    from Verbs import UniversalCaster
 
 import tkinter as tk
 
@@ -41,6 +41,13 @@ class ManualGame(tk.Tk):
         fr.grid(row=len(self.player_frame_list) + 1, column=1,
                 padx=5, pady=5, sticky="W")
         startstate.player_list[self.player_index].decision_maker = "manual"
+        # castables
+        self.caster_frame = tk.Frame(self)
+        self.caster_frame.grid(row=0, column=2,
+                               rowspan=len(self.player_frame_list) + 2,
+                               padx=5, pady=5, sticky="W")
+        caster_label = tk.Label(self.caster_frame, text="ACTIONS TO TAKE")
+        caster_label.grid(row=0, column=0, sticky="N")
         # populate the display and start the game
         self.rebuild_display()
         self.mainloop()
@@ -53,26 +60,26 @@ class ManualGame(tk.Tk):
     def player(self):
         return game.player_list[self.player_index]
 
-    def _caster(self, options: List[StackObject]):
-        chosen = Choices.choose_exactly_one(options, "choose to activate",
-                                            self.player.decision_maker)
-        if len(chosen) == 0:
-            return  # no valid choice, so just pass
-        elif len(chosen) == 1:
-            self._put_on_stack(chosen[0])
-        else:
-            assert False  # problem!
-
-    def _put_on_stack(self, stack_obj: StackObject):
-        universes = stack_obj.put_on_stack(self.game)
-        if len(universes) == 0:
-            return  # casting failed, nothing changed so do nothing
-        assert (len(universes) == 1)
-        self.history.append(universes[0])
-        if self.var_resolveall.get():
-            self.empty_entire_stack()
-        else:
-            self.rebuild_display()
+    # def _caster(self, options: List[StackObject]):
+    #     chosen = Choices.choose_exactly_one(options, "choose to activate",
+    #                                         self.player.decision_maker)
+    #     if len(chosen) == 0:
+    #         return  # no valid choice, so just pass
+    #     elif len(chosen) == 1:
+    #         self._put_on_stack(chosen[0])
+    #     else:
+    #         assert False  # problem!
+    #
+    # def _put_on_stack(self, stack_obj: StackObject):
+    #     universes = stack_obj.put_on_stack(self.game)
+    #     if len(universes) == 0:
+    #         return  # casting failed, nothing changed so do nothing
+    #     assert (len(universes) == 1)
+    #     self.history.append(universes[0])
+    #     if self.var_resolveall.get():
+    #         self.empty_entire_stack()
+    #     else:
+    #         self.rebuild_display()
 
     def build_player_display(self, player: Player):
         self_frame = self.player_frame_list[player.player_index]
@@ -123,52 +130,53 @@ class ManualGame(tk.Tk):
         botrow = 0  # number in top row
         for ii, card in enumerate(player.field):
             butt = card.build_tk_display(field_frame)
-            # add option for user to activate abilities, if is human player.
-            if player.player_index == self.player_index:
-                opts = []
-                for ab in card.get_activated():
-                    opts += ab.valid_stack_objects(player.gamestate,
-                                                   player.player_index, card)
-                if len(opts) >= 1:
-                    cast_fn = lambda options=opts: self._caster(options)
-                    butt.config(state="normal", command=cast_fn)
-                else:
-                    butt.config(state="disabled", disabledforeground="black",
-                                bg="lightgrey")
+            # # RIGHT NOW, nobody gets to activate anything ever. Sorry.
+            # if player.player_index == self.player_index:
+            #     opts = []
+            #     for ab in card.get_activated():
+            #         opts += ab.valid_stack_objects(player.gamestate,
+            #                                        player.player_index, card)
+            #     if len(opts) >= 1:
+            #         cast_fn = lambda options=opts: self._caster(options)
+            #         butt.config(state="normal", command=cast_fn)
+            #     else:
+            #         butt.config(state="disabled", disabledforeground="black",
+            #                     bg="lightgrey")
             if card.has_type(RulesText.Creature):
-                butt.grid(row=0, column=toprow+1, padx=2, pady=2, sticky="N")
+                butt.grid(row=0, column=toprow + 1, padx=2, pady=2, sticky="N")
                 toprow += 1
             else:
-                butt.grid(row=1, column=botrow+1, padx=2, pady=2, sticky="S")
+                butt.grid(row=1, column=botrow + 1, padx=2, pady=2, sticky="S")
                 botrow += 1
         # hand
-        if player.player_index == self.player_index:
-            # the user-controller player:
-            hand_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
-            hand_frame.grid(row=1, column=1, padx=5, pady=3, sticky="W")
-            tk.Label(hand_frame, text="HAND", wraplength=1).grid(row=0, column=0)
-            for ii, card in enumerate(player.hand):
-                butt = card.build_tk_display(hand_frame)
-                # add option for user to activate abilities, if has priority
-                if self.player_index == self.game.priority_player_index:
-                    opts = []
-                    for ab in card.get_activated():
-                        opts += ab.valid_stack_objects(player.gamestate,
-                                                       player.player_index,
-                                                       card)
-                    opts += card.valid_stack_objects(player.gamestate)  # cast
-                    if len(opts) >= 1:
-                        cast_fn = lambda options=opts: self._caster(options)
-                        butt.config(state="normal", command=cast_fn)
-                    else:
-                        butt.config(state="disabled",
-                                    disabledforeground="black",
-                                    bg="lightgrey")
-                else:
-                    # not your priority, so can't do anything!
-                    butt.config(state="disabled", disabledforeground="black",
-                                bg="lightgrey")
-                butt.grid(row=0, column=ii+1, padx=2, pady=2)
+        # if player.player_index == self.player_index:
+        #     # the user-controller player:
+        hand_frame = tk.Frame(self_frame, borderwidth=1, relief="solid")
+        hand_frame.grid(row=1, column=1, padx=5, pady=3, sticky="W")
+        tk.Label(hand_frame, text="HAND", wraplength=1).grid(row=0, column=0)
+        for ii, card in enumerate(player.hand):
+            butt = card.build_tk_display(hand_frame)
+            # # RIGHT NOW nobody gets to cast spells. deal with it.
+            # # add option for user to activate abilities, if has priority
+            # if self.player_index == self.game.priority_player_index:
+            #     opts = []
+            #     for ab in card.get_activated():
+            #         opts += ab.valid_stack_objects(player.gamestate,
+            #                                        player.player_index,
+            #                                        card)
+            #     opts += card.valid_stack_objects(player.gamestate)  #cast
+            #     if len(opts) >= 1:
+            #         cast_fn = lambda options=opts: self._caster(options)
+            #         butt.config(state="normal", command=cast_fn)
+            #     else:
+            #         butt.config(state="disabled",
+            #                     disabledforeground="black",
+            #                     bg="lightgrey")
+            # else:
+            #     # not your priority, so can't do anything!
+            #     butt.config(state="disabled", disabledforeground="black",
+            #                 bg="lightgrey")
+            butt.grid(row=0, column=ii + 1, padx=2, pady=2)
 
     def build_stack_display(self):
         # clear previous
@@ -199,12 +207,51 @@ class ManualGame(tk.Tk):
         for ii, obj in enumerate(self.game.stack):
             butt = obj.build_tk_display(obj_frame)
             butt.config(command=self.resolve_top_of_stack)
-            butt.grid(row=0, column=ii+5, padx=5, pady=3, rowspan=2)
+            butt.grid(row=0, column=ii + 5, padx=5, pady=3, rowspan=2)
+
+    def cast_it(self, caster_verb):
+        universes = caster_verb.do_it(self.game)
+        if len(universes) == 0:
+            return  # casting failed, nothing changed so do nothing
+        assert (len(universes) == 1)
+        self.history.append(universes[0][0])
+        if self.var_resolveall.get():
+            self.empty_entire_stack()
+        else:
+            self.rebuild_display()
+
+    def build_caster_display(self):
+        # clear previous
+        for widgets in self.caster_frame.winfo_children():
+            widgets.destroy()
+        activables = self.game.priority.get_valid_activations()
+        castables = self.game.priority.get_valid_castables()
+        doables: List[UniversalCaster] = activables + castables
+        for ii, caster in enumerate(doables):
+            text = "Player: %i" % caster.player
+            text += "\nSource:  %s" % caster.source.name
+            text += "\nCost: %s" % str(caster.subject.obj.cost)
+            text += "\nObject: %s" % caster.subject.obj.name
+            button = tk.Button(self.caster_frame,
+                               text=text, anchor="w", justify="left",
+                               height=5,
+                               width=30,
+                               wraplength=200,
+                               padx=3, pady=3,
+                               relief="raised", bg='lightgreen',
+                               command=lambda c=caster: self.cast_it(c)
+                               )
+            button.grid(row=0 + ii//2, column=ii % 2)
+
+
+
+
 
     def rebuild_display(self):
         for player in self.game.player_list:
             self.build_player_display(player)
         self.build_stack_display()
+        self.build_caster_display()
 
     def undo_action(self):
         if len(self.history) > 1:
@@ -282,4 +329,24 @@ if __name__ == "__main__":
     for _ in range(5):
         game.give_to(Cardboard.Cardboard(Decklist.Blossoms()), Zone.DeckTop, 0)
 
+    for d in game.active.get_valid_activations():
+        print(d)
+    for d in game.active.get_valid_castables():
+        print(d)
+
     gui = ManualGame(game, 0)
+
+    need to fix that get_valid is using manual questions on how to pay cost
+
+    # game.player_list[0].pool.add_mana("GGGG")
+    # game.player_list[0].decision_maker = "manual"
+    # game.player_list[1].decision_maker = "try_one"
+    # casters = game.player_list[0].get_valid_castables()
+    # [(game2, _, _)] = casters[2].do_it(game)  # cast company
+    # defer = game2.stack[0].do_effect
+    # lookdothendo = defer.sub_verbs[0]
+    #
+    # print([pl.decision_maker for pl in game.player_list])
+    # print([pl.decision_maker for pl in game2.player_list])
+    # print(lookdothendo.populate_options(game2, defer.player, defer.source,
+    #                                     defer.cause))

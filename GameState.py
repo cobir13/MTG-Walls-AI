@@ -522,7 +522,7 @@ class Player:
         allows tracking "between split universes."
         If track_list has non-Cardboard objects, they're also
         returned"""
-        new_player = Player(new_state)
+        new_player = Player(new_state, self.decision_maker)
         # copy the ints by value
         new_player.turn_count = self.turn_count
         new_player.life = self.life
