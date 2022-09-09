@@ -687,35 +687,35 @@ if __name__ == "__main__":
     assert len(tree2.get_intermediate()) == 1
     # assert len(tree2.final_states) == 0
     assert tree2.traverse_counter == 1
-    assert all([len(gs.active.deck) == 5 for gs in tree2.get_active()])
-    assert all([len(gs.active.hand) == 3 for gs in tree2.get_active()])
+    assert all([len(gs.active.deck) == 5 for gs in tree2.get_active(1)])
+    assert all([len(gs.active.hand) == 3 for gs in tree2.get_active(1)])
 
     tree2.beginning_phase_for_all_valid_states()
     # noinspection PyProtectedMember
     assert len(tree2._active_states) == 3  # turns 0, 1, 2
-    assert len(tree2.get_active()) == 1
+    assert len(tree2.get_active(2)) == 1
     assert len(tree2.get_active(1)) == 1
     assert len(tree2.get_intermediate()) == 1
+    intermed = tree2.get_intermediate(2)[0]
     assert len(tree2.get_intermediate(1)) == 1
     # assert len(tree2.final_states) == 0
     assert tree2.traverse_counter == 2
-    assert all([len(gs.active.deck) == 4 for gs in tree2.get_active()])
-    assert all([len(gs.active.hand) == 4 for gs in tree2.get_active()])
-    assert all([len(gs.stack) == 0 for gs in tree2.get_active()])
-
+    assert all([len(gs.active.deck) == 4 for gs in tree2.get_active(2)])
+    assert all([len(gs.active.hand) == 4 for gs in tree2.get_active(2)])
+    assert all([len(gs.stack) == 0 for gs in tree2.get_active(2)])
     # HAND: Roots, Roots, Roots, Caryatid
     # FIELD: Caryatid, Roots
     # Life: 20, Deck: [Caryatid]x4, Mana: ()
     tree2.main_phase_for_all_active_states()
-    assert len(tree2.get_active()) == 0
+    assert len(tree2.get_active(2)) == 0
     assert len(tree2.get_active(1)) == 1
     # 9 intermediate. They are: after draw. add G 1st. OR add Au 1st. float GA.
     # caryatid on stack. resolve caryatid.
     # OR roots on stack. resolve roots. float G.
-    assert len(tree2.get_intermediate()) == 9
+    assert len(tree2.get_intermediate(2)) == 9
     assert len(tree2.get_intermediate(1)) == 1
     assert tree2.traverse_counter == 11  # 9 + 2, no overlaps
-    assert (len(tree2.get_states_no_options()) == 2)  # cast roots or caryatid
+    assert (len(tree2.get_states_no_options(2)) == 2)  # cast roots or caryatid
 
     # do one more turn
     tree2.beginning_phase_for_all_valid_states()

@@ -199,6 +199,12 @@ class ManualGame(tk.Tk):
         b3 = tk.Checkbutton(self.stack_frame, text="Auto-resolve all",
                             variable=self.var_resolveall, indicatoron=True)
         b3.grid(row=0, column=0, columnspan=2, padx=5, pady=5)
+
+        # button to show super_stack
+        b2 = tk.Button(self.stack_frame, text="SUPER", bg="red",
+                       command=lambda: print(self.game.super_stack))
+        b2.grid(row=1, column=2, padx=5, pady=2)
+
         # show the items on the stack
         obj_frame = tk.Frame(self.stack_frame, borderwidth=1, relief="solid",
                              height=120, width=800)
@@ -212,7 +218,7 @@ class ManualGame(tk.Tk):
     def cast_it(self, caster_verb):
         universes = caster_verb.do_it(self.game)
         if len(universes) == 0:
-            print("failed to cast %s" % str(caster_verb)
+            print("failed to cast %s" % str(caster_verb))
             return  # casting failed, nothing changed so do nothing
         assert (len(universes) == 1)
         self.history.append(universes[0][0])

@@ -16,7 +16,7 @@ import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
 from Stack import StackObject
-from Verbs import MoveToZone, DrawCard, Untap
+from Verbs import MoveToZone, DrawCard, Untap, NullVerb
 import Choices
 
 
@@ -265,10 +265,15 @@ class GameState:
         self.stack = []
         self.super_stack = []
 
+    def pass_priority(self):
+        self.priority_player_index = ((self.priority_player_index + 1)
+                                      % len(self.player_list))
+
     def step_untap(self):
         """MUTATES. Adds any triggered StackAbilities to the
         super_stack. This function is where things reset for
         the turn."""
+        self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
             turn = self.active.turn_count
@@ -295,6 +300,7 @@ class GameState:
 
     def step_upkeep(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack."""
+        self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
         self.phase = GameState.PHASES.index("upkeep")
@@ -305,6 +311,7 @@ class GameState:
     def step_draw(self):
         """MUTATES. Adds any triggered StackAbilities to the super_stack.
            Draws from player_index 0 of deck."""
+        self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
             self.events_since_previous += "\nDraw step"
@@ -348,6 +355,8 @@ class GameState:
         # clear the superstack and return!
         final_results: List[GameState] = []
         for tup in results:
+            # active player recieves priority. Rule 117.3b
+            tup[0].priority_player_index = tup[0].active_player_index
             final_results += tup[0].clear_super_stack()
         return final_results
 
@@ -432,11 +441,64 @@ class GameState:
     #     self.is_my_turn = not self.is_my_turn
 
     def step_attack(self):
+        self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nGo to combat"
         self.phase = GameState.PHASES.index("combat")
         print("not yet implemented")
         return
+
+
+    def do_priority_action(self) -> List[GameState]:
+        """
+        The player with priority chooses a single valid action
+        to do and does it. This action can be: cast a spell,
+        activate an ability, or pass priority. A list of new
+        GameStates is returned, one for each chosen action,
+        where that action has been performed. The original
+        GameState is not mutated.
+        """
+        # options are: cast spell, activate ability, let stack resolve
+        activables = self.priority.get_valid_activations()
+        castables = self.priority.get_valid_castables()
+        doables: List[Verbs.Verb] = activables + castables + [NullVerb()]
+        state_list: List[GameState] = []
+        for to_do in Choices.choose_exactly_one(doables, "choose action to do",
+                                                self.priority.decision_maker):
+            if isinstance(to_do, NullVerb):
+                # pass priority
+                state2 = self.copy()
+                state2.pass_priority()
+                if len(state2.stack) > 0:
+                    # if previous action on stack was done by player who NOW
+                    # has priority again, then all players have passed.
+                    # Resolve the top of the stack. Rule 117.4.
+                    if (state2.stack[-1].player_index
+                            == state2.priority_player_index):
+                        state_list += state2.resolve_top_of_stack()
+                    else:
+                        state_list += [state2]
+                else:
+                    # if stack is empty and all players have passed in a circle
+                    # back to the active player, end the phase
+                    # TODO: some sort of "next phase" function
+                    if (state2.priority_player_index
+                            == state2.active_player_index):
+                        state2.phase += 1
+                    state_list += [state2]
+            else:
+                # player chose an actual action to do. do it!
+                if to_do.copies:
+                    results = to_do.do_it(self)
+                else:
+                    new_state, [new_caster] = self.copy_and_track([to_do])
+                    results = new_caster.do_it(new_state)
+                final_results = []
+                for state3, _, _ in results:
+                    final_results += state3.clear_super_stack()
+                state_list += final_results
+        # return final results
+        return state_list
 
 
 # ---------------------------------------------------------------------------

@@ -65,25 +65,7 @@ class PlayTree:
         while len(self._active_states[turn]) > 0:
             # remove a random GameState from the active list and explore it
             state: GameState = self._active_states[turn].pop()
-            # options are: cast spell, activate ability, let stack resolve
-            activables = state.priority.get_valid_activations()
-            castables = state.priority.get_valid_castables()
-            doables: List[Verbs.UniversalCaster] = activables + castables
-            # if there are valid actions, make new nodes by taking them
-            new_nodes = []
-            for caster in doables:
-                if caster.copies:
-                    results = caster.do_it(state)
-                else:
-                    new_state, [new_caster] = state.copy([caster])
-                    results = new_caster.do_it(new_state)
-                for state2, _, _ in results:
-                    new_nodes += state2.clear_super_stack()
-            if len(state.stack) > 0:
-                # list of GameStates with the top effect on the stack resolved
-                new_nodes += state.resolve_top_of_stack()
-            # add these new nodes to the trackers
-            for new_state in new_nodes:
+            for new_state in state.do_priority_action():
                 self._add_state_to_trackers(new_state)
 
     def beginning_phase_for_all_valid_states(self, turn=-1):
