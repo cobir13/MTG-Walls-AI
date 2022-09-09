@@ -551,6 +551,10 @@ class Player:
         activatables: List[Verbs.PlayAbility] = []
         active_objects: List[Cardboard] = []  # I already checked these cards
         game = self.gamestate
+        # temporarily set decision_maker to be "try_all", to see if ANY method
+        # of casting this card will work.
+        decider = self.decision_maker
+        self.decision_maker = "try_all"
         for source in self.hand + self.field + self.grave:
             if (any([source.is_equiv_to(ob) for ob in active_objects])
                     and hide_equivalent):
@@ -564,6 +568,7 @@ class Player:
             # track object to not look at any similar again.
             if add_object and hide_equivalent:
                 active_objects.append(source)
+        self.decision_maker = decider  # reset decision_maker
         return activatables
 
     def get_valid_castables(self, hide_equivalent=True
@@ -577,15 +582,21 @@ class Player:
         castables: List[Verbs.PlayCardboard] = []
         active_objects: List[Cardboard] = []
         game = self.gamestate
+        # temporarily set decision_maker to be "try_all", to see if ANY method
+        # of casting this card will work.
+        decider = self.decision_maker
+        self.decision_maker = "try_all"
         for card in self.hand:
+            # skip cards equivalent to those already searched
             if (any([card.is_equiv_to(ob) for ob in active_objects])
                     and hide_equivalent):
-                continue  # skip cards equivalent to those already searched
-            # get a list of stack-objects for casting this card
+                continue
+            # check if this card can be cast.
             caster = card.valid_caster(game)
             if caster is not None:
                 active_objects.append(card)
                 castables.append(caster)
+        self.decision_maker = decider  # reset decision_maker
         return castables
 
     def add_to_hand(self, card: Cardboard):

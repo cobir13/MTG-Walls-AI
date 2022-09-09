@@ -770,6 +770,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_castables()) == 2
     tree = PlayTree([game], 2)
     tree.main_phase_for_all_active_states()
+    # shock enters tapped; shocked in, taps for 2 colors; non-shock is played
     assert len(tree.get_states_no_options()) == 4
     collector = set()
     for g in tree.get_states_no_options():

@@ -81,8 +81,7 @@ class PlayTree:
                     new_nodes += state2.clear_super_stack()
             if len(state.stack) > 0:
                 # list of GameStates with the top effect on the stack resolved
-                for state2 in state.resolve_top_of_stack():
-                    new_nodes += state2.clear_super_stack()
+                new_nodes += state.resolve_top_of_stack()
             # add these new nodes to the trackers
             for new_state in new_nodes:
                 self._add_state_to_trackers(new_state)

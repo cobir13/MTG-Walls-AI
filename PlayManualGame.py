@@ -212,6 +212,7 @@ class ManualGame(tk.Tk):
     def cast_it(self, caster_verb):
         universes = caster_verb.do_it(self.game)
         if len(universes) == 0:
+            print("failed to cast %s" % str(caster_verb)
             return  # casting failed, nothing changed so do nothing
         assert (len(universes) == 1)
         self.history.append(universes[0][0])
@@ -309,7 +310,7 @@ if __name__ == "__main__":
         game.give_to(Cardboard.Cardboard(Decklist.Mountain()), Zone.Hand, 1)
 
     # player0 is playing Walls
-    game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.Hand, 0)
+    game.give_to(Cardboard.Cardboard(Decklist.TempleGarden()), Zone.Hand, 0)
     game.give_to(Cardboard.Cardboard(Decklist.Caretaker()), Zone.Hand, 0)
     game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.Hand, 0)
     game.give_to(Cardboard.Cardboard(Decklist.Forest()), Zone.Hand, 0)

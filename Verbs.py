@@ -1346,21 +1346,21 @@ class UniversalCaster(AffectStack):
                                    for state3, verb, track3 in tupes]
                 else:
                     tuple_list += [(state2, self2, track2[1:])]
-        # 601.2i: ability has now "been activated".  Any abilities which
-        # trigger from some aspect of paying the costs have already
-        # been added to the superstack during ability.cost.pay. Now add
-        # any trigger that trigger off of this activation/casting itself.
+        # 601.2i: ability has now "been activated".
         results: List[RESULT] = []
-        for state4, self4, track4 in tuple_list:
-            new_tuple_list = Verb.do_it(self4, state4, track4, check_triggers)
+        for state4, self4, trk4 in tuple_list:
             # if necessary, the object will now instantly resolve. We are
             # guaranteed that the object is be the latest item on the stack, as
             # triggers go on SUPER-stack. obj was put on stack even though it
             # might be removed because then it can be automatically copied by
             # GameState and to make subclasses of UniversalCaster nicer.
-            for state5, self5, track5 in new_tuple_list:
-                self5: UniversalCaster
-                results += self5._remove_if_needed(state5, track5)
+            self4: UniversalCaster
+            for state5, self5, track5 in self4._remove_if_needed(state4, trk4):
+                #  Any abilities which trigger from some aspect of paying
+                #  costs have already been added to the superstack during
+                #  ability.cost.pay. Now add any trigger that trigger off
+                #  of this activation/casting itself.
+                results += Verb.do_it(self5, state5, track5, check_triggers)
         return results
 
     @staticmethod
@@ -1404,7 +1404,8 @@ class PlayManaAbility(PlayAbility):
             return [(game, self, to_track)]
         else:
             # perform the effect (resolve ability, perform spell, etc)
-            tuple_list = stack_obj.do_effect.do_it(game, [self] + to_track)
+            tuple_list = stack_obj.do_effect.do_it(game, [self] + to_track,
+                                                   check_triggers=False)
             # add this effect verb to self as a sub_verb that was executed, so
             # that its triggers are also automatically checked
             results = []
@@ -1442,21 +1443,22 @@ class AddTriggeredAbility(UniversalCaster):
                                            do_effect=do_effect)
             state2, things = state.copy_and_track([stack_obj, self] + to_track)
             state2.add_to_stack(things[0])  # copy of stack_obj
-            # 601.2i: ability has now "been activated".  Any abilities which
-            # trigger from some aspect of paying the costs have already
-            # been added to the superstack during ability.cost.pay. Now add
-            # any trigger that trigger off of this activation/casting itself.
             self2: AddTriggeredAbility = things[1]
-            new_tuple_list = Verb.do_it(self2, state2, things[2:],
-                                        check_triggers)
+            # 601.2i: ability has now "been activated".
             # if necessary, the object will now instantly resolve. We are
             # guaranteed that the object is be the latest item on the stack, as
             # triggers go on SUPER-stack. obj was put on stack even though it
             # might be removed because then it can be automatically copied by
             # GameState and to make subclasses of UniversalCaster nicer.
+            new_tuple_list = self2._remove_if_needed(state2, things[2:])
             for state3, self3, track3 in new_tuple_list:
+                #  Any abilities which trigger from some aspect of paying
+                #  costs have already been added to the superstack during
+                #  ability.cost.pay. Now add any trigger that trigger off
+                #  of this activation/casting itself.
                 self3: AddTriggeredAbility
-                final_results += self3._remove_if_needed(state3, track3)
+                final_results += Verb.do_it(self3, state3, track3,
+                                            check_triggers)
         return final_results
 
 
@@ -1472,9 +1474,10 @@ class AddAsEntersAbility(AddTriggeredAbility):
             return [(game, self, to_track)]
         else:
             # perform the effect (resolve ability, perform spell, etc)
-            tuple_list = stack_obj.do_effect.do_it(game, [self] + to_track)
+            tuple_list = stack_obj.do_effect.do_it(game, [self] + to_track,
+                                                   check_triggers=False)
             # add this effect verb to self as a sub_verb that was executed, so
-            # that it's triggers are also automatically checked
+            # that its triggers are also automatically checked
             results = []
             for state2, effect2, things2 in tuple_list:
                 self2: UniversalCaster = things2[0].replace_verb(0, effect2)
@@ -1522,7 +1525,7 @@ class PlayLand(PlayCardboard):
         [mover] = mover.populate_options(game, self.player, self.source,
                                          self.cause)
         mover = mover.replace_subject(stack_obj.obj)
-        mover.do_it(game)  # mutates, so no need to track or anything
+        mover.do_it(game, check_triggers=False)  # mutates, so no need to track
         # add this effect verb to self as a sub_verb that was executed, so
         # that its triggers are also automatically checked
         self2: PlayLand = self.replace_verb(0, mover)
