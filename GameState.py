@@ -12,6 +12,7 @@ import Verbs
 if TYPE_CHECKING:
     from Abilities import TriggeredAbility, TimedAbility
 from Cardboard import Cardboard, CardNull  # actually needs
+import RulesText
 import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
@@ -80,7 +81,7 @@ class GameState:
 
     def __str__(self):
         txt = "\n".join([str(p) for p in self.player_list])
-        txt += "\nPhase %i" % self.phase
+        txt += "\nPhase %i (%s)" % (self.phase, GameState.PHASES[self.phase])
         if len(self.stack) > 0:
             txt += "\nSTACK:  " + ",".join([str(s) for s in self.stack])
         if len(self.super_stack) > 0:
@@ -90,8 +91,8 @@ class GameState:
     def get_id(self):
         players = [p.get_id() for p in self.player_list]
         phase = "\nPhase %i" % self.phase
-        stack = ",".join([c.get_id() for c in self.stack])
-        super_stack = ",".join([c.get_id() for c in self.super_stack])
+        stack = "[%s]" % ",".join([c.get_id() for c in self.stack])
+        super_stack = "[%s]" % ",".join([c.get_id() for c in self.super_stack])
         return "\n".join(players + [phase, stack, super_stack])
 
     @property
@@ -190,11 +191,12 @@ class GameState:
     def has_options(self) -> bool:
         """Either has items on the stack to resolve, or has
         activated abilities that can be activated (including
-        mana abilities), or has cards that can be cast."""
+        mana abilities), or has cards that can be cast, or
+        has something else to do in this phase."""
         opts = sum(
             [len(p.get_valid_activations()) + len(p.get_valid_castables())
-             for p in self.player_list])
-        return opts + len(self.stack) > 0
+             for p in self.player_list if p.want_to_act])
+        return (opts + len(self.stack)) > 0
 
     def add_to_stack(self, obj: StackObject):
         if hasattr(obj.obj, "zone"):
@@ -207,13 +209,6 @@ class GameState:
         for ii in range(index, len(self.stack) - 1):
             self.stack[ii].zone.location = ii
         return obj
-
-
-    def get_all_public_cards(self):
-        faceup = []
-        for player in self.player_list:
-            faceup += player.field + player.grave
-        return faceup
 
     def give_to(self, card,
                 destination: Type[Zone.DeckTop | Zone.DeckBottom | Zone.Hand
@@ -237,25 +232,6 @@ class GameState:
 
     # -------------------------------------------------------------------------
 
-    def state_based_actions(self):
-        """MUTATES. Performs any state-based actions like killing creatures if
-        toughness is less than 0.
-        Adds any triggered StackAbilities to the super_stack.
-        """
-        for player in self.player_list:
-            i = 0
-            while i < len(player.field):
-                card = player.field[i]
-                toughness = Get.Toughness().get(self, player.player_index,
-                                                card)
-                if toughness is not None and toughness <= 0:
-                    MoveToZone.move(self, card, Zone.Grave(card.player_index),
-                                    check_triggers=True)
-                    continue  # don't increment counter
-                i += 1
-            # legend rule   # TODO
-            # Sacrifice().do_it(self, player.player_index, card)
-
     def pass_turn(self):
         self.phase = 0
         self.active_player_index = ((self.active_player_index + 1)
@@ -264,23 +240,6 @@ class GameState:
         self.active.turn_count += 1
         self.stack = []
         self.super_stack = []
-
-    def pass_priority(self):
-        self.priority_player_index = ((self.priority_player_index + 1)
-                                      % len(self.player_list))
-
-    def step_untap(self):
-        """MUTATES. Adds any triggered StackAbilities to the
-        super_stack. This function is where things reset for
-        the turn."""
-        self.priority_player_index = self.active_player_index
-        was_tracking = self.is_tracking_history
-        if self.is_tracking_history:
-            turn = self.active.turn_count
-            ii = self.active_player_index
-            text = "\nUntap step: Player%i Turn%i" % (turn, ii)
-            self.events_since_previous += text
-        self.phase = GameState.PHASES.index("untap")
         # resets that happen for all players
         for player in self.player_list:
             player.pool = ManaPool("")
@@ -289,6 +248,127 @@ class GameState:
             for card in player.field:
                 # erase the invisible counters
                 card.counters = [c for c in card.counters if c[0] not in "@$"]
+        return self
+
+    def pass_phase(self) -> List[GameState]:
+        """
+        Increment the phase to the next phase where anyone actually
+        wants to do anything. If everyone is done, pass the turn.
+        MUTATES SELF. also returns list of new gamestate(s).
+        """
+        self.phase += 1
+        # resets stack, mana pools
+        self.stack = []
+        self.super_stack = []
+        for player in self.player_list:
+            player.pool = ManaPool("")
+        # active player has priority
+        self.priority_player_index = self.active_player_index
+        # pass turn if we've passed the end of the turn.
+        if self.phase == len(self.PHASES):
+            return [self.pass_turn()]
+        else:
+            return [self]
+
+
+    def pass_priority(self) -> List[GameState]:
+        """
+        The current player with priority has passed priority. Give
+        priority to the next player who wants it or pass until all
+        players have passed. If everyone has passed, resolve top
+        of the stack or move to the next phase.
+        MUTATES SELF. also returns list of new gamestate(s).
+        """
+        index = self.priority_player_index + 1
+        self.priority_player_index = index % len(self.player_list)
+        # if there is a stack, increment the priority counter until either we
+        # find a player who wants to respond OR we reach the controller of the
+        # top of the stack (in which case we've passed all around the circle).
+        if len(self.stack) > 0:
+            stack_controller = self.stack[-1].player_index
+            # increment until find controller, or player who wants to respond.
+            while (self.priority_player_index != stack_controller
+                   and not self.priority.want_to_respond):
+                index = self.priority_player_index + 1
+                self.priority_player_index = index % len(self.player_list)
+            if self.priority_player_index == stack_controller:
+                # found controller. everyone passed, so resolve stack.
+                return self.resolve_top_of_stack()
+            else:
+                # a player who wants to respond now has priority. return.
+                return [self]
+        else:
+            # stack is empty. increment the priority counter until either all
+            # players have passed in a circle back to the active player, or
+            # until we find a player who wants to take an action
+            while (self.priority_player_index != self.active_player_index
+                   and not self.priority.want_to_act):
+                index = self.priority_player_index + 1
+                self.priority_player_index = index % len(self.player_list)
+            if self.priority_player_index == self.active_player_index:
+                # found active player. everyone passed, so go to next phase
+                return self.pass_phase()
+            else:
+                # a player who wants to do an action now has priority. return.
+                return [self]
+
+    def do_priority_action(self) -> List[GameState]:
+        """
+        The player with priority chooses a single valid action
+        to do and does it. This action can be: cast a spell,
+        activate an ability, or pass priority. A list of new
+        GameStates is returned, one for each chosen action,
+        where that action has been performed. The original
+        GameState is not mutated.
+        Note that pass_priority may change the phase, if no
+        player wants priority within this phase.
+        """
+        # sometimes the player has already stated that they don't want to act
+        # at this point in time. If so, just pass priority immediately
+        if len(self.stack) > 0 and not self.priority.want_to_respond:
+            return self.copy().pass_priority()
+        if len(self.stack) == 0 and not self.priority.want_to_act:
+            return self.copy().pass_priority()
+        # options are: cast spell; activate ability; pass priority
+        activables = self.priority.get_valid_activations()
+        castables = self.priority.get_valid_castables()
+        doables: List[Verbs.Verb] = activables + castables + [NullVerb()]
+        state_list: List[GameState] = []
+        for to_do in Choices.choose_exactly_one(doables, "choose action to do",
+                                                self.priority.decision_maker):
+            if isinstance(to_do, NullVerb):
+                # pass priority
+                state_list += self.copy().pass_priority()
+            else:
+                # player chose an actual action to do. do it!
+                if to_do.copies:
+                    results = to_do.do_it(self)
+                else:
+                    new_state, [new_caster] = self.copy_and_track([to_do])
+                    results = new_caster.do_it(new_state)
+                final_results = []
+                for state3, _, _ in results:
+                    final_results += state3.clear_super_stack()
+                state_list += final_results
+        # return final results
+        return state_list
+
+    # -------------------------------------------------------------------------
+
+    def step_untap(self):
+        """
+        Untaps all permaments and adds any triggers to
+        the super_stack. The phase becomes "upkeep".
+        MUTATES.
+        """
+        assert self.phase == GameState.PHASES.index("untap")
+        self.priority_player_index = self.active_player_index
+        was_tracking = self.is_tracking_history
+        if self.is_tracking_history:
+            turn = self.active.turn_count
+            ii = self.active_player_index
+            text = "\nUntap step: Player%i Turn%i" % (turn, ii)
+            self.events_since_previous += text
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
         for card in self.active.field:
@@ -297,9 +377,15 @@ class GameState:
             untapper.do_it(self, check_triggers=True)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
+        self.phase = GameState.PHASES.index("upkeep")  # set to next phase
 
     def step_upkeep(self):
-        """MUTATES. Adds any triggered StackAbilities to the super_stack."""
+        """
+        Puts any upkeep triggers on the super_stack. The phase
+        remains "upkeep".
+        MUTATES.
+        """
+        assert self.phase == GameState.PHASES.index("upkeep")
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
@@ -309,8 +395,11 @@ class GameState:
             ability.add_any_to_super(state=self, source_of_ability=card)
 
     def step_draw(self):
-        """MUTATES. Adds any triggered StackAbilities to the super_stack.
-           Draws from player_index 0 of deck."""
+        """
+        Draws a card for turn and puts any triggers on the
+        super_stack. The phase remains "draw". MUTATES.
+        """
+        assert self.phase == GameState.PHASES.index("draw")
         self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
@@ -322,6 +411,83 @@ class GameState:
                                                CardNull(), None)
         drawer.do_it(self)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
+
+    def step_attack(self):
+        """Handles all of combat. Phase becomes main2. MUTATES."""
+        assert self.phase == GameState.PHASES.index("combat")
+        self.priority_player_index = self.active_player_index
+        if self.is_tracking_history:
+            self.events_since_previous += "\nGo to combat"
+        # get a list of all possible attackers
+        player = self.active_player_index
+        field = Zone.Field(player).get(self)
+        # for card in field:
+        #     RulesText.DeclareAttacker().on()
+        print("Combat not yet implemented. instead, skip.")
+        self.phase = GameState.PHASES.index("main2")
+
+    def step_endstep(self):
+        """
+        Puts any endstep triggers on the super_stack. The phase
+        remains "endstep".
+        MUTATES.
+        """
+        assert self.phase == GameState.PHASES.index("endstep")
+        self.priority_player_index = self.active_player_index
+        if self.is_tracking_history:
+            self.events_since_previous += "\nEnd step"
+        self.phase = GameState.PHASES.index("endstep")
+        for card, ability in self.trig_endstep:
+            # adds triggering abilities to self.super_stack, if meet condition
+            ability.add_any_to_super(state=self, source_of_ability=card)
+
+    def step_cleanup(self):
+        """
+        Does cleanup. Puts any triggers caused by doing this
+        onto the superstack. The phase remains cleanup.
+        MUTATES.
+        """
+        assert self.phase == GameState.PHASES.index("endstep")
+        self.priority_player_index = self.active_player_index
+        if self.is_tracking_history:
+            self.events_since_previous += "\nEnd step"
+        self.phase = GameState.PHASES.index("endstep")
+        # discard down to 7 cards
+        if len(self.hand) > 7:
+            discard_list = Choices.choose_exactly_n(self.hand,
+                                                    len(self.hand) - 7,
+                                                    "discard to hand size")
+            if self.is_tracking_history:
+                print("discard:", [str(c) for c in discard_list])
+            for card in discard_list:
+                MoveToZone(ZONE.GRAVE).do_it(self, self.active_player_index,
+                                             card,)
+
+    # def step_cleanup(self):
+    #     if self.is_tracking_history:
+    #         self.events_since_previous += "\nCleanup"
+    #     # discard down to 7 cards
+    #     if len(self.hand) > 7:
+    #         discard_list = Choices.choose_exactly_n(self.hand,
+    #                                                 len(self.hand) - 7,
+    #                                                 "discard to hand size")
+    #         if self.is_tracking_history:
+    #             print("discard:", [str(c) for c in discard_list])
+    #         for card in discard_list:
+    #             MoveToZone(ZONE.GRAVE).do_it(self, self.active_player_index,
+    #                                          card,)
+    #     # clear any floating mana
+    #     if self.is_tracking_history and self.pool.cmc() > 0:
+    #         print("end with %s" % (str(self.pool)))
+    #     for color in self.pool.data.keys():
+    #         self.pool.data[color] = 0
+    #     # pass the turn
+    #     if not self.is_my_turn:
+    #         self.turn_count += 1
+    #         self.has_played_land = False
+    #     self.is_my_turn = not self.is_my_turn
+
+    # -------------------------------------------------------------------------
 
     def resolve_top_of_stack(self) -> List[GameState]:
         """
@@ -416,90 +582,24 @@ class GameState:
             final_results += state.clear_super_stack()
         return final_results
 
-    # def step_cleanup(self):
-    #     if self.is_tracking_history:
-    #         self.events_since_previous += "\nCleanup"
-    #     # discard down to 7 cards
-    #     if len(self.hand) > 7:
-    #         discard_list = Choices.choose_exactly_n(self.hand,
-    #                                                 len(self.hand) - 7,
-    #                                                 "discard to hand size")
-    #         if self.is_tracking_history:
-    #             print("discard:", [str(c) for c in discard_list])
-    #         for card in discard_list:
-    #             MoveToZone(ZONE.GRAVE).do_it(self, self.active_player_index,
-    #                                          card,)
-    #     # clear any floating mana
-    #     if self.is_tracking_history and self.pool.cmc() > 0:
-    #         print("end with %s" % (str(self.pool)))
-    #     for color in self.pool.data.keys():
-    #         self.pool.data[color] = 0
-    #     # pass the turn
-    #     if not self.is_my_turn:
-    #         self.turn_count += 1
-    #         self.has_played_land = False
-    #     self.is_my_turn = not self.is_my_turn
-
-    def step_attack(self):
-        self.priority_player_index = self.active_player_index
-        if self.is_tracking_history:
-            self.events_since_previous += "\nGo to combat"
-        self.phase = GameState.PHASES.index("combat")
-        print("not yet implemented")
-        return
-
-
-    def do_priority_action(self) -> List[GameState]:
+    def state_based_actions(self):
+        """MUTATES. Performs any state-based actions like killing creatures if
+        toughness is less than 0.
+        Adds any triggered StackAbilities to the super_stack.
         """
-        The player with priority chooses a single valid action
-        to do and does it. This action can be: cast a spell,
-        activate an ability, or pass priority. A list of new
-        GameStates is returned, one for each chosen action,
-        where that action has been performed. The original
-        GameState is not mutated.
-        """
-        # options are: cast spell, activate ability, let stack resolve
-        activables = self.priority.get_valid_activations()
-        castables = self.priority.get_valid_castables()
-        doables: List[Verbs.Verb] = activables + castables + [NullVerb()]
-        state_list: List[GameState] = []
-        for to_do in Choices.choose_exactly_one(doables, "choose action to do",
-                                                self.priority.decision_maker):
-            if isinstance(to_do, NullVerb):
-                # pass priority
-                state2 = self.copy()
-                state2.pass_priority()
-                if len(state2.stack) > 0:
-                    # if previous action on stack was done by player who NOW
-                    # has priority again, then all players have passed.
-                    # Resolve the top of the stack. Rule 117.4.
-                    if (state2.stack[-1].player_index
-                            == state2.priority_player_index):
-                        state_list += state2.resolve_top_of_stack()
-                    else:
-                        state_list += [state2]
-                else:
-                    # if stack is empty and all players have passed in a circle
-                    # back to the active player, end the phase
-                    # TODO: some sort of "next phase" function
-                    if (state2.priority_player_index
-                            == state2.active_player_index):
-                        state2.phase += 1
-                    state_list += [state2]
-            else:
-                # player chose an actual action to do. do it!
-                if to_do.copies:
-                    results = to_do.do_it(self)
-                else:
-                    new_state, [new_caster] = self.copy_and_track([to_do])
-                    results = new_caster.do_it(new_state)
-                final_results = []
-                for state3, _, _ in results:
-                    final_results += state3.clear_super_stack()
-                state_list += final_results
-        # return final results
-        return state_list
-
+        for player in self.player_list:
+            i = 0
+            while i < len(player.field):
+                card = player.field[i]
+                toughness = Get.Toughness().get(self, player.player_index,
+                                                card)
+                if toughness is not None and toughness <= 0:
+                    MoveToZone.move(self, card, Zone.Grave(card.player_index),
+                                    check_triggers=True)
+                    continue  # don't increment counter
+                i += 1
+            # legend rule   # TODO
+            # Sacrifice().do_it(self, player.player_index, card)
 
 # ---------------------------------------------------------------------------
 
@@ -523,8 +623,21 @@ class Player:
         self.hand: List[Cardboard] = []  # list of Cardboard objects
         self.field: List[Cardboard] = []  # list of Cardboard objects
         self.grave: List[Cardboard] = []  # list of Cardboard objects
+        # The following fields are NOT included in get_id
         # how the player makes decisions. ["try_all", "try_one", or "manual"]
         self.decision_maker: str = decision_maker
+        # untap, upkeep, draw, main1, combat, main2, endstep, cleanup.
+        # Want option to act (rather than pass) during my/opponents phase:
+        self.act_in_my_phase = [
+            False, False, False, True, False, False, False, False]
+        self.act_in_opp_phase = [
+            False, False, False, False, False, False, False, False]
+        # Respond to anything going on the stack during my/opponents phase:
+        self.respond_in_my_phase = [
+            True, True, True, False, False, False, False, False]
+        self.respond_in_opp_phase = [
+            False, False, False, False, False, False, False, False]
+
 
     @property
     def is_my_turn(self):
@@ -537,6 +650,27 @@ class Player:
     @property
     def land_drops_left(self):
         return 1 - self.num_lands_played
+
+    @property
+    def want_to_respond(self) -> bool:
+        """Return whether this player wants to respond to things
+        being put onto the stack during this phase and turn, or
+        whether this player just wants to auto-pass."""
+        assert self.is_my_priority
+        if self.is_my_turn:
+            return self.respond_in_my_phase[self.gamestate.phase]
+        else:
+            return self.respond_in_opp_phase[self.gamestate.phase]
+
+    @property
+    def want_to_act(self) -> bool:
+        """Return whether this player wants to put things onto
+        the stack during this phase and turn, or whether this
+        player just wants to auto-pass."""
+        if self.is_my_turn:
+            return self.act_in_my_phase[self.gamestate.phase]
+        else:
+            return self.act_in_opp_phase[self.gamestate.phase]
 
     def __str__(self):
         txt = "Player%i" % self.player_index

@@ -5,12 +5,9 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import TYPE_CHECKING, List, Set
+from typing import List, Set
 
-import Verbs
-
-if TYPE_CHECKING:
-    import GameState
+from GameState import GameState
 
 
 class PlayTree:
@@ -20,94 +17,251 @@ class PlayTree:
     """
 
     def __init__(self, start_states: List[GameState], turn_limit: int):
-        # Internal structure: indexed lists of sets. Each set represents
-        # GameStates from the same turn of the game (so identical turnclocks).
-        # There are four lists:
-        #       intermediate_states: every state reached during the turn
-        #       _active_states: states which have _options (moves to explore)
-        #       game_over_states: states where the game has ended in a loss
-        #       _out_of_option_states: states where the game has ended in a win
-        # The i-th index within the list gives the set of states for the i-th
-        # total turn of the game (sum of turns that any player has taken).
-        # NOTE: for all of these sets of GameStates, the super_stack is
-        # guaranteed to be empty. But the normal stack may have things!
+        # The structures to hold historical GameStates are:
+        #       _intermediate_states:
+        #           set of all intermediate states that have ever been
+        #           reached. Set uses ID to make hash, and ID incorporates
+        #           turn and phase, so two identical board situations from
+        #           different phases will register as separate. This is used
+        #           to confirm whether a GameState has been seen already or
+        #           not. If we've already visisted a GameState, then we're
+        #           already tracking it SOMEWHERE and don't need to do any
+        #           further work with it.
+        #           Thus, the other lists can be lists rather than sets, to
+        #           save on computation time and memory.
+        #       _active_states:
+        #           list (turn of game) of list (phase of game) of list of
+        #           states which still need to be processed for that phase.
+        #           By "processed" I mean that the state is at the beginning
+        #           of the given phase and the phase still needs to be
+        #           performed on it. Note that PlayTree does not clear these
+        #           states, but rather leaves them as a history marker.
+        #           Indexed as _active_states[turn][phase][index].
+        #       _out_of_option_states:
+        #           list (turn of game) of list of states where the game has
+        #           no more valid option this turn. Indexed as
+        #           _out_of_option_states[turn][index].
+        #       _game_over_states:
+        #           list (turn of game) of list of states where the game has
+        #           ended. Indexed as _game_over_states[turn][index].
+        # NOTE: for all of these lists of GameStates, the super_stack is
+        # guaranteed to be empty. But the normal stack may have things.
         self.turn_limit = turn_limit  # max number of turns this will test
-        self.traverse_counter: int = 0  # num states every visited. for debug.
-        self._intermediate_states: List[Set[GameState]] = []
-        self._active_states: List[Set[GameState]] = []
-        self._out_of_option_states: List[Set[GameState]] = []
-        self._game_over_states: List[Set[GameState]] = []
+        self.traverse_counter: int = 0  # num states ever visited. for debug.
+        self._intermediate_states: Set[GameState] = set()
+        self._active_states: List[List[List[GameState]]] = []
+        # self._out_of_option_states: List[List[GameState]] = []
+        self._game_over_states: List[List[GameState]] = []
+        # prep the start states. if turn 0, advance to turn 1 as untap
         for state in start_states:
+            if state.total_turns == 0:
+                state = state.copy()
+                state.active_player_index -= 1  # so pass_turn won't change it.
+                state.pass_turn()
             self._add_state_to_trackers(state)
 
     def _add_state_to_trackers(self, state: GameState):
-        # only add if NEW state. If we've seen it this turn, don't track.
+        # only add if NEW state. If already in intermediate, don't track.
         if (len(self._intermediate_states) <= state.total_turns
-                or state not in self._intermediate_states[state.total_turns]):
+                or state not in self._intermediate_states):
             # make sure trackers have enough slots. all are same length.
-            while len(self._intermediate_states) <= state.total_turns:
-                self._intermediate_states.append(set())
-                self._active_states.append(set())
-                self._out_of_option_states.append(set())
-                self._game_over_states.append(set())
+            while len(self._active_states) <= state.total_turns:
+                # for _active_states, need one sub-list per phase
+                self._active_states.append([[] for _ in GameState.PHASES])
+                # self._out_of_option_states.append([])
+                self._game_over_states.append([])
             if state.game_over:
-                self._game_over_states[state.total_turns].add(state)
-            elif state.has_options:
-                self._active_states[state.total_turns].add(state)
+                self._game_over_states[state.total_turns].append(state)
             else:
-                self._out_of_option_states[state.total_turns].add(state)
+                turn = state.total_turns
+                self._active_states[turn][state.phase].append(state)
             # always add to intermediate, which tracks ALL states
-            self._intermediate_states[state.total_turns].add(state)
+            self._intermediate_states.add(state)
         self.traverse_counter += 1  # counter doesn't care if repeats
 
-    def main_phase_for_all_active_states(self, turn=-1):
-        """DOES NOT MUTATE"""
-        while len(self._active_states[turn]) > 0:
-            # remove a random GameState from the active list and explore it
-            state: GameState = self._active_states[turn].pop()
-            for new_state in state.do_priority_action():
-                self._add_state_to_trackers(new_state)
+    def _whittle_and_respond(self, in_progress: Set[GameState], phase: int):
+        """
+        Pops GameStates off of the `in_progress` set (mutating
+        it). Let the players respond to Triggers or just pass,
+        as they choose. Puts the new states into the trackers,
+        or back into the set if there is still actions to take.
+        Continues until `in_progress` is whittled to nothing.
+        """
+        while len(in_progress) > 0:
+            # remove a GameState from the in-progress list and explore it
+            state4: GameState = in_progress.pop()
+            if state4.phase != phase or state4.game_over:
+                # new phase and/or game is over, so done processing this state
+                self._add_state_to_trackers(state4)
+            else:
+                self.traverse_counter += 1
+                # give priority player a chance to act, then process again
+                in_progress.update(state4.do_priority_action())
 
-    def beginning_phase_for_all_valid_states(self, turn=-1):
-        """Pass turn, untap, upkeep, draw to all intermediate states
-        which are legal stopping points -- have empty stacks.
-        This will result in new states being added to the active
-        states list for the next turn, since untap step
-        increments the turn counter.
-        DOES NOT MUTATE EXISTING STATES"""
-        new_nodes = []
-        for state in self.get_states_no_stack(turn):
+    def phase_untap(self):
+        """process the states in the uptap phase of active states
+        and moves them to the upkeep phase."""
+        phase = GameState.PHASES.index("untap")
+        for state in self._active_states[-1][phase]:
             state2 = state.copy()
-            state2.pass_turn()
-            state2.step_untap()
-            state2.step_upkeep()
-            state2.step_draw()
-            new_nodes += state2.clear_super_stack()
-        # The states in new_node may have things on the stack! That's ok.
-        # They are the new active_states.
-        for new_state in new_nodes:
-            self._add_state_to_trackers(new_state)
+            state2.step_untap()  # phase becomes upkeep
+            for new_state in state2.clear_super_stack():
+                self._add_state_to_trackers(new_state)  # adds to upkeep phase
 
-    def get_states_no_stack(self, turn: int = -1) -> List[GameState]:
-        return [gs for gs in self.get_intermediate(turn) if len(gs.stack) == 0]
+    def phase_upkeep(self):
+        """process the states in the uptap phase of active states
+        and moves them to the next phase."""
+        phase = GameState.PHASES.index("upkeep")
+        in_progress: Set[GameState] = set()
+        # add upkeep triggers to stack
+        for state in self._active_states[-1][phase]:
+            state2 = state.copy()
+            state2.step_upkeep()  # phase remains upkeep
+            in_progress.update(state2.clear_super_stack())
+        # let the players respond to triggers or just pass, as they choose.
+        self._whittle_and_respond(in_progress, phase)
 
-    def get_states_no_options(self, turn: int = -1) -> List[GameState]:
-        return list(self._out_of_option_states[turn])
+    def phase_draw(self):
+        """process the states in the draw phase of active states
+        and moves them to the next phase."""
+        phase = GameState.PHASES.index("draw")
+        in_progress: Set[GameState] = set()
+        # draw a card and add any triggers to the stack
+        for state in self._active_states[-1][phase]:
+            state2 = state.copy()
+            state2.step_draw()  # phase remains draw step
+            in_progress.update(state2.clear_super_stack())
+        # let the players respond to triggers or just pass, as they choose.
+        self._whittle_and_respond(in_progress, phase)
 
-    def get_intermediate(self, turn: int = -1) -> List[GameState]:
-        """Returns the set of intermediate states for the
-        specified turn. If turn is -1, gets the states from
-        the latest turn instead."""
-        return list(self._intermediate_states[turn])
+    def phase_main(self):
+        """process the states in the main1 or main2 phase of
+        active states and moves them to the next phase."""
+        phase = GameState.PHASES.index("main1")
+        in_progress: Set[GameState] = set(self._active_states[-1][phase])
+        # let the players respond to triggers or just pass, as they choose.
+        self._whittle_and_respond(in_progress, phase)
 
-    def get_active(self, turn: int = -1) -> List[GameState]:
-        """Returns the set of active states for the
-        specified turn. If turn is -1, gets the states from
-        the latest turn instead."""
-        return list(self._active_states[turn])
+    def phase_combat(self):
+        # Right now, there's no priority during combat. Players just declare
+        # attacks and blocks and then damage happens.
+        phase = GameState.PHASES.index("combat")
+        for state in self._active_states[-1][phase]:
+            state2 = state.copy()
+            state2.step_attack()  # phase becomes main2
+            for new_state in state2.clear_super_stack():
+                self._add_state_to_trackers(new_state)  # add to main2 phase
+
+    def phase_endstep(self):
+        """process the states in the endstep phase of active states
+        and moves them to the cleanup phase."""
+        phase = GameState.PHASES.index("endstep")
+        in_progress: Set[GameState] = set()
+        # add end-step triggers to stack
+        for state in self._active_states[-1][phase]:
+            state2 = state.copy()
+            state2.step_endstep()  # phase remains end step
+            in_progress.update(state2.clear_super_stack())
+        # let the players respond to triggers or just pass, as they choose.
+        self._whittle_and_respond(in_progress, phase)
+
+    def phase_cleanup(self, ):
+        """process the states in the endstep phase of active states
+        and moves them to the cleanup phase."""
+        phase = GameState.PHASES.index("cleanup")
+        in_progress: Set[GameState] = set()
+        # add cleanup triggers to stack
+        for state in self._active_states[-1][phase]:
+            state2 = state.copy()
+            state2.step_cleanup()  # phase remains cleanup
+            in_progress.update(state2.clear_super_stack())
+        # If there is something on the stack, let the players respond to
+        # triggers or just pass, as they choose. If there is nothing on the
+        # stack, they don't get the option. Pass automatically.
+        while len(in_progress) > 0:
+            # remove a GameState from the in-progress list and explore it
+            state4: GameState = in_progress.pop()
+            if state4.phase != phase or state4.game_over:
+                # new phase and/or game is over, so done processing this state
+                self._add_state_to_trackers(state4)
+            elif len(state4.stack) == 0:
+                # if nothing on stack, players don't get a chance to act here.
+                state4.pass_turn()
+                self._add_state_to_trackers(state4)
+            else:
+                self.traverse_counter += 1
+                # give priority player a chance to act, then process again
+                in_progress.update(state4.do_priority_action())
+
+
+    def main_phase_then_end(self):
+        """Does main phase 1 and then skips directly to do cleanup phase.
+        DOES NOT MUTATE EXISTING STATES"""
+        self.phase_main()
+        # main1 dumps results into combat phase. move to endstep phase instead.
+        for state in self._active_states[-1][GameState.PHASES.index("combat")]:
+            state2 = state.copy()
+            state2.phase = GameState.PHASES.index("cleanup")
+            self._add_state_to_trackers(state2)
+        # run endstep phase
+        self.phase_endstep()
+
+    def beginning_phases(self):
+        """Untap, upkeep, draw, and move to main phase.
+        DOES NOT MUTATE EXISTING STATES"""
+        self.phase_untap()
+        self.phase_upkeep()
+        self.phase_draw()
+
+    def get_intermediate(self):
+        return list(self._intermediate_states)
+
+    def get_latest_active(self, turn: int | None = None,
+                          phase: str | int | None = None
+                          ) -> List[GameState]:
+        """Returns the set of active states for the specified
+        turn and phase. If turn is None, gets the states from the
+        latest turn instead. If phase is None, gets the states
+        from the latest phase with active (not-yet-processed) states.
+        """
+        if turn is None:
+            turn = -1
+        turn_list: List[List[GameState]] = self._active_states[turn]
+        if phase is None:
+            phase_lists = [sub for sub in turn_list if len(sub) > 0]
+            if len(phase_lists) == 0:
+                return []
+            else:
+                return phase_lists[-1]
+        elif isinstance(phase, str):
+            phase: int = GameState.PHASES.index(phase)
+            return turn_list[phase]
+        else:
+            return turn_list[phase]
+
+    def get_num_active(self, turn: int):
+        turn_list: List[List[GameState]] = self._active_states[turn]
+        return [len(sub) for sub in turn_list]
+
 
     def get_finished(self, turn: int = -1) -> List[GameState]:
         """Returns the set of active states for the
         specified turn. If turn is -1, gets the states from
         the latest turn instead."""
         return list(self._game_over_states[turn])
+
+    def nice_display_of_active(self, turn: int,
+                               phase: str | int | None = None):
+        if phase is None:
+            list_of_lists = self._active_states[turn]
+        elif isinstance(phase, str):
+            phase = GameState.PHASES.index(phase)
+            list_of_lists = [self._active_states[turn][phase]]
+        else:
+            list_of_lists = [self._active_states[turn][phase]]
+        # now print
+        for pp, sublist in enumerate(list_of_lists):
+            print("---------- %s ----------" % GameState.PHASES[pp])
+            s = "\n***************\n".join([str(g) for g in sublist])
+            if len(s) > 0:
+                print(s)

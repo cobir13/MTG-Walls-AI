@@ -53,6 +53,8 @@ Notes comparing this program to the real Magic:The Gathering rules:
         target of something on the stack, the game will treat them as fully
         identical. It cannot distinguish cards based on pointers from the
         stack.
+    - Players do not get priority during combat unless something triggers
+        during combat. All combat tricks must be done pre-combat.
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack
@@ -68,9 +70,17 @@ Notes for future improvements or speedups:
         The new thing will have a pointer back to the original so that it can
         revert at end of turn, and an end-of-turn trigger to revert it. Make
         sure reversion is recursive in case something is animated twice!
+        Also make sure the card reverts if it moves zones.
+        Maybe store the revert info within the verb, not within the RulesText?
     - Add delayed triggers, hook them into the timed trigger lists
     - Add field to abilities to say what zones they are active from?
     - I am copying abilities and verbs when I might not need to? I should
         go through carefully later, for speedup, if I want.
     - Make Defer a decorator or abstract class to inherit from?
+    - Speedup by getting rid of GameState.has_options?
+    - Only need one intermediate set in PlayTree, not one per phase?
+    - Might be bug in cleanup where you can cast instants even with an empty
+        stack, as long as something already triggered during endstep.
+    - PlayTree does a lot of copying. At least once per phase. Can maybe
+        do better than that by grouping some of the beginning phases?
 

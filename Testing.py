@@ -656,76 +656,79 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
     # build a PlayTree for a game with no deck
-    tree1 = PlayTree([carygame1], 5)
+    tree1 = PlayTree([carygame1], 5)  # carygame on turn2, phase 1.
     assert carygame1.active.turn_count == 2
     for t in range(2):
-        assert len(tree1.get_active(t)) == 0
-        assert len(tree1.get_intermediate(t)) == 0
-    assert len(tree1.get_active(2)) == 1
-    assert len(tree1.get_active()) == 1
-    assert len(tree1.get_intermediate(2)) == 1
+        assert len(tree1.get_latest_active(t)) == 0
+        assert len(tree1.get_finished(t)) == 0
+    assert len(tree1.get_latest_active(2)) == 1
+    assert tree1.get_num_active(2) == [0, 1, 0, 0, 0, 0, 0, 0]
+    assert len(tree1.get_latest_active()) == 1
     assert len(tree1.get_intermediate()) == 1
     assert len(tree1.get_finished()) == 0
+
     # try untap and upkeep. expect game_over because draw from empty deck
-    tree1.beginning_phase_for_all_valid_states()
-    assert len(tree1.get_active()) == 0
-    assert len(tree1.get_intermediate()) == 1  # new turn so only 1 this turn.
+    tree1.beginning_phases()
+    assert tree1.get_num_active(2) == [0, 1, 1, 0, 0, 0, 0, 0]
     assert len(tree1.get_finished()) == 1
+    assert len(tree1.get_intermediate()) == 3  # 2 active, 1 finished.
     assert tree1.get_finished()[0].game_over
     assert tree1.get_finished()[0].active.victory_status == "L"
 
     tree_game = carygame1.copy()
-    tree_game.active.turn_count = 1  # to simplify, roll back to earlier turn
-    # HAND: Roots, Roots, Roots
-    # FIELD: Caryatid, Roots
-    # Life: 20 vs 20, Deck: 0, Mana: ()
+    tree_game.active.turn_count = 1  # roll back to earlier turn
+    tree_game.phase = 0  # reset to untap phase
     tree_game.is_tracking_history = True
     for x in range(5):
         tree_game.give_to(Cardboard(Decklist.Caryatid()), Zone.DeckTop)
+    # HAND: Roots, Roots, Roots
+    # FIELD: Caryatid, Roots
+    # Life: 20 vs 20. Deck: 5x caryatids. Mana: (). Turn 1, untap phase.
     tree2 = PlayTree([tree_game], 5)
-    assert len(tree2.get_active()) == 1
+    assert tree2.get_num_active(1) == [1, 0, 0, 0, 0, 0, 0, 0]
     assert len(tree2.get_intermediate()) == 1
-    # assert len(tree2.final_states) == 0
+    assert len(tree2.get_finished()) == 0
     assert tree2.traverse_counter == 1
-    assert all([len(gs.active.deck) == 5 for gs in tree2.get_active(1)])
-    assert all([len(gs.active.hand) == 3 for gs in tree2.get_active(1)])
+    assert all([len(gs.active.deck) == 5 for gs in tree2.get_latest_active(1)])
+    assert all([len(gs.active.hand) == 3 for gs in tree2.get_latest_active(1)])
 
-    tree2.beginning_phase_for_all_valid_states()
+    tree2.beginning_phases()
     # noinspection PyProtectedMember
-    assert len(tree2._active_states) == 3  # turns 0, 1, 2
-    assert len(tree2.get_active(2)) == 1
-    assert len(tree2.get_active(1)) == 1
-    assert len(tree2.get_intermediate()) == 1
-    intermed = tree2.get_intermediate(2)[0]
-    assert len(tree2.get_intermediate(1)) == 1
-    # assert len(tree2.final_states) == 0
-    assert tree2.traverse_counter == 2
-    assert all([len(gs.active.deck) == 4 for gs in tree2.get_active(2)])
-    assert all([len(gs.active.hand) == 4 for gs in tree2.get_active(2)])
-    assert all([len(gs.stack) == 0 for gs in tree2.get_active(2)])
+    assert len(tree2._active_states) == 2  # turns 0, 1.
+    # reached main phase one. But no interesting branch-points yet.
+    assert tree2.get_num_active(1) == [1, 1, 1, 1, 0, 0, 0, 0]
+    assert len(tree2.get_latest_active(1)) == 1
+    assert len(tree2.get_latest_active(0)) == 0  # unchanged
+    assert len(tree2.get_finished(1)) == 0
+    assert len(tree2.get_intermediate()) == 4  # 4 phases, similar boardstates
+    assert tree2.traverse_counter == 4
+    assert all([len(gs.active.deck) == 4 for gs in tree2.get_latest_active(1)])
+    assert all([len(gs.active.hand) == 4 for gs in tree2.get_latest_active(1)])
+    assert all([len(gs.stack) == 0 for gs in tree2.get_latest_active(1)])
     # HAND: Roots, Roots, Roots, Caryatid
     # FIELD: Caryatid, Roots
-    # Life: 20, Deck: [Caryatid]x4, Mana: ()
-    tree2.main_phase_for_all_active_states()
-    assert len(tree2.get_active(2)) == 0
-    assert len(tree2.get_active(1)) == 1
+    # Life: 20. Deck: [Caryatid]x4. Mana: ().  Turn 1, phase 3 (main1)
+    tree2.main_phase_then_end()
     # 9 intermediate. They are: after draw. add G 1st. OR add Au 1st. float GA.
     # caryatid on stack. resolve caryatid.
     # OR roots on stack. resolve roots. float G.
-    assert len(tree2.get_intermediate(2)) == 9
-    assert len(tree2.get_intermediate(1)) == 1
-    assert tree2.traverse_counter == 11  # 9 + 2, no overlaps
-    assert (len(tree2.get_states_no_options(2)) == 2)  # cast roots or caryatid
+    # the mana is erased by changing phase, but still evidence on the creature
+    # producing it. HOWEVER, don't see stack in active lists, so only see 7.
+    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
+    assert len(tree2.get_intermediate()) == 4 + 7 + 7
+    print(tree2.traverse_counter, "is 22?")
+    assert tree2.traverse_counter == 22  # 4+9+9
+
 
     # do one more turn
-    tree2.beginning_phase_for_all_valid_states()
+    tree2.beginning_phases()
     # 5 distinct states. 9, minus 2 that had card on stack. Then Cary{T}+G
     # and unused Caryatid are indistinguishable, and same with Roots[-0/-1]+G
     # and Roots[-0/-1]+Cary{T}+GA.  So 9-2-2=5
-    assert len(tree2.get_active()) == 5
-    tree2.main_phase_for_all_active_states()
+    assert len(tree2.get_latest_active()) == 5
+    tree2.main_phase_then_end()
     # I never finished turn 1 properly so there are still actives there. sure.
-    assert all([len(tree2.get_active(t)) == 0 for t in [0, 2, 3]])
+    assert all([len(tree2.get_latest_active(t)) == 0 for t in [0, 2, 3]])
     # These next several are empirical. I didn't theory. Too hard to count.
     assert len(tree2.get_states_no_options()) == 17  # 20
     assert len(tree2.get_states_no_stack()) == 85  # 85  # 88
@@ -734,6 +737,7 @@ if __name__ == "__main__":
     id_list = [g.get_id() for g in tree2.get_intermediate()]
     assert n == len(id_list)
     assert n == len(set(id_list))  # making sure set hash is still working
+    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -752,7 +756,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 5
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     assert len(tree.get_states_no_options()) == 5
     collector = set()
     for g in tree.get_states_no_options():
@@ -769,7 +773,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 2
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     # shock enters tapped; shocked in, taps for 2 colors; non-shock is played
     assert len(tree.get_states_no_options()) == 4
     collector = set()
@@ -797,7 +801,7 @@ if __name__ == "__main__":
                 matcher.match(c, game, player, game.active.hand[0])]) == 5
 
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     # 4 distinct fetchables, but each shock give 3 options (2 colors + tapped).
     # Can also fail to find.
     assert len(tree.get_states_no_options()) == 9
@@ -826,7 +830,7 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.Swamp()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     assert len(tree.get_states_no_options()) == 1
     result = tree.get_states_no_options()[0]
     assert result.active.life == 19
@@ -838,7 +842,7 @@ if __name__ == "__main__":
     game = GameState(1)
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     assert len(tree.get_states_no_options()) == 1
     result = tree.get_states_no_options()[0]
     assert result.active.life == 19
@@ -968,7 +972,7 @@ if __name__ == "__main__":
     assert len(game.active.get_valid_activations()) == 1
     activ = game.active.get_valid_activations()[0]  # for debug
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     [univ1] = tree.get_states_no_options()
     assert len(univ1.active.hand) == 0  # used mana to cast 2nd Caretaker
     assert len(univ1.active.field) == 3
@@ -992,7 +996,7 @@ if __name__ == "__main__":
         assert univ.active.pool == ManaHandler.ManaPool("A")
 
     tree = PlayTree([game], 2)
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     [univ2, univ3] = tree.get_states_no_options()
     assert (univ2.active.pool == ManaHandler.ManaPool("A"))
     assert (univ3.active.pool == ManaHandler.ManaPool("A"))
@@ -1041,14 +1045,14 @@ if __name__ == "__main__":
     assert len(game6.active.get_valid_activations(hide_equivalent=False)) == 5
     assert len(game6.active.get_valid_activations()) == 4
     tree6 = PlayTree([game6], 5)
-    tree6.main_phase_for_all_active_states()
+    tree6.main_phase_then_end()
     collector = set()
     for g in tree6.get_states_no_options():
         collector.add(str(g.active.pool))
     assert collector == {"GGGGGAAAAAAA", "GGGGGAAAAAA", "AAAAAAA", "GGGGGAA",
                          "AAA"}
     assert len(tree6.get_states_no_options()) == 1 + 1 + 2 + 2 + 1
-    assert len(tree6.get_active()) == 0
+    assert len(tree6.get_latest_active()) == 0
     # Math: count based on when the first caretaker is tapped (which action).
     # 5th: impossible
     # 4th: 6 ways to order other 3. Caretaker taps other caretaker. 6*1=6
@@ -1084,24 +1088,24 @@ if __name__ == "__main__":
         game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     # tree. Turn 1.
     tree = PlayTree([game], 5)
-    tree.main_phase_for_all_active_states(0)
+    tree.main_phase_then_end()
     # start, Forest, tap, Caretaker, resolve
     assert len(tree.get_intermediate(0)) == 5
     assert len(tree.get_states_no_options(0)) == 1
     assert tree.traverse_counter == 5
 
     # Turn 2.
-    tree.beginning_phase_for_all_valid_states()
-    assert len(tree.get_active(1)) == 3  # played nothing, forest, or caretaker
-    tree.main_phase_for_all_active_states(1)
+    tree.beginning_phases()
+    assert len(tree.get_latest_active(1)) == 3  # played nothing, forest, or caretaker
+    tree.main_phase_then_end()
     assert len(tree.get_intermediate(1)) == 44  # 42  # 53
     assert len(tree.get_states_no_options(1)) == 6  # 7
     assert tree.traverse_counter == 62  # 59  # 74
 
     # Turn 3.
-    tree.beginning_phase_for_all_valid_states()
-    assert len(tree.get_active(2)) == 12
-    tree.main_phase_for_all_active_states(2)
+    tree.beginning_phases()
+    assert len(tree.get_latest_active(2)) == 12
+    tree.main_phase_then_end()
     intermed = tree.get_intermediate(2)
     no_opts = tree.get_states_no_options(2)
     assert len(intermed) == 1144  # 980  # 1638
@@ -1134,7 +1138,7 @@ if __name__ == "__main__":
     game.is_tracking_history = True
     tree = PlayTree([game], 5)
     # only option is play Forest, play Blossoms, draw Island
-    tree.main_phase_for_all_active_states()
+    tree.main_phase_then_end()
     assert len(tree.get_states_no_options()) == 1
     [final] = tree.get_states_no_options()
     assert len(final.active.hand) == 2
@@ -1145,8 +1149,8 @@ if __name__ == "__main__":
 
     # play next turn: draw Island, play Island, play Blossoms, draw Island
     tree2 = PlayTree([final], 5)
-    tree2.beginning_phase_for_all_valid_states()
-    tree2.main_phase_for_all_active_states()
+    tree2.beginning_phases()
+    tree2.main_phase_then_end()
     assert len(tree2.get_states_no_options()) == 2  # floating W or U
     [final2, _] = tree2.get_states_no_options()
     assert len(final2.active.hand) == 2
@@ -1158,8 +1162,8 @@ if __name__ == "__main__":
     # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
     final2.give_to(Cardboard(Decklist.Caryatid()), Zone.Hand)
     tree3 = PlayTree([final2], 5)
-    tree3.beginning_phase_for_all_valid_states()
-    tree3.main_phase_for_all_active_states()
+    tree3.beginning_phases()
+    tree3.main_phase_then_end()
     for g in tree3.get_states_no_options():
         assert len(g.active.hand) == 2
         assert len(g.active.field) == 7

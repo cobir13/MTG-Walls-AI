@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 from Abilities import ActivatedAbility, TriggeredAbility, TriggerWhenVerb,\
     TimedAbility
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
-    PlayCardboard, PlayLand, PlayPermanent
+    PlayCardboard, PlayLand, PlayPermanent, AffectPlayer
 import Zone
 
 
@@ -152,6 +152,41 @@ class TapSymbol(Tap):
 
     def __str__(self):
         return "{T}"
+
+
+class DeclareAttacker(AffectPlayer):
+    """`source` is attacking card. `subject` is player (index)
+    being attacked."""
+    def can_be_done(self, state: GameState) -> bool:
+        is_critter = Match.CardType(Creature).match(self.subject, state,
+                                                    self.player, self.source)
+        is_sick = self.subject.summon_sick
+        has_haste = Match.Keyword("haste").match(self.subject, state,
+                                                 self.player, self.source)
+        is_defender = Match.Keyword("defender").match(self.subject, state,
+                                                      self.player, self.source)
+        return (super().can_be_done(state)
+                and (is_critter and (not is_sick or has_haste)
+                     and not is_defender))
+
+    def do_it(self, state, to_track=[], check_triggers=True):
+        has_vig = Match.Keyword("vigilance").match(self.subject, state,
+                                                   self.player, self.source)
+        if not has_vig:
+            tapper = Tap()
+            [tapper] = tapper.populate_options(state, self.player, self.source,
+                                               self.cause)
+            tapper = tapper.replace_subject(self.subject)
+            tapper.do_it(state, check_triggers=False)
+            # add tapper to sub_verbs, to be visible to triggers for tapping
+            new_self = self.replace_verb(0, tapper)
+            return Verb.do_it(new_self, state, to_track, check_triggers)
+        else:
+            # no visible action. Is no attacker list to add to, for example.
+            return Verb.do_it(self, state, to_track, check_triggers)
+
+    def __str__(self):
+        return "Attack with " + str(self.subject)
 
 
 # ----------
