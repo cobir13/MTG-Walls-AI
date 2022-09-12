@@ -666,6 +666,7 @@ if __name__ == "__main__":
     assert len(tree1.get_latest_active()) == 1
     assert len(tree1.get_intermediate()) == 1
     assert len(tree1.get_finished()) == 0
+    assert tree1.traverse_counter == 0
 
     # try untap and upkeep. expect game_over because draw from empty deck
     tree1.beginning_phases()
@@ -674,6 +675,7 @@ if __name__ == "__main__":
     assert len(tree1.get_intermediate()) == 3  # 2 active, 1 finished.
     assert tree1.get_finished()[0].game_over
     assert tree1.get_finished()[0].active.victory_status == "L"
+    assert tree1.traverse_counter == 3
 
     tree_game = carygame1.copy()
     tree_game.active.turn_count = 1  # roll back to earlier turn
@@ -688,7 +690,7 @@ if __name__ == "__main__":
     assert tree2.get_num_active(1) == [1, 0, 0, 0, 0, 0, 0, 0]
     assert len(tree2.get_intermediate()) == 1
     assert len(tree2.get_finished()) == 0
-    assert tree2.traverse_counter == 1
+    assert tree2.traverse_counter == 0  # no states tested yet
     assert all([len(gs.active.deck) == 5 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.active.hand) == 3 for gs in tree2.get_latest_active(1)])
 
@@ -701,7 +703,7 @@ if __name__ == "__main__":
     assert len(tree2.get_latest_active(0)) == 0  # unchanged
     assert len(tree2.get_finished(1)) == 0
     assert len(tree2.get_intermediate()) == 4  # 4 phases, similar boardstates
-    assert tree2.traverse_counter == 4
+    assert tree2.traverse_counter == 5
     assert all([len(gs.active.deck) == 4 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.active.hand) == 4 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.stack) == 0 for gs in tree2.get_latest_active(1)])
@@ -716,7 +718,6 @@ if __name__ == "__main__":
     # producing it. HOWEVER, don't see stack in active lists, so only see 7.
     assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
     assert len(tree2.get_intermediate()) == 4 + 7 + 7
-    print(tree2.traverse_counter, "is 22?")
     assert tree2.traverse_counter == 22  # 4+9+9
 
 

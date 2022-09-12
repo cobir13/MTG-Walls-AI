@@ -60,6 +60,20 @@ class PlayTree:
                 state.pass_turn()
             self._add_state_to_trackers(state)
 
+    def _track_locally(self,
+                       to_track: List[GameState],
+                       track_list: List[GameState],
+                       track_set: Set[GameState]):
+        """
+        Start tracking the list of given states. Any that aren't
+        already in the tracking set should be added to both the
+        tracking set and the tracking list. (Also, increment the
+        traverse counter.)"""
+        # counter doesn't care if it's a repeat. counts total states visited.
+        self.traverse_counter += len(to_track)
+        track_list.extend([s for s in to_track if s not in track_set])
+        track_set.update(to_track)
+
     def _add_state_to_trackers(self, state: GameState):
         # only add if NEW state. If already in intermediate, don't track.
         if (len(self._intermediate_states) <= state.total_turns
@@ -75,11 +89,11 @@ class PlayTree:
             else:
                 turn = state.total_turns
                 self._active_states[turn][state.phase].append(state)
-            # always add to intermediate, which tracks ALL states
+            # always add to intermediate
             self._intermediate_states.add(state)
-        self.traverse_counter += 1  # counter doesn't care if repeats
 
-    def _whittle_and_respond(self, in_progress: Set[GameState], phase: int):
+    def _whittle_and_respond(self, in_progress: List[GameState],
+                             tracking_set: Set[GameState], phase: int):
         """
         Pops GameStates off of the `in_progress` set (mutating
         it). Let the players respond to Triggers or just pass,
@@ -94,9 +108,10 @@ class PlayTree:
                 # new phase and/or game is over, so done processing this state
                 self._add_state_to_trackers(state4)
             else:
-                self.traverse_counter += 1
                 # give priority player a chance to act, then process again
-                in_progress.update(state4.do_priority_action())
+                self._track_locally(to_track=state4.do_priority_action(),
+                                    track_list=in_progress,
+                                    track_set=tracking_set)
 
     def phase_untap(self):
         """process the states in the uptap phase of active states
@@ -106,41 +121,49 @@ class PlayTree:
             state2 = state.copy()
             state2.step_untap()  # phase becomes upkeep
             for new_state in state2.clear_super_stack():
+                self.traverse_counter += 1
                 self._add_state_to_trackers(new_state)  # adds to upkeep phase
 
     def phase_upkeep(self):
         """process the states in the uptap phase of active states
         and moves them to the next phase."""
         phase = GameState.PHASES.index("upkeep")
-        in_progress: Set[GameState] = set()
+        in_progress: List[GameState] = []
+        screener: Set[GameState] = set()
         # add upkeep triggers to stack
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_upkeep()  # phase remains upkeep
-            in_progress.update(state2.clear_super_stack())
+            self._track_locally(to_track=state2.clear_super_stack(),
+                                track_list=in_progress, track_set=screener)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, phase)
+        self._whittle_and_respond(in_progress, screener, phase)
 
     def phase_draw(self):
         """process the states in the draw phase of active states
         and moves them to the next phase."""
         phase = GameState.PHASES.index("draw")
-        in_progress: Set[GameState] = set()
+        in_progress: List[GameState] = []
+        screener: Set[GameState] = set()
         # draw a card and add any triggers to the stack
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_draw()  # phase remains draw step
-            in_progress.update(state2.clear_super_stack())
+            self._track_locally(to_track=state2.clear_super_stack(),
+                                track_list=in_progress, track_set=screener)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, phase)
+        self._whittle_and_respond(in_progress, screener, phase)
 
     def phase_main(self):
         """process the states in the main1 or main2 phase of
         active states and moves them to the next phase."""
         phase = GameState.PHASES.index("main1")
-        in_progress: Set[GameState] = set(self._active_states[-1][phase])
+        in_progress: List[GameState] = []
+        screener: Set[GameState] = set()
+        self._track_locally(to_track=self._active_states[-1][phase],
+                            track_list=in_progress, track_set=screener)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, phase)
+        self._whittle_and_respond(in_progress, screener, phase)
 
     def phase_combat(self):
         # Right now, there's no priority during combat. Players just declare
@@ -150,31 +173,36 @@ class PlayTree:
             state2 = state.copy()
             state2.step_attack()  # phase becomes main2
             for new_state in state2.clear_super_stack():
+                self.traverse_counter += 1
                 self._add_state_to_trackers(new_state)  # add to main2 phase
 
     def phase_endstep(self):
         """process the states in the endstep phase of active states
         and moves them to the cleanup phase."""
         phase = GameState.PHASES.index("endstep")
-        in_progress: Set[GameState] = set()
+        in_progress: List[GameState] = []
+        screener: Set[GameState] = set()
         # add end-step triggers to stack
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_endstep()  # phase remains end step
-            in_progress.update(state2.clear_super_stack())
+            self._track_locally(to_track=state2.clear_super_stack(),
+                                track_list=in_progress, track_set=screener)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, phase)
+        self._whittle_and_respond(in_progress, screener, phase)
 
     def phase_cleanup(self, ):
         """process the states in the endstep phase of active states
         and moves them to the cleanup phase."""
         phase = GameState.PHASES.index("cleanup")
-        in_progress: Set[GameState] = set()
+        in_progress: List[GameState] = []
+        screener: Set[GameState] = set()
         # add cleanup triggers to stack
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_cleanup()  # phase remains cleanup
-            in_progress.update(state2.clear_super_stack())
+            self._track_locally(to_track=state2.clear_super_stack(),
+                                track_list=in_progress, track_set=screener)
         # If there is something on the stack, let the players respond to
         # triggers or just pass, as they choose. If there is nothing on the
         # stack, they don't get the option. Pass automatically.
@@ -187,11 +215,13 @@ class PlayTree:
             elif len(state4.stack) == 0:
                 # if nothing on stack, players don't get a chance to act here.
                 state4.pass_turn()
+                self.traverse_counter += 1
                 self._add_state_to_trackers(state4)
             else:
-                self.traverse_counter += 1
                 # give priority player a chance to act, then process again
-                in_progress.update(state4.do_priority_action())
+                self._track_locally(to_track=state4.do_priority_action(),
+                                    track_list=in_progress,
+                                    track_set=screener)
 
 
     def main_phase_then_end(self):
