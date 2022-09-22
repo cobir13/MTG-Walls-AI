@@ -666,7 +666,6 @@ if __name__ == "__main__":
     assert len(tree1.get_latest_active()) == 1
     assert len(tree1.get_intermediate()) == 1
     assert len(tree1.get_finished()) == 0
-    assert tree1.traverse_counter == 0
 
     # try untap and upkeep. expect game_over because draw from empty deck
     tree1.beginning_phases()
@@ -675,7 +674,6 @@ if __name__ == "__main__":
     assert len(tree1.get_intermediate()) == 3  # 2 active, 1 finished.
     assert tree1.get_finished()[0].game_over
     assert tree1.get_finished()[0].active.victory_status == "L"
-    assert tree1.traverse_counter == 3
 
     tree_game = carygame1.copy()
     tree_game.active.turn_count = 1  # roll back to earlier turn
@@ -690,7 +688,6 @@ if __name__ == "__main__":
     assert tree2.get_num_active(1) == [1, 0, 0, 0, 0, 0, 0, 0]
     assert len(tree2.get_intermediate()) == 1
     assert len(tree2.get_finished()) == 0
-    assert tree2.traverse_counter == 0  # no states tested yet
     assert all([len(gs.active.deck) == 5 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.active.hand) == 3 for gs in tree2.get_latest_active(1)])
 
@@ -703,7 +700,6 @@ if __name__ == "__main__":
     assert len(tree2.get_latest_active(0)) == 0  # unchanged
     assert len(tree2.get_finished(1)) == 0
     assert len(tree2.get_intermediate()) == 4  # 4 phases, similar boardstates
-    assert tree2.traverse_counter == 5
     assert all([len(gs.active.deck) == 4 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.active.hand) == 4 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.stack) == 0 for gs in tree2.get_latest_active(1)])
@@ -717,28 +713,127 @@ if __name__ == "__main__":
     # the mana is erased by changing phase, but still evidence on the creature
     # producing it. HOWEVER, don't see stack in active lists, so only see 7.
     assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
-    assert len(tree2.get_intermediate()) == 4 + 7 + 7
-    assert tree2.traverse_counter == 22  # 4+9+9
-
+    assert tree2.get_num_active(2) == [7, 0, 0, 0, 0, 0, 0, 0]
 
     # do one more turn
     tree2.beginning_phases()
+    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
     # 5 distinct states. 9, minus 2 that had card on stack. Then Cary{T}+G
     # and unused Caryatid are indistinguishable, and same with Roots[-0/-1]+G
     # and Roots[-0/-1]+Cary{T}+GA.  So 9-2-2=5
-    assert len(tree2.get_latest_active()) == 5
+    assert tree2.get_num_active(2) == [7, 5, 5, 5, 0, 0, 0, 0]
+    # The 5 states are:
+    # 1) Caryatid,           Roots
+    # 2) Caryatid,           Roots[-0/-1]
+    # 3) Caryatid,           Roots,       Roots[-0/-1]
+    # 4) Caryatid,           Roots[-0/-1],Roots[-0/-1]
+    # 5) Caryatid, Caryatid, Roots[-0 / -1]
+    # In total, after draw, player has access to: Caryatid x3, Roots x4.
+    # Let's go through the theory here. What can each of these 5 games do?
+    # 1)    C,R | C(T),R | C,R-1 | C(T),R-1 | C(T),R-1:C | C(T)
+
+
+
+    # Game 1 & 2: 2 mana. hold, play caryatid, or play roots & activate or not.
+    # ---- Game 1)  2 mana: C,R-1 | 2xC,R-1 | C,R-1,R | C,2xR-1         -> 4
+    #               0,1:    C,R |*C,R*|*C,R-1*                          -> 1
+    # ---- Game 2)  2 mana: C,R-2 | 2xC,R-2 | C,R-2,R | C,R-2,R-1       -> 4
+    #               0,1:    C,R-1 |*C,R-1*|*C,R-2*                      -> 1
+    # Game 3 & 4 & 5) Float 0, 1, 2, or 3 mana. If only 2, same 4 options
+    #   (nothing; play caryatid; play roots & activate or not). But two or
+    #   three ways to get that two mana. 0 and 1 mana are trivial.
+    #   If 3 mana: pass; play cary; play roots and stop; play roots, activate,
+    #   stop or play cary or roots (which activates or not). 7 possibilities.
+    # ---- Game 3)  3:  C,R-2,R-1 | 2xC,R-2,R-1 | C,R-2,R-1,R | C,R-2,2xR-1
+    #                   2xC,R-2,2xR-1 | C,R-2,2xR-1,R | C,R-2,3xR-1     -> 7
+    #               2:  *C,2xR-1*| 2xC,2xR-1 | C,2xR-1,R | C,3xR-1
+    #                   *C,R-2,R*| 2xC,R-2,R | C,R-2,2xR |*C,R-2,R-1,R*
+    #                   *C,R-2,R-1*|*2xC,R-2,R-1*|*C,R-2,R-1,R*|*C,R-2,2xR-1*
+    #                                                                   -> 5
+    #               1:  *C,R-1,R*|*C,R-2,R*|*C,2xR-1*                   -> 0
+    #               0:  *C,R-1,R*                                       -> 0
+    # ---- Game 4)  3:  C,2xR-2 | 2xC,2xR-2 | C,2xR-2,R | C,2xR-2,R-1
+    #                   2xC,2xR-2,R-1 | C,2xR-2,R-1,R | C,2xR-2,2xR-1   -> 7
+    #               2:  *C,R-2,R-1*|*2xC,R-2,R-1*|*C,R-2,R-1,R*|*C,R-2,2xR-1*
+    #                   *C,2xR-2*|*2xC,2xR-2*|*C,2xR-2,R*|*C,2xR-2,R-1* -> 0
+    #               1:  *C,2xR-1*|*C,R-2,R-1*                           -> 0
+    #               0:  *C,2xR-1*                                       -> 0
+    # ---- Game 5)  3:  *2xC,R-2*| 3xC,R-2 |*2xC,R-2,R*|*2xC,R-2,R-1*
+    #                   3xC,R-2,R-1 | 2xC,R-2,R-1,R |*2xC,R-2,2xR-1*    -> 3
+    #               2:  *2xC,R-1*| 3xC,R-1 | 2xC,R-1,R |*2xC,2xR-1*
+    #                   *2xC,R-2*|*3xC,R-2*|*2xC,R-2,R*|*2xC,R-2,R-1*   -> 2
+    #               1:  *2xC,R-1*|*2xC,R-2*                             -> 0
+    #               0:  *2xC,R-1*                                       -> 0
+    # Grand total, discounting duplicates: 34 after next untap
+    # before that it'll be more, because summonsick, tapped can distinguish
+    #
+
+    # Split these 5 off into separate trees for the next test.
+    new_trees = []
+    for ii, game in enumerate(tree2.get_latest_active(2, 3)):
+        assert len(game.active.field) == [2, 2, 3, 3, 3][ii]
+        new_tree = PlayTree([game], 5)
+        new_tree.main_phase_then_end()
+        new_tree.beginning_phases()
+        new_trees.append(new_tree)
+
+    assert new_trees[0].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
+    assert new_trees[0].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
+    assert new_trees[1].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
+    assert new_trees[1].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
+    assert new_trees[2].get_num_active(2) == [0, 0, 0, 1, 23, 0, 0, 23]
+    assert new_trees[2].get_num_active(3) == [23, 15, 15, 15, 0, 0, 0, 0]
+
+
+
     tree2.main_phase_then_end()
-    # I never finished turn 1 properly so there are still actives there. sure.
-    assert all([len(tree2.get_latest_active(t)) == 0 for t in [0, 2, 3]])
-    # These next several are empirical. I didn't theory. Too hard to count.
-    assert len(tree2.get_states_no_options()) == 17  # 20
-    assert len(tree2.get_states_no_stack()) == 85  # 85  # 88
+    tree2.beginning_phases()
+    # next bit is empirical. I didn't theory. used to be 85 or 88...
+    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
+    assert tree2.get_num_active(2) == [7, 5, 5, 5, 76, 0, 0, 76]
+    assert tree2.get_num_active(3) == [69, 38, 38, 38, 0, 0, 0, 0]
+
+
+    post_main = tree2.get_latest_active(2, 4)
+    template = post_main[0].copy()
+    assert len(template.active.field) + len(template.active.hand) == 7
+    assert (len(template.stack) == 0)
+    assert (template.active.pool.cmc() == 0)
+    template.active.field = []
+    template.active.hand = []
+
+    lister = []
+    for g in tree2.get_latest_active(2, 4):
+        temp = g.copy()
+        temp.active.hand = []
+        temp.active.field = []
+        assert temp == template
+        lister.append(", ".join([c.name
+                                 + ("T" if c.tapped else "")
+                                 + str(c.counters)
+                                 for c in g.active.field]))
+    lister = sorted(lister)
+    for line in lister:
+        print(line)
+    print(len(lister))
+
+    assert False
+
+
     n = len(tree2.get_intermediate())
-    assert n == 129  # empirical. I didn't theory. used to be 123...
+    assert n == 261  # empirical. I didn't theory.
+    # making sure set hash is still working
     id_list = [g.get_id() for g in tree2.get_intermediate()]
     assert n == len(id_list)
-    assert n == len(set(id_list))  # making sure set hash is still working
+    assert n == len(set(id_list))
+    # pass turn and do untap-upkeep-draw. should have 17 distinct states
+    tree2.beginning_phases()
     assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
+    assert tree2.get_num_active(2) == [7, 5, 5, 5, 76, 0, 0, 76]
+    assert tree2.get_num_active(3) == [69, 38, 38, 38, 0, 0, 0, 0]
+    for g in tree2.get_latest_active(3, 3):
+        assert (len(g.stack) == 0)
+        assert (g.active.pool.cmc() == 0)
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -1066,7 +1161,6 @@ if __name__ == "__main__":
     #   sequence the other 3. 3 ways to not, leaving caretaker and 2 others.
     #   Either tap caretaker + one of 2 and then remainder, or tap one and then
     #   tap either caretaker or remainder. 1*6+3*(2+2*2)=24
-    assert tree6.traverse_counter == 72  # 6+12+18+24=60
     assert len(tree6.get_intermediate()) == 34
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
@@ -1093,7 +1187,6 @@ if __name__ == "__main__":
     # start, Forest, tap, Caretaker, resolve
     assert len(tree.get_intermediate(0)) == 5
     assert len(tree.get_states_no_options(0)) == 1
-    assert tree.traverse_counter == 5
 
     # Turn 2.
     tree.beginning_phases()
@@ -1101,7 +1194,6 @@ if __name__ == "__main__":
     tree.main_phase_then_end()
     assert len(tree.get_intermediate(1)) == 44  # 42  # 53
     assert len(tree.get_states_no_options(1)) == 6  # 7
-    assert tree.traverse_counter == 62  # 59  # 74
 
     # Turn 3.
     tree.beginning_phases()
@@ -1112,7 +1204,6 @@ if __name__ == "__main__":
     assert len(intermed) == 1144  # 980  # 1638
     assert len(intermed) == len(set(intermed))
     assert len(no_opts) == 30  # 62
-    assert tree.traverse_counter == 2718  # 2338  # 3716
     assert max([g.active.pool.cmc() for g in no_opts]) == 8
     print("      ...done, %0.2f sec."
           % (time.perf_counter() - start_clock))

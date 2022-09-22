@@ -50,8 +50,7 @@ class Cardboard:
         return s
 
     def __repr__(self):
-        s = "Card_"
-        s += type(self.rules_text).__name__  # MtG type (creature, land, etc)
+        s = type(self.rules_text).__name__  # MtG card name (ex: Wall of Roots)
         if self.tapped or self.summon_sick:
             s += "_"
         if self.tapped:
@@ -121,8 +120,7 @@ class Cardboard:
 
     def get_id(self):
         s = type(
-            self.rules_text).__name__  # MtG card type (creature, land, etc)
-        # s += self.rules_text.name + "_"
+            self.rules_text).__name__  # MtG card name (e.g. Wall of Roots)
         if self.tapped:
             s += "T"
         if self.summon_sick:

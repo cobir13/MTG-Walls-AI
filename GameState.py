@@ -7,6 +7,7 @@ Created on Mon Dec 28 21:13:59 2020
 from __future__ import annotations
 from typing import List, Tuple, Type, TYPE_CHECKING
 
+import Match
 import Verbs
 
 if TYPE_CHECKING:
@@ -319,7 +320,7 @@ class GameState:
         activate an ability, or pass priority. A list of new
         GameStates is returned, one for each chosen action,
         where that action has been performed. The original
-        GameState is not mutated.
+        GameState is NOT MUTATED.
         Note that pass_priority may change the phase, if no
         player wants priority within this phase.
         """
@@ -441,27 +442,54 @@ class GameState:
             # adds triggering abilities to self.super_stack, if meet condition
             ability.add_any_to_super(state=self, source_of_ability=card)
 
-    def step_cleanup(self):
+    def step_cleanup(self) -> List[GameState]:
         """
-        Does cleanup. Puts any triggers caused by doing this
-        onto the superstack. The phase remains cleanup.
-        MUTATES.
+        Does cleanup:
+        - if there are items on the stack, players can respond.
+        - if active player has too many cards in hand, discard.
+        Recurses until the stack is empty and the active player
+        has few enough cards in hand. Then passes the turn, so
+        the returned states are in the Upkeep phase of the next
+        player's next turn.
+        DOES NOT MUTATE SELF. Returns new GameStates instead.
         """
-        assert self.phase == GameState.PHASES.index("endstep")
-        self.priority_player_index = self.active_player_index
-        if self.is_tracking_history:
-            self.events_since_previous += "\nEnd step"
-        self.phase = GameState.PHASES.index("endstep")
-        # discard down to 7 cards
-        if len(self.hand) > 7:
-            discard_list = Choices.choose_exactly_n(self.hand,
-                                                    len(self.hand) - 7,
-                                                    "discard to hand size")
-            if self.is_tracking_history:
-                print("discard:", [str(c) for c in discard_list])
-            for card in discard_list:
-                MoveToZone(ZONE.GRAVE).do_it(self, self.active_player_index,
-                                             card,)
+        assert self.phase == GameState.PHASES.index("cleanup")
+        if len(self.stack) > 0:
+            game_list = []
+            for g in self.do_priority_action():
+                if g.phase == GameState.PHASES.index("cleanup"):
+                    game_list += g.step_cleanup()
+                else:
+                    game_list.append(g)
+        elif len(self.active.hand) > 7:
+            # discard down to 7 cards
+            choose_which = Get.Chooser(Match.Anything(),
+                                       num_to_choose=len(self.active.hand) - 7,
+                                       can_be_fewer=False)
+            get_from_hand = Get.CardsFrom(Zone.Hand(self.active_player_index))
+            discarder = Verbs.DiscardCard().on(subject_chooser=choose_which,
+                                               option_getter=get_from_hand,
+                                               allowed_to_fail=False)
+            vlist = discarder.populate_options(self, self.active_player_index,
+                                               None, None)
+            tuple_list = []
+            for verb_to_do in vlist:
+                if verb_to_do.copies:
+                    tuple_list += verb_to_do.do_it(self, check_triggers=True)
+                else:
+                    state2, [new_verb] = self.copy_and_track([verb_to_do])
+                    tuple_list += new_verb.do_it(state2, check_triggers=True)
+            game_list = []
+            for state3, _, _ in tuple_list:
+                for g in state3.clear_super_stack():
+                    game_list += g.step_cleanup()
+            return game_list
+        else:
+            return [self.copy().pass_turn()]
+
+
+
+
 
     # def step_cleanup(self):
     #     if self.is_tracking_history:
@@ -795,31 +823,33 @@ class Player:
         self.decision_maker = decider  # reset decision_maker
         return castables
 
+    # -----------
+
     def add_to_hand(self, card: Cardboard):
         """Hand is sorted and tracks Zone.location."""
         card.zone = Zone.Hand(self.player_index)
         self.hand.append(card)
-        self.hand.sort(key=Cardboard.get_id)
-        # update zone locations. mutates, so will also affect pointers.
-        for ii in range(len(self.hand)):
-            self.hand[ii].zone.location = ii
+        self.re_sort_hand()
 
     def remove_from_hand(self, card: Cardboard):
         """Field is sorted and tracks Zone.location."""
         index = card.zone.location
         self.hand.pop(index)
-        # update zone locations. mutates, so will also affect pointers.
+        # order didn't change, so no need to re-sort. just fix indexing.
         for ii in range(index, len(self.hand)):
+            self.hand[ii].zone.location = ii
+
+    def re_sort_hand(self):
+        self.hand.sort(key=Cardboard.get_id)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(len(self.hand)):
             self.hand[ii].zone.location = ii
 
     def add_to_field(self, card: Cardboard):
         """Field is sorted and tracks Zone.location."""
         card.zone = Zone.Field(self.player_index)
         self.field.append(card)
-        self.field.sort(key=Cardboard.get_id)
-        # update zone locations. mutates, so will also affect pointers.
-        for ii in range(len(self.field)):
-            self.field[ii].zone.location = ii
+        self.re_sort_field()
         # add mechanism to sense triggers from cards in play
         self.gamestate.trig_event += [(card, ab)
                                       for ab in card.rules_text.trig_verb]
@@ -834,7 +864,7 @@ class Player:
         """Field is sorted and tracks Zone.location."""
         index = card.zone.location
         self.field.pop(index)
-        # update zone locations. mutates, so will also affect pointers.
+        # order didn't change, so no need to re-sort. just fix indexing.
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
         # remove mechanism for sensing triggers from this card
@@ -849,21 +879,30 @@ class Player:
         self.gamestate.trig_endstep = [t for t in self.gamestate.trig_endstep
                                        if t[0] is not card]
 
+    def re_sort_field(self):
+        self.field.sort(key=Cardboard.get_id)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(len(self.field)):
+            self.field[ii].zone.location = ii
+
     def add_to_grave(self, card: Cardboard):
         """Grave is sorted and tracks Zone.location."""
         card.zone = Zone.Grave(self.player_index)
         self.grave.append(card)
-        self.grave.sort(key=Cardboard.get_id)
-        # update zone locations. mutates, so will also affect pointers.
-        for ii in range(len(self.grave)):
-            self.grave[ii].zone.location = ii
+        self.re_sort_grave()
 
     def remove_from_grave(self, card: Cardboard):
         """Grave is sorted and tracks Zone.location."""
         index = card.zone.location
         self.grave.pop(index)
-        # update zone locations. mutates, so will also affect pointers.
+        # order didn't change, so no need to re-sort. just fix indexing.
         for ii in range(index, len(self.grave)):
+            self.grave[ii].zone.location = ii
+
+    def re_sort_grave(self):
+        self.grave.sort(key=Cardboard.get_id)
+        # update zone locations. mutates, so will also affect pointers.
+        for ii in range(len(self.grave)):
             self.grave[ii].zone.location = ii
 
     def add_to_deck(self, card: Cardboard, dist_from_bottom: int):
@@ -875,7 +914,7 @@ class Player:
             dist_from_bottom += len(self.deck) + 1
         card.zone = Zone.Deck(self.player_index, dist_from_bottom)
         self.deck.insert(dist_from_bottom, card)
-        # update zone locations. mutates, so will also affect pointers.
+        # order didn't change, but need to fix indexing.
         for ii in range(dist_from_bottom, len(self.deck)):
             self.deck[ii].zone.location = ii
 
@@ -883,6 +922,6 @@ class Player:
         """Deck is not sorted but DOES track Zone.location."""
         index = card.zone.location
         self.deck.pop(index)
-        # update zone locations. mutates, so will also affect pointers.
+        # order didn't change, but need to fix indexing.
         for ii in range(index, len(self.deck)):
             self.deck[ii].zone.location = ii

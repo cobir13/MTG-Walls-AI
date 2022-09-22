@@ -32,9 +32,9 @@ class PlayTree:
         #       _active_states:
         #           list (turn of game) of list (phase of game) of list of
         #           states which still need to be processed for that phase.
-        #           By "processed" I mean that the state is at the beginning
-        #           of the given phase and the phase still needs to be
-        #           performed on it. Note that PlayTree does not clear these
+        #           By "processed" I mean that THE STATE IS IN THE BEGINNING
+        #           OF THE GIVEN PHASE AND THE PHASE STILL NEEDS TO BE
+        #           PERFORMED ON IT. Note that PlayTree does not clear these
         #           states, but rather leaves them as a history marker.
         #           Indexed as _active_states[turn][phase][index].
         #       _out_of_option_states:
@@ -47,7 +47,6 @@ class PlayTree:
         # NOTE: for all of these lists of GameStates, the super_stack is
         # guaranteed to be empty. But the normal stack may have things.
         self.turn_limit = turn_limit  # max number of turns this will test
-        self.traverse_counter: int = 0  # num states ever visited. for debug.
         self._intermediate_states: Set[GameState] = set()
         self._active_states: List[List[List[GameState]]] = []
         # self._out_of_option_states: List[List[GameState]] = []
@@ -67,10 +66,7 @@ class PlayTree:
         """
         Start tracking the list of given states. Any that aren't
         already in the tracking set should be added to both the
-        tracking set and the tracking list. (Also, increment the
-        traverse counter.)"""
-        # counter doesn't care if it's a repeat. counts total states visited.
-        self.traverse_counter += len(to_track)
+        tracking set and the tracking list."""
         track_list.extend([s for s in to_track if s not in track_set])
         track_set.update(to_track)
 
@@ -121,7 +117,6 @@ class PlayTree:
             state2 = state.copy()
             state2.step_untap()  # phase becomes upkeep
             for new_state in state2.clear_super_stack():
-                self.traverse_counter += 1
                 self._add_state_to_trackers(new_state)  # adds to upkeep phase
 
     def phase_upkeep(self):
@@ -173,7 +168,6 @@ class PlayTree:
             state2 = state.copy()
             state2.step_attack()  # phase becomes main2
             for new_state in state2.clear_super_stack():
-                self.traverse_counter += 1
                 self._add_state_to_trackers(new_state)  # add to main2 phase
 
     def phase_endstep(self):
@@ -195,34 +189,10 @@ class PlayTree:
         """process the states in the endstep phase of active states
         and moves them to the cleanup phase."""
         phase = GameState.PHASES.index("cleanup")
-        in_progress: List[GameState] = []
-        screener: Set[GameState] = set()
-        # add cleanup triggers to stack
         for state in self._active_states[-1][phase]:
-            state2 = state.copy()
-            state2.step_cleanup()  # phase remains cleanup
-            self._track_locally(to_track=state2.clear_super_stack(),
-                                track_list=in_progress, track_set=screener)
-        # If there is something on the stack, let the players respond to
-        # triggers or just pass, as they choose. If there is nothing on the
-        # stack, they don't get the option. Pass automatically.
-        while len(in_progress) > 0:
-            # remove a GameState from the in-progress list and explore it
-            state4: GameState = in_progress.pop()
-            if state4.phase != phase or state4.game_over:
-                # new phase and/or game is over, so done processing this state
-                self._add_state_to_trackers(state4)
-            elif len(state4.stack) == 0:
-                # if nothing on stack, players don't get a chance to act here.
-                state4.pass_turn()
-                self.traverse_counter += 1
-                self._add_state_to_trackers(state4)
-            else:
-                # give priority player a chance to act, then process again
-                self._track_locally(to_track=state4.do_priority_action(),
-                                    track_list=in_progress,
-                                    track_set=screener)
-
+            for state2 in state.step_cleanup():
+                assert state2.phase == 0
+                self._add_state_to_trackers(state2)
 
     def main_phase_then_end(self):
         """Does main phase 1 and then skips directly to do cleanup phase.
@@ -234,7 +204,7 @@ class PlayTree:
             state2.phase = GameState.PHASES.index("cleanup")
             self._add_state_to_trackers(state2)
         # run endstep phase
-        self.phase_endstep()
+        self.phase_cleanup()
 
     def beginning_phases(self):
         """Untap, upkeep, draw, and move to main phase.
@@ -284,14 +254,19 @@ class PlayTree:
                                phase: str | int | None = None):
         if phase is None:
             list_of_lists = self._active_states[turn]
+            list_of_phases = GameState.PHASES
         elif isinstance(phase, str):
             phase = GameState.PHASES.index(phase)
             list_of_lists = [self._active_states[turn][phase]]
+            list_of_phases = [GameState.PHASES[phase]]
         else:
             list_of_lists = [self._active_states[turn][phase]]
+            list_of_phases = [GameState.PHASES[phase]]
         # now print
-        for pp, sublist in enumerate(list_of_lists):
-            print("---------- %s ----------" % GameState.PHASES[pp])
-            s = "\n***************\n".join([str(g) for g in sublist])
+        for ii in range(len(list_of_lists)):
+            game_list = list_of_lists[ii]
+            phase = list_of_phases[ii]
+            print("---------- %s ----------" % phase)
+            s = "\n***************\n".join([str(g) for g in game_list])
             if len(s) > 0:
                 print(s)

@@ -966,6 +966,9 @@ class Tap(AffectCard):
 
     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
         self.subject.tapped = True
+        # maintain the sorting in the subject's zone for new changed card id
+        assert self.subject.is_in(Zone.Field)
+        state.player_list[self.subject.player_index].re_sort_field()
         # add history. maybe check_triggers (add to super_stack, trim inputs)
         return Verb.do_it(self, state, to_track, check_triggers)
 
@@ -981,6 +984,9 @@ class Untap(AffectCard):
 
     def do_it(self, state: GameState, to_track=[], check_triggers=True):
         self.subject.tapped = False
+        # maintain the sorting in the subject's zone for new changed card id
+        assert self.subject.is_in(Zone.Field)
+        state.player_list[self.subject.player_index].re_sort_field()
         # add history. maybe check_triggers (add to super_stack, trim inputs)
         return Verb.do_it(self, state, to_track, check_triggers)
 
@@ -1002,6 +1008,9 @@ class AddCounter(AffectCard):
 
     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
         self.subject.add_counter(self.counter_text)
+        # maintain the sorting in the subject's zone for new changed card id
+        assert self.subject.is_in(Zone.Field)
+        state.player_list[self.subject.player_index].re_sort_field()
         # add history. maybe check_triggers (add to super_stack, trim inputs)
         return Verb.do_it(self, state, to_track, check_triggers)
 
@@ -1031,6 +1040,9 @@ class ActivateOncePerTurn(AffectCard):
 
     def do_it(self, state, to_track=[], check_triggers=True):
         self.subject.add_counter(self.counter_text)
+        # maintain the sorting in the subject's zone for new changed card id
+        assert self.subject.is_in(Zone.Field)
+        state.player_list[self.subject.player_index].re_sort_field()
         # add history. maybe check_triggers (add to super_stack, trim inputs)
         return Verb.do_it(self, state, to_track, check_triggers)
 
@@ -1062,6 +1074,7 @@ class Shuffle(AffectPlayer):
     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
         """Mutates. Reorder deck randomly."""
         random.shuffle(state.player_list[self.subject].deck)
+        # maintain location indexing of the deck
         for ii in range(len(state.player_list[self.subject].deck)):
             state.player_list[self.subject].deck[ii].zone.location = ii
         # add history. maybe check_triggers (add to super_stack, trim inputs)
@@ -1168,6 +1181,18 @@ class DrawCard(AffectPlayer):
             lose.do_it(state, check_triggers=False)  # mutates
             # didn't actually draw, so check for LoseTheGame not Draw or Move
             return Verb.do_it(lose, state, to_track, check_triggers)
+
+
+class DiscardCard(MoveToZone):
+    def __init__(self):
+        super().__init__(Zone.Grave(Get.Owners()))
+
+    def can_be_done(self, state: GameState) -> bool:
+        return (super().can_be_done(state)
+                and self.subject.is_in(Zone.Hand))
+
+    def __str__(self):
+        return "Discard"
 
 
 class MarkAsPlayedLand(AffectPlayer):
