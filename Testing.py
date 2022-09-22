@@ -187,7 +187,6 @@ if __name__ == "__main__":
     # define two cards which can "listen" for triggers. One cares about
     # tapping creatures, the other about moving them from field
 
-
     class WeirdOrb(RulesText.Creature):
         def __init__(self):
             super().__init__()
@@ -358,6 +357,7 @@ if __name__ == "__main__":
             self.add_activated("Jumper move to hand",
                                Costs.Cost("2"),
                                Verbs.MoveToZone(Zone.Hand(Get.Controllers())))
+
 
     gameJ1 = GameState()
     gameJ1.give_to(Cardboard(Jumper()), Zone.Field, 0)
@@ -732,12 +732,18 @@ if __name__ == "__main__":
     # I did the theory out on paper by hand. Results are in the asserts below.
     # Split these 5 off into separate trees for the next test.
     new_trees = []
+    collector_t2 = [set(), set(), set(), set(), set(), set(), set(), set()]
+    collector_t3 = [set(), set(), set(), set(), set(), set(), set(), set()]
     for ii, game in enumerate(tree2.get_latest_active(2, 3)):
         assert len(game.active.field) == [2, 2, 3, 3, 3][ii]
         new_tree = PlayTree([game], 5)
         new_tree.main_phase_then_end()
         new_tree.beginning_phases()
         new_trees.append(new_tree)
+        # if I combine these final results, how many do I get?
+        for phase in range(8):
+            collector_t2[phase].update(new_tree.get_latest_active(2, phase))
+            collector_t3[phase].update(new_tree.get_latest_active(3, phase))
     assert new_trees[0].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
     assert new_trees[0].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
     assert new_trees[1].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
@@ -748,89 +754,19 @@ if __name__ == "__main__":
     assert new_trees[3].get_num_active(3) == [18, 12, 12, 12, 0, 0, 0, 0]
     assert new_trees[4].get_num_active(2) == [0, 0, 0, 1, 18, 0, 0, 18]
     assert new_trees[4].get_num_active(3) == [18, 11, 11, 11, 0, 0, 0, 0]
+    assert len(collector_t3[3]) == 32  # T3 main phase starts with 32 states.
+    assert [len(s) for s in collector_t2] == [0, 0, 0, 5, 73, 0, 0, 73]
+    assert [len(s) for s in collector_t3] == [64, 32, 32, 32, 0, 0, 0, 0]
+    # NOTE: 73 -> 64 is because of clearing "already used" markers, I think
 
-    assert False
-
-    # Game 1 & 2: 2 mana. hold, play caryatid, or play roots & activate or not.
-    # ---- Game 1)  2 mana: C,R-1 | 2xC,R-1 | C,R-1,R | C,2xR-1         -> 4
-    #               0,1:    C,R |*C,R*|*C,R-1*                          -> 1
-    # ---- Game 2)  2 mana: C,R-2 | 2xC,R-2 | C,R-2,R | C,R-2,R-1       -> 4
-    #               0,1:    C,R-1 |*C,R-1*|*C,R-2*                      -> 1
-    # Game 3 & 4 & 5) Float 0, 1, 2, or 3 mana. If only 2, same 4 options
-    #   (nothing; play caryatid; play roots & activate or not). But two or
-    #   three ways to get that two mana. 0 and 1 mana are trivial.
-    #   If 3 mana: pass; play cary; play roots and stop; play roots, activate,
-    #   stop or play cary or roots (which activates or not). 7 possibilities.
-    # ---- Game 3)  3:  C,R-2,R-1 | 2xC,R-2,R-1 | C,R-2,R-1,R | C,R-2,2xR-1
-    #                   2xC,R-2,2xR-1 | C,R-2,2xR-1,R | C,R-2,3xR-1     -> 7
-    #               2:  *C,2xR-1*| 2xC,2xR-1 | C,2xR-1,R | C,3xR-1
-    #                   *C,R-2,R*| 2xC,R-2,R | C,R-2,2xR |*C,R-2,R-1,R*
-    #                   *C,R-2,R-1*|*2xC,R-2,R-1*|*C,R-2,R-1,R*|*C,R-2,2xR-1*
-    #                                                                   -> 5
-    #               1:  *C,R-1,R*|*C,R-2,R*|*C,2xR-1*                   -> 0
-    #               0:  *C,R-1,R*                                       -> 0
-    # ---- Game 4)  3:  C,2xR-2 | 2xC,2xR-2 | C,2xR-2,R | C,2xR-2,R-1
-    #                   2xC,2xR-2,R-1 | C,2xR-2,R-1,R | C,2xR-2,2xR-1   -> 7
-    #               2:  *C,R-2,R-1*|*2xC,R-2,R-1*|*C,R-2,R-1,R*|*C,R-2,2xR-1*
-    #                   *C,2xR-2*|*2xC,2xR-2*|*C,2xR-2,R*|*C,2xR-2,R-1* -> 0
-    #               1:  *C,2xR-1*|*C,R-2,R-1*                           -> 0
-    #               0:  *C,2xR-1*                                       -> 0
-    # ---- Game 5)  3:  *2xC,R-2*| 3xC,R-2 |*2xC,R-2,R*|*2xC,R-2,R-1*
-    #                   3xC,R-2,R-1 | 2xC,R-2,R-1,R |*2xC,R-2,2xR-1*    -> 3
-    #               2:  *2xC,R-1*| 3xC,R-1 | 2xC,R-1,R |*2xC,2xR-1*
-    #                   *2xC,R-2*|*3xC,R-2*|*2xC,R-2,R*|*2xC,R-2,R-1*   -> 2
-    #               1:  *2xC,R-1*|*2xC,R-2*                             -> 0
-    #               0:  *2xC,R-1*                                       -> 0
-    # Grand total, discounting duplicates: 34 after next untap
-    # before that it'll be more, because summonsick, tapped can distinguish
-
-
+    # proceed with the same calculations but in tree2, not split off
     tree2.main_phase_then_end()
     tree2.beginning_phases()
-    # next bit is empirical. I didn't theory. used to be 85 or 88...
+    # the intermediate values are empirical. but they match collector! good!
     assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
     assert tree2.get_num_active(2) == [7, 5, 5, 5, 73, 0, 0, 73]
-    assert tree2.get_num_active(3) == [64, 39, 39, 39, 0, 0, 0, 0]
-
-    assert False
-
-    post_main = tree2.get_latest_active(2, 4)
-    template = post_main[0].copy()
-    assert len(template.active.field) + len(template.active.hand) == 7
-    assert (len(template.stack) == 0)
-    assert (template.active.pool.cmc() == 0)
-    template.active.field = []
-    template.active.hand = []
-
-    lister = []
-    for g in tree2.get_latest_active(2, 4):
-        temp = g.copy()
-        temp.active.hand = []
-        temp.active.field = []
-        assert temp == template
-        lister.append(", ".join([c.name
-                                 + ("T" if c.tapped else "")
-                                 + str(c.counters)
-                                 for c in g.active.field]))
-    lister = sorted(lister)
-    for line in lister:
-        print(line)
-    print(len(lister))
-
-    assert False
-
-
-    n = len(tree2.get_intermediate())
-    assert n == 261  # empirical. I didn't theory.
-    # making sure set hash is still working
-    id_list = [g.get_id() for g in tree2.get_intermediate()]
-    assert n == len(id_list)
-    assert n == len(set(id_list))
-    # pass turn and do untap-upkeep-draw. should have 17 distinct states
-    tree2.beginning_phases()
-    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
-    assert tree2.get_num_active(2) == [7, 5, 5, 5, 76, 0, 0, 76]
-    assert tree2.get_num_active(3) == [69, 38, 38, 38, 0, 0, 0, 0]
+    assert tree2.get_num_active(2)[4:] == [len(s) for s in collector_t2][4:]
+    assert tree2.get_num_active(3) == [len(s) for s in collector_t3]
     for g in tree2.get_latest_active(3, 3):
         assert (len(g.stack) == 0)
         assert (g.active.pool.cmc() == 0)
@@ -842,43 +778,128 @@ if __name__ == "__main__":
     print("Testing basic lands, shock-lands, fetch-lands...")
     start_clock = time.perf_counter()
 
+
+    class ZZRockW(RulesText.Permanent):
+        def __init__(self):
+            super().__init__()
+            self.name = "RockW"
+            self.cost = Costs.Cost("W")
+
+    class ZZRockU(RulesText.Permanent):
+        def __init__(self):
+            super().__init__()
+            self.name = "RockU"
+            self.cost = Costs.Cost("U")
+
+    class ZZRockB(RulesText.Permanent):
+        def __init__(self):
+            super().__init__()
+            self.name = "RockB"
+            self.cost = Costs.Cost("B")
+
+    class ZZRockR(RulesText.Permanent):
+        def __init__(self):
+            super().__init__()
+            self.name = "RockR"
+            self.cost = Costs.Cost("R")
+
+    class ZZRockG(RulesText.Permanent):
+        def __init__(self):
+            super().__init__()
+            self.name = "RockG"
+            self.cost = Costs.Cost("G")
+
+    rock_list = [ZZRockW, ZZRockU, ZZRockB, ZZRockR, ZZRockG]
+
     # put some basics in hand, make sure they're playable and produce mana
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Plains()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Island()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Swamp()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Mountain()), Zone.Hand)
+    for rock_type in rock_list:
+        game.give_to(Cardboard(rock_type()), Zone.Hand)
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 5
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    assert len(tree.get_states_no_options()) == 5
+    # nothing; play land x5; tap land x5; cast relevant colored Rock x5
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 16, 0, 0, 16]
     collector = set()
-    for g in tree.get_states_no_options():
-        collector.add((g.active.field[0].name, str(g.active.pool)))
-        assert len(g.active.field) == 1
-        assert len(g.active.hand) == 4
-    assert collector == {("Forest", "G"), ("Plains", "W"), ("Island", "U"),
-                         ("Swamp", "B"), ("Mountain", "R")}
+    for g in tree.get_latest_active(1, "cleanup"):
+        if len(g.active.field) == 2:  # land AND colored rock in play
+            collector.add((g.active.field[0].name, g.active.field[1].name))
+    assert collector == {('Mountain', 'RockR'), ('Island', 'RockU'),
+                         ('Plains', 'RockW'), ('Swamp', 'RockB'),
+                         ('Forest', 'RockG')}
 
     # test a shock land the same way
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
     game.give_to(Cardboard(Decklist.HallowedFountain()), Zone.Hand)
+    for rock_type in rock_list:
+        game.give_to(Cardboard(rock_type()), Zone.Hand)
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 2
-    tree = PlayTree([game], 2)
-    tree.main_phase_then_end()
-    # shock enters tapped; shocked in, taps for 2 colors; non-shock is played
-    assert len(tree.get_states_no_options()) == 4
+
+
+    game1 = game.copy()
+    [(game_onstack, _, _)] = game1.active.get_valid_castables()[1].do_it(game1)
+    game2, game3 = game_onstack.clear_super_stack()
+    assert game2.active.life == 20 and game2.active.field[0].tapped
+    assert game3.active.life == 18 and not game3.active.field[0].tapped
+    mana_floating = []
+    for jj in range(2):
+        game_new = game3.copy()
+        assert len(game_new.active.get_valid_castables()) == 0
+        assert len(game_new.active.get_valid_activations()) == 2
+        verb = game_new.active.get_valid_activations()[jj]
+        mana_floating.append(verb.do_it(game_new)[0][0])
+    assert set([str(g.active.pool) for g in mana_floating]) == {"W", "U"}
+    rock_on_stack = []
+    for g in mana_floating:
+        assert len(g.active.get_valid_castables()) == 1
+        assert len(g.active.get_valid_activations()) == 0
+        color = str(g.active.pool)
+        [(state, _, _)] = g.active.get_valid_castables()[0].do_it(g)
+        assert state.stack[0].obj.name[-1] == color
+        rock_on_stack.append(state)
+    assert len(rock_on_stack) == 2
+    assert len(set(rock_on_stack)) == 2
+    resolved = []
+    for g in rock_on_stack:
+        assert len(g.active.get_valid_castables()) == 0
+        assert len(g.active.get_valid_activations()) == 0
+        resolved += g.resolve_top_of_stack()
+    assert len(resolved) == 2
+    assert len(set(resolved)) == 2
+
     collector = set()
-    for g in tree.get_states_no_options():
-        collector.add((g.active.life, str(g.active.pool)))
-        assert len(g.active.field) == 1
-        assert len(g.active.hand) == 1
-        assert g.active.field[0].tapped
-    assert collector == {(20, "G"), (20, ""), (18, "U"), (18, "W")}
+    collector.update([game1, game2, game3])
+    collector.update(mana_floating)
+    collector.update(rock_on_stack)
+    collector.update(resolved)
+    assert len(collector) == 9
+
+    tree = PlayTree([game], 5)
+    tree.main_phase_then_end()
+    # shock enters tapped; shock in; 2x tap for color; 2x play rock. Or play
+    # basic; tap it; play rock. Or do nothing. 10 total. But collapsed to 9
+    # because after you pass phase, can't tell which color Fountain tapped for.
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 9, 0, 0, 9]
+    collector = set()
+    for g in tree.get_latest_active(1, "cleanup"):
+        names = [c.name + ("T" if c.tapped else "") for c in g.active.field]
+        collector.add(",".join(names) + "," + str(g.active.life))
+    assert collector == {',20', 'Forest,20', 'ForestT,20', 'ForestT,RockG,20',
+                         'HallowedFountainT,20', 'HallowedFountain,18',
+                         'HallowedFountainT,18', 'HallowedFountainT,RockU,18',
+                         'HallowedFountainT,RockW,18'}
 
     # test a fetch land with many valid targets
     game = GameState(1)
@@ -1190,7 +1211,8 @@ if __name__ == "__main__":
 
     # Turn 2.
     tree.beginning_phases()
-    assert len(tree.get_latest_active(1)) == 3  # played nothing, forest, or caretaker
+    assert len(
+        tree.get_latest_active(1)) == 3  # played nothing, forest, or caretaker
     tree.main_phase_then_end()
     assert len(tree.get_intermediate(1)) == 44  # 42  # 53
     assert len(tree.get_states_no_options(1)) == 6  # 7
@@ -1209,7 +1231,6 @@ if __name__ == "__main__":
           % (time.perf_counter() - start_clock))
     print("         (~1.20 2022-09-06)")
     print("         (~0.70 2022-07-22)")
-
 
     # -----------------------------------------------------------------------
 
@@ -1449,7 +1470,6 @@ if __name__ == "__main__":
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
     # -----------------------------------------------------------------------
-
 
     # build a card that grants haste, see if caryatid taps when it enters.
     # this is a good test of "granting" and also checking like "haste" does.

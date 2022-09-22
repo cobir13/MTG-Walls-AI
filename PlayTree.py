@@ -59,17 +59,6 @@ class PlayTree:
                 state.pass_turn()
             self._add_state_to_trackers(state)
 
-    def _track_locally(self,
-                       to_track: List[GameState],
-                       track_list: List[GameState],
-                       track_set: Set[GameState]):
-        """
-        Start tracking the list of given states. Any that aren't
-        already in the tracking set should be added to both the
-        tracking set and the tracking list."""
-        track_list.extend([s for s in to_track if s not in track_set])
-        track_set.update(to_track)
-
     def _add_state_to_trackers(self, state: GameState):
         # only add if NEW state. If already in intermediate, don't track.
         if (len(self._intermediate_states) <= state.total_turns
@@ -89,7 +78,7 @@ class PlayTree:
             self._intermediate_states.add(state)
 
     def _whittle_and_respond(self, in_progress: List[GameState],
-                             tracking_set: Set[GameState], phase: int):
+                             track_set: Set[GameState], phase: int):
         """
         Pops GameStates off of the `in_progress` set (mutating
         it). Let the players respond to Triggers or just pass,
@@ -105,9 +94,10 @@ class PlayTree:
                 self._add_state_to_trackers(state4)
             else:
                 # give priority player a chance to act, then process again
-                self._track_locally(to_track=state4.do_priority_action(),
-                                    track_list=in_progress,
-                                    track_set=tracking_set)
+                to_track = state4.do_priority_action()
+                in_progress.extend([s for s in to_track if s not in track_set])
+                track_set.update(to_track)
+
 
     def phase_untap(self):
         """process the states in the uptap phase of active states
@@ -129,8 +119,9 @@ class PlayTree:
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_upkeep()  # phase remains upkeep
-            self._track_locally(to_track=state2.clear_super_stack(),
-                                track_list=in_progress, track_set=screener)
+            to_track = state2.clear_super_stack()
+            in_progress.extend([s for s in to_track if s not in screener])
+            screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
         self._whittle_and_respond(in_progress, screener, phase)
 
@@ -144,8 +135,9 @@ class PlayTree:
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_draw()  # phase remains draw step
-            self._track_locally(to_track=state2.clear_super_stack(),
-                                track_list=in_progress, track_set=screener)
+            to_track = state2.clear_super_stack()
+            in_progress.extend([s for s in to_track if s not in screener])
+            screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
         self._whittle_and_respond(in_progress, screener, phase)
 
@@ -155,8 +147,9 @@ class PlayTree:
         phase = GameState.PHASES.index("main1")
         in_progress: List[GameState] = []
         screener: Set[GameState] = set()
-        self._track_locally(to_track=self._active_states[-1][phase],
-                            track_list=in_progress, track_set=screener)
+        to_track = self._active_states[-1][phase]
+        in_progress.extend([s for s in to_track if s not in screener])
+        screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
         self._whittle_and_respond(in_progress, screener, phase)
 
@@ -180,8 +173,9 @@ class PlayTree:
         for state in self._active_states[-1][phase]:
             state2 = state.copy()
             state2.step_endstep()  # phase remains end step
-            self._track_locally(to_track=state2.clear_super_stack(),
-                                track_list=in_progress, track_set=screener)
+            to_track = state2.clear_super_stack()
+            in_progress.extend([s for s in to_track if s not in screener])
+            screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
         self._whittle_and_respond(in_progress, screener, phase)
 
