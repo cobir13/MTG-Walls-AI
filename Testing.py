@@ -729,10 +729,27 @@ if __name__ == "__main__":
     # 4) Caryatid,           Roots[-0/-1],Roots[-0/-1]
     # 5) Caryatid, Caryatid, Roots[-0 / -1]
     # In total, after draw, player has access to: Caryatid x3, Roots x4.
-    # Let's go through the theory here. What can each of these 5 games do?
-    # 1)    C,R | C(T),R | C,R-1 | C(T),R-1 | C(T),R-1:C | C(T)
+    # I did the theory out on paper by hand. Results are in the asserts below.
+    # Split these 5 off into separate trees for the next test.
+    new_trees = []
+    for ii, game in enumerate(tree2.get_latest_active(2, 3)):
+        assert len(game.active.field) == [2, 2, 3, 3, 3][ii]
+        new_tree = PlayTree([game], 5)
+        new_tree.main_phase_then_end()
+        new_tree.beginning_phases()
+        new_trees.append(new_tree)
+    assert new_trees[0].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
+    assert new_trees[0].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
+    assert new_trees[1].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
+    assert new_trees[1].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
+    assert new_trees[2].get_num_active(2) == [0, 0, 0, 1, 23, 0, 0, 23]
+    assert new_trees[2].get_num_active(3) == [23, 15, 15, 15, 0, 0, 0, 0]
+    assert new_trees[3].get_num_active(2) == [0, 0, 0, 1, 18, 0, 0, 18]
+    assert new_trees[3].get_num_active(3) == [18, 12, 12, 12, 0, 0, 0, 0]
+    assert new_trees[4].get_num_active(2) == [0, 0, 0, 1, 18, 0, 0, 18]
+    assert new_trees[4].get_num_active(3) == [18, 11, 11, 11, 0, 0, 0, 0]
 
-
+    assert False
 
     # Game 1 & 2: 2 mana. hold, play caryatid, or play roots & activate or not.
     # ---- Game 1)  2 mana: C,R-1 | 2xC,R-1 | C,R-1,R | C,2xR-1         -> 4
@@ -766,33 +783,16 @@ if __name__ == "__main__":
     #               0:  *2xC,R-1*                                       -> 0
     # Grand total, discounting duplicates: 34 after next untap
     # before that it'll be more, because summonsick, tapped can distinguish
-    #
-
-    # Split these 5 off into separate trees for the next test.
-    new_trees = []
-    for ii, game in enumerate(tree2.get_latest_active(2, 3)):
-        assert len(game.active.field) == [2, 2, 3, 3, 3][ii]
-        new_tree = PlayTree([game], 5)
-        new_tree.main_phase_then_end()
-        new_tree.beginning_phases()
-        new_trees.append(new_tree)
-
-    assert new_trees[0].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
-    assert new_trees[0].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
-    assert new_trees[1].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
-    assert new_trees[1].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
-    assert new_trees[2].get_num_active(2) == [0, 0, 0, 1, 23, 0, 0, 23]
-    assert new_trees[2].get_num_active(3) == [23, 15, 15, 15, 0, 0, 0, 0]
-
 
 
     tree2.main_phase_then_end()
     tree2.beginning_phases()
     # next bit is empirical. I didn't theory. used to be 85 or 88...
     assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
-    assert tree2.get_num_active(2) == [7, 5, 5, 5, 76, 0, 0, 76]
-    assert tree2.get_num_active(3) == [69, 38, 38, 38, 0, 0, 0, 0]
+    assert tree2.get_num_active(2) == [7, 5, 5, 5, 73, 0, 0, 73]
+    assert tree2.get_num_active(3) == [64, 39, 39, 39, 0, 0, 0, 0]
 
+    assert False
 
     post_main = tree2.get_latest_active(2, 4)
     template = post_main[0].copy()

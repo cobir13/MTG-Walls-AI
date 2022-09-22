@@ -372,7 +372,7 @@ class GameState:
             self.events_since_previous += text
         # temporarily turn off tracking for these Untaps
         self.is_tracking_history = False
-        for card in self.active.field:
+        for card in self.active.field[:]:  # Untap sorts field, so copy list
             untapper = Untap().populate_options(self, self.active_player_index,
                                                 card, None)[0]
             untapper.do_it(self, check_triggers=True)
