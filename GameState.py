@@ -19,7 +19,7 @@ import Zone
 from ManaHandler import ManaPool
 from Stack import StackObject
 from Verbs import MoveToZone, DrawCard, Untap, NullVerb
-import Choices
+import Pilots
 
 
 class GameState:
@@ -341,10 +341,9 @@ class GameState:
         # options are: cast spell; activate ability; pass priority
         activables = self.priority.get_valid_activations()
         castables = self.priority.get_valid_castables()
-        doables: List[Verbs.Verb] = activables + castables + [NullVerb()]
+        opts = activables + castables
         state_list: List[GameState] = []
-        for to_do in Choices.choose_exactly_one(doables, "choose action to do",
-                                                self.priority.decision_maker):
+        for to_do in self.priority.pilot.choose_action_to_take(opts):
             if isinstance(to_do, NullVerb):
                 # pass priority
                 state_list += self.copy().pass_priority()
@@ -595,8 +594,8 @@ class GameState:
             # only back to active player if super_stack==[]. breaks base case.
             assert player != self.active_player_index
         # pick a super_stack caster to cast first.
-        maker = self.player_list[player].decision_maker
-        for ii, v in Choices.choose_exactly_one(theirs, "Put on stack", maker):
+        decider = self.player_list[player].pilot
+        for ii, v in decider.choose_exactly_one(theirs, "Put on stack"):
             state2 = self.copy()
             caster2 = state2.super_stack.pop(ii)
             # put onto the stack of copies of state2. doesn't mutate state2
@@ -641,7 +640,8 @@ class GameState:
 
 
 class Player:
-    def __init__(self, state: GameState, decision_maker: str = "try_all"):
+    def __init__(self, state: GameState,
+                 pilot: Pilots.Pilot = Pilots.BotTriesAll()):
         """Initializer also adds the new Player to the
         GameState's list of players"""
         self.gamestate: GameState = state
@@ -661,7 +661,7 @@ class Player:
         self.grave: List[Cardboard] = []  # list of Cardboard objects
         # The following fields are NOT included in get_id
         # how the player makes decisions. ["try_all", "try_one", or "manual"]
-        self.decision_maker: str = decision_maker
+        self.pilot: Pilots.Pilot = pilot
         # untap, upkeep, draw, main1, combat, main2, endstep, cleanup.
         # Want option to act (rather than pass) during my/opponents phase:
         self.act_in_my_phase = [
@@ -754,7 +754,7 @@ class Player:
         allows tracking "between split universes."
         If track_list has non-Cardboard objects, they're also
         returned"""
-        new_player = Player(new_state, self.decision_maker)
+        new_player = Player(new_state, self.pilot)
         # copy the ints by value
         new_player.turn_count = self.turn_count
         new_player.life = self.life
@@ -785,8 +785,8 @@ class Player:
         game = self.gamestate
         # temporarily set decision_maker to be "try_all", to see if ANY method
         # of casting this card will work.
-        decider = self.decision_maker
-        self.decision_maker = "try_all"
+        old_pilot = self.pilot
+        self.pilot = Pilots.BotTriesAll()
         for source in self.hand + self.field + self.grave:
             if (any([source.is_equiv_to(ob) for ob in active_objects])
                     and hide_equivalent):
@@ -800,7 +800,7 @@ class Player:
             # track object to not look at any similar again.
             if add_object and hide_equivalent:
                 active_objects.append(source)
-        self.decision_maker = decider  # reset decision_maker
+        self.pilot = old_pilot  # reset pilot
         return activatables
 
     def get_valid_castables(self, hide_equivalent=True
@@ -814,12 +814,13 @@ class Player:
         castables: List[Verbs.PlayCardboard] = []
         active_objects: List[Cardboard] = []
         game = self.gamestate
-        # temporarily set decision_maker to be "try_all", to see if ANY method
+        # temporarily set pilot to be "try_all", to see if ANY method
         # of casting this card will work.
-        decider = self.decision_maker
-        self.decision_maker = "try_all"
+        old_pilot = self.pilot
+        self.pilot = Pilots.BotTriesAll()
         for card in self.hand:
-            # skip cards equivalent to those already searched
+            # skip cards equivalent to those
+            # already searched
             if (any([card.is_equiv_to(ob) for ob in active_objects])
                     and hide_equivalent):
                 continue
@@ -828,7 +829,7 @@ class Player:
             if caster is not None:
                 active_objects.append(card)
                 castables.append(caster)
-        self.decision_maker = decider  # reset decision_maker
+        self.pilot = old_pilot  # reset pilot
         return castables
 
     # -----------

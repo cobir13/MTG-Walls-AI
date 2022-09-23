@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 import tkinter as tk
 
 import Zone
-import Choices
+import Pilots
 import RulesText  # for Creature, maybe Land
 from GameState import GameState, Player
 import Decklist
@@ -31,7 +31,7 @@ class ManualGame(tk.Tk):
             if pl.player_index != self.player_index:
                 fr.grid(row=pl.player_index, column=1,
                         padx=5, pady=5, sticky="W")
-                pl.decision_maker = "try_one"
+                pl.pilot = Pilots.HumanPlayer()
         # stack
         self.stack_frame = tk.Frame(self)
         self.stack_frame.grid(row=len(self.player_frame_list),
@@ -40,7 +40,7 @@ class ManualGame(tk.Tk):
         fr = self.player_frame_list[self.player_index]
         fr.grid(row=len(self.player_frame_list) + 1, column=1,
                 padx=5, pady=5, sticky="W")
-        startstate.player_list[self.player_index].decision_maker = "manual"
+        startstate.player_list[self.player_index].pilot = Pilots.HumanPlayer()
         # castables
         self.caster_frame = tk.Frame(self)
         self.caster_frame.grid(row=0, column=2,
@@ -59,27 +59,6 @@ class ManualGame(tk.Tk):
     @property
     def player(self):
         return game.player_list[self.player_index]
-
-    # def _caster(self, options: List[StackObject]):
-    #     chosen = Choices.choose_exactly_one(options, "choose to activate",
-    #                                         self.player.decision_maker)
-    #     if len(chosen) == 0:
-    #         return  # no valid choice, so just pass
-    #     elif len(chosen) == 1:
-    #         self._put_on_stack(chosen[0])
-    #     else:
-    #         assert False  # problem!
-    #
-    # def _put_on_stack(self, stack_obj: StackObject):
-    #     universes = stack_obj.put_on_stack(self.game)
-    #     if len(universes) == 0:
-    #         return  # casting failed, nothing changed so do nothing
-    #     assert (len(universes) == 1)
-    #     self.history.append(universes[0])
-    #     if self.var_resolveall.get():
-    #         self.empty_entire_stack()
-    #     else:
-    #         self.rebuild_display()
 
     def build_player_display(self, player: Player):
         self_frame = self.player_frame_list[player.player_index]

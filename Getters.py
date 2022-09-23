@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     TARGET = int | Cardboard | StackObject
 
-import Choices
+import Pilots
 import Match
 import Zone
 
@@ -388,15 +388,14 @@ class Chooser(AllWhich):
         requested."""
         options: tuple = super().pick(options, state, player, card)[0]
         num = self.num_to_choose.get(state, player, card)
-        decider = state.player_list[player].decision_maker
+        decider = state.player_list[player].pilot
         if self.can_be_less:
-            return Choices.choose_n_or_fewer(options, num, setting=decider)
+            return decider.choose_n_or_fewer(options, num)
         else:
             if num == 1:
-                return [(c,) for c in
-                        Choices.choose_exactly_one(options, setting=decider)]
+                return [(c,) for c in decider.choose_exactly_one(options)]
             else:
-                return Choices.choose_exactly_n(options, num, setting=decider)
+                return decider.choose_exactly_n(options, num)
         # TODO: add equivalence screening?
 
     def __str__(self):

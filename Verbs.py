@@ -26,7 +26,7 @@ import Match as Match
 import Getters as Get
 import ManaHandler
 import Stack
-import Choices
+import Pilots
 
 
 # ---------------------------------------------------------------------------
@@ -568,17 +568,15 @@ class Modal(VerbFactory):
             num: int = self.num_to_choose.get(state, player, source)
         else:
             num: int = self.num_to_choose
-        decider = state.player_list[player].decision_maker
+        decider = state.player_list[player].pilot
         modes: List[Tuple[Tuple[int, str]]]
         if self.can_be_less:
-            modes = Choices.choose_n_or_fewer(possible, num, setting=decider)
+            modes = decider.choose_n_or_fewer(possible, num)
         else:
             if num == 1:
-                modes = [(c,) for c in
-                         Choices.choose_exactly_one(possible, setting=decider)]
+                modes = [(c,) for c in decider.choose_exactly_one(possible)]
             else:
-                modes = Choices.choose_exactly_n(possible, num,
-                                                 setting=decider)
+                modes = decider.choose_exactly_n(possible, num)
         # step 2: for each chosen set of verbs, make a multi to describe that
         multi_verbs: List[MultiVerb] = []
         for set_of_verbs in modes:  # Tuple[Tuple[int, str]]
