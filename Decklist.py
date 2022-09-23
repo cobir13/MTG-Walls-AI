@@ -285,7 +285,7 @@ class MistyRainforest(Land):
 
     def __init__(self):
         super().__init__()
-        self.name = "WindsweptHeath"
+        self.name = "MistyRainforest"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
                            TriggerOnSelfEnter(),

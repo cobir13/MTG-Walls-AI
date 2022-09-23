@@ -778,7 +778,6 @@ if __name__ == "__main__":
     print("Testing basic lands, shock-lands, fetch-lands...")
     start_clock = time.perf_counter()
 
-
     class ZZRockW(RulesText.Permanent):
         def __init__(self):
             super().__init__()
@@ -840,17 +839,17 @@ if __name__ == "__main__":
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
     game.phase = 3  # set to main phase
-    game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
-    game.give_to(Cardboard(Decklist.HallowedFountain()), Zone.Hand)
     for rock_type in rock_list:
         game.give_to(Cardboard(rock_type()), Zone.Hand)
+    game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
+    game.give_to(Cardboard(Decklist.HallowedFountain()), Zone.Hand)
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 2
 
-
+    # some detailed testing I did while debugging. may as well leave it in!
     game1 = game.copy()
-    [(game_onstack, _, _)] = game1.active.get_valid_castables()[1].do_it(game1)
-    game2, game3 = game_onstack.clear_super_stack()
+    [(onstack, _, _)] = game1.active.get_valid_castables()[1].do_it(game1)
+    game2, game3 = onstack.clear_super_stack()
     assert game2.active.life == 20 and game2.active.field[0].tapped
     assert game3.active.life == 18 and not game3.active.field[0].tapped
     mana_floating = []
@@ -878,7 +877,6 @@ if __name__ == "__main__":
         resolved += g.resolve_top_of_stack()
     assert len(resolved) == 2
     assert len(set(resolved)) == 2
-
     collector = set()
     collector.update([game1, game2, game3])
     collector.update(mana_floating)
@@ -903,6 +901,10 @@ if __name__ == "__main__":
 
     # test a fetch land with many valid targets
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
+    for rock_type in rock_list:
+        game.give_to(Cardboard(rock_type()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.Plains()), Zone.DeckTop)
@@ -911,6 +913,7 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.HallowedFountain()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.BreedingPool()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.MistyRainforest()), Zone.Hand)
+    # 5 valid targets (4 unique).  1 fetchland & color-testing Rocks in hand.
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 1  # play fetch
     matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
@@ -919,53 +922,60 @@ if __name__ == "__main__":
 
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    # 4 distinct fetchables, but each shock give 3 options (2 colors + tapped).
-    # Can also fail to find.
-    assert len(tree.get_states_no_options()) == 9
+    # Pass; play fetch (triggers on etb), gets 2 basics or 2 shocks or fails
+    # to find. Each basic gives 3 options: pass with it untapped; tap it;
+    # cast Rock. Each shock gives 5 options: etb tapped; shock in and pass;
+    # tap it; cast 2 possible Rocks.  So 1 + 2*3 + 2*5 + 1 = 18
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 18, 0, 0, 18]
     collector = set()
-    ticker = 0
-    for g in tree.get_states_no_options():
-        collector.add((g.active.life, str(g.active.pool)))
-        assert len(g.active.hand) == 0
-        assert g.active.grave[0].has_type(Decklist.MistyRainforest)
-        assert any([c.name == "Swamp" for c in g.active.deck])  # never swamp
-        if len(g.active.field) == 0:
-            ticker += 1
-            assert len(g.active.deck) == 7
-        else:
-            assert len(g.active.deck) == 6
-            assert g.active.field[0].tapped
-    # 2 ways to have (19,"") and (17,"G")
-    assert ticker == 1
-    assert collector == {(19, "G"), (19, "U"), (19, ""), (17, "U"), (17, "G"),
-                         (17, "W")}
+    for g in tree.get_latest_active(1, "cleanup"):
+        collector.add(",".join([c.name for c in g.active.field]
+                               + [str(g.active.life)]))
+        if len(g.active.grave) > 0:
+            assert len(g.active.grave) == 1
+            assert g.active.grave[0].name == "MistyRainforest"
+    assert collector == {'19', '20',
+                         'Island,19', 'Island,RockU,19',
+                         'Forest,19', 'Forest,RockG,19',
+                         'HallowedFountain,19', 'HallowedFountain,RockU,17',
+                         'HallowedFountain,17', 'HallowedFountain,RockW,17',
+                         'BreedingPool,19', 'BreedingPool,RockG,17',
+                         'BreedingPool,17', 'BreedingPool,RockU,17'}
 
     # what about a fetch with no valid targets
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
     game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.Roots()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.Swamp()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    assert len(tree.get_states_no_options()) == 1
-    result = tree.get_states_no_options()[0]
-    assert result.active.life == 19
-    assert len(result.active.deck) == 3
-    assert len(result.active.hand) == 0
-    assert len(result.active.grave) == 1
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 2, 0, 0, 2]
+    for g in tree.get_latest_active(1, "cleanup"):
+        grave = len(g.active.grave)
+        life = g.active.life
+        field = len(g.active.field)
+        assert ((grave == 1 and field == 0 and life == 19)
+                or (grave == 0 and field == 0 and life == 20))
 
     # what about no deck at all?
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    assert len(tree.get_states_no_options()) == 1
-    result = tree.get_states_no_options()[0]
-    assert result.active.life == 19
-    assert len(result.active.deck) == 0
-    assert len(result.active.hand) == 0
-    assert len(result.active.grave) == 1
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 2, 0, 0, 2]
+    for g in tree.get_latest_active(1, "cleanup"):
+        assert len(g.active.deck) == 0
+        assert len(g.active.field) == 0
+        life = g.active.life
+        hand = len(g.active.hand)
+        grave = len(g.active.grave)
+        assert ((life == 20 and hand == 1 and grave == 0)
+                or (life == 19 and hand == 0 and grave == 1))
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -1079,6 +1089,7 @@ if __name__ == "__main__":
 
     game.pass_turn()
     game.step_untap()
+    game.phase = GameState.PHASES.index("main1")
     assert not game.active.field[0].summon_sick
     assert (len(game.active.get_valid_activations()) == 0)  # nothing to tap
 
@@ -1088,16 +1099,20 @@ if __name__ == "__main__":
     assert len(game.active.field) == 2
     assert len(game.active.get_valid_activations()) == 1
     activ = game.active.get_valid_activations()[0]  # for debug
-    tree = PlayTree([game], 2)
+    tree = PlayTree([game], 3)
     tree.main_phase_then_end()
-    [univ1] = tree.get_states_no_options()
-    assert len(univ1.active.hand) == 0  # used mana to cast 2nd Caretaker
-    assert len(univ1.active.field) == 3
-    assert univ1.active.pool == ManaHandler.ManaPool("")
-    assert all([c.tapped or c.summon_sick for c in univ1.active.field])
+    # pass; tap summon-sick caryatid using caretaker; play caretaker
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 3, 0, 0, 3]
+    collector = set()
+    for g in tree.get_latest_active(1, "cleanup"):
+        collector.add(",".join([("T" if c.tapped else "")
+                                + ("S" if c.summon_sick else "")
+                                for c in g.active.field]))
+    assert collector == {'T,TS', 'S,T,TS', ',S'}
 
-    # Rewind to before casting 2nd Caretaker. Give 1st TWO things to tap.
+    #  Give the caretaker TWO things to tap. and something new to cast
     game.give_to(game.active.hand[0], Zone.Field)
+    game.give_to(Cardboard(ZZRockR()), Zone.Hand)
     # one caretaker is summoning-sick, the other is not
     # only one ability, but two options to activate it
     ability_casters = game.active.get_valid_activations()
@@ -1114,9 +1129,15 @@ if __name__ == "__main__":
 
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    [univ2, univ3] = tree.get_states_no_options()
-    assert (univ2.active.pool == ManaHandler.ManaPool("A"))
-    assert (univ3.active.pool == ManaHandler.ManaPool("A"))
+    # pass; tap caryatid; cast Rock; tap caretaker; cast Rock
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 5, 0, 0, 5]
+    results = []
+    for g in tree.get_latest_active(1, "cleanup"):
+        if len(g.active.hand) == 0:
+            results.append(g)
+            assert len([c for c in g.active.field if c.tapped]) == 2
+    assert len(results) == 2
+    [univ2, univ3] = results
     assert (len(univ2.active.field) == len(univ3.active.field))
     # check that they are really tapped differently
     assert ([c.tapped for c in univ2.active.field]
@@ -1161,15 +1182,17 @@ if __name__ == "__main__":
     # axebane; battlement; caryatid; caretaker x 2
     assert len(game6.active.get_valid_activations(hide_equivalent=False)) == 5
     assert len(game6.active.get_valid_activations()) == 4
+
+    game6.active.turn_count = 1  # set to turn 1, not turn 0
+    game6.phase = 3  # set to main phase
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_then_end()
+    assert tree6.get_num_active(1) == [0, 0, 0, 1, 23, 0, 0, 23]
     collector = set()
-    for g in tree6.get_states_no_options():
+    for g in tree6.get_latest_active(1, 4):
         collector.add(str(g.active.pool))
     assert collector == {"GGGGGAAAAAAA", "GGGGGAAAAAA", "AAAAAAA", "GGGGGAA",
                          "AAA"}
-    assert len(tree6.get_states_no_options()) == 1 + 1 + 2 + 2 + 1
-    assert len(tree6.get_latest_active()) == 0
     # Math: count based on when the first caretaker is tapped (which action).
     # 5th: impossible
     # 4th: 6 ways to order other 3. Caretaker taps other caretaker. 6*1=6
@@ -1182,7 +1205,7 @@ if __name__ == "__main__":
     #   sequence the other 3. 3 ways to not, leaving caretaker and 2 others.
     #   Either tap caretaker + one of 2 and then remainder, or tap one and then
     #   tap either caretaker or remainder. 1*6+3*(2+2*2)=24
-    assert len(tree6.get_intermediate()) == 34
+
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
