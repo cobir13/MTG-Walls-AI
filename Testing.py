@@ -187,6 +187,7 @@ if __name__ == "__main__":
     # define two cards which can "listen" for triggers. One cares about
     # tapping creatures, the other about moving them from field
 
+
     class WeirdOrb(RulesText.Creature):
         def __init__(self):
             super().__init__()
@@ -200,7 +201,6 @@ if __name__ == "__main__":
                                ),
                                Verbs.AddMana("R")
                                )
-
 
     class BloodArtist(RulesText.Creature):
         def __init__(self):
@@ -778,11 +778,13 @@ if __name__ == "__main__":
     print("Testing basic lands, shock-lands, fetch-lands...")
     start_clock = time.perf_counter()
 
+
     class ZZRockW(RulesText.Permanent):
         def __init__(self):
             super().__init__()
             self.name = "RockW"
             self.cost = Costs.Cost("W")
+
 
     class ZZRockU(RulesText.Permanent):
         def __init__(self):
@@ -790,11 +792,13 @@ if __name__ == "__main__":
             self.name = "RockU"
             self.cost = Costs.Cost("U")
 
+
     class ZZRockB(RulesText.Permanent):
         def __init__(self):
             super().__init__()
             self.name = "RockB"
             self.cost = Costs.Cost("B")
+
 
     class ZZRockR(RulesText.Permanent):
         def __init__(self):
@@ -802,11 +806,13 @@ if __name__ == "__main__":
             self.name = "RockR"
             self.cost = Costs.Cost("R")
 
+
     class ZZRockG(RulesText.Permanent):
         def __init__(self):
             super().__init__()
             self.name = "RockG"
             self.cost = Costs.Cost("G")
+
 
     rock_list = [ZZRockW, ZZRockU, ZZRockB, ZZRockR, ZZRockG]
 
@@ -1201,7 +1207,7 @@ if __name__ == "__main__":
                 # the target that was tapped doesn't activate later
                 target_tapped = history.split("\n")[1][4:-3]
                 assert all([("Activate %s" % target_tapped) not in h
-                            for h in hist_list[ii+1:]])
+                            for h in hist_list[ii + 1:]])
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -1210,12 +1216,14 @@ if __name__ == "__main__":
     print("Can PlayTree find 8 mana on turn 3...")
     start_clock = time.perf_counter()
 
+
     class EightDrop(RulesText.Creature):
         def __init__(self):
             super().__init__()
             self.name = "EightDrop"
             self.cost = Costs.Cost("8")
             self.set_power_toughness(8, 8)
+
 
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
@@ -1279,12 +1287,13 @@ if __name__ == "__main__":
     for x in range(10):
         game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
 
-
     tree = PlayTree([game], 5)
-    # only option is play Forest, play Blossoms, draw Island
     tree.main_phase_then_end()
-    assert len(tree.get_states_no_options()) == 1
-    [final] = tree.get_states_no_options()
+    # Pass | Plains(T) | Plains,Forest | Plains(T),Forest | Plains,Forest(T) |
+    # Plains(T),Forest(T) | Plains(T),Forest(T),Blossoms
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 7, 0, 0, 7]
+    assert len(tree.get_latest_no_options(1, 7)) == 1
+    [final] = tree.get_latest_no_options(1, 7)  # cleanup of this turn
     assert len(final.active.hand) == 2
     assert len(final.active.field) == 3
     assert len(final.active.deck) == 9
@@ -1293,10 +1302,13 @@ if __name__ == "__main__":
 
     # play next turn: draw Island, play Island, play Blossoms, draw Island
     tree2 = PlayTree([final], 5)
+    tree2.phase_cleanup()
     tree2.beginning_phases()
     tree2.main_phase_then_end()
-    assert len(tree2.get_states_no_options()) == 2  # floating W or U
-    [final2, _] = tree2.get_states_no_options()
+    assert tree2.get_num_active(2) == [1, 1, 1, 1, 16, 0, 0, 16]  # empirical
+    # Both Blossoms in play, all lands tapped
+    assert len(tree2.get_latest_no_options(2, 7)) == 1
+    [final2] = tree2.get_latest_no_options(2, 7)
     assert len(final2.active.hand) == 2
     assert len(final2.active.field) == 5
     assert len(final2.active.deck) == 7
@@ -1306,9 +1318,11 @@ if __name__ == "__main__":
     # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
     final2.give_to(Cardboard(Decklist.Caryatid()), Zone.Hand)
     tree3 = PlayTree([final2], 5)
+    tree3.phase_cleanup()
     tree3.beginning_phases()
     tree3.main_phase_then_end()
-    for g in tree3.get_states_no_options():
+    assert tree3.get_num_active(3) == [1, 1, 1, 1, 34, 0, 0, 34]  # empirical
+    for g in tree3.get_latest_no_options(3, 7):
         assert len(g.active.hand) == 2
         assert len(g.active.field) == 7
         assert len(g.active.deck) == 6
@@ -1364,14 +1378,14 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
 
-    def cast_and_resolve_company(state):
+    def cast_and_resolve_company(gamestate):
         # cast Collected Company
-        state.active.pool.add_mana("GGGG")
-        state.give_to(Cardboard(Decklist.Company()), Zone.Hand, 0)
-        castables = state.active.get_valid_castables()
+        gamestate.active.pool.add_mana("GGGG")
+        gamestate.give_to(Cardboard(Decklist.Company()), Zone.Hand, 0)
+        castables = gamestate.active.get_valid_castables()
         assert len(castables) == 1
         # Defer tracks cause, which is None since this is a card being cast.
-        [(on_stack, _, _)] = castables[0].do_it(state)
+        [(on_stack, _, _)] = castables[0].do_it(gamestate)
         assert len(on_stack.super_stack) == 0
         assert len(on_stack.stack) == 1
         return on_stack.resolve_top_of_stack()

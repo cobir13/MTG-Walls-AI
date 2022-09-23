@@ -249,6 +249,13 @@ class GameState:
             for card in player.field:
                 # erase the invisible counters
                 card.counters = [c for c in card.counters if c[0] not in "@$"]
+        # add tracker message, if applicable
+        if self.is_tracking_history:
+            message = "Pass>>Player%i Turn%i" % (self.active_player_index,
+                                                 self.active.turn_count)
+            if "\n>>" not in self.events_since_previous:
+                message = "\n>>" + message
+            self.events_since_previous += message
         return self
 
     def pass_phase(self) -> List[GameState]:
@@ -257,6 +264,9 @@ class GameState:
         the game into the next turn, pass the turn.
         MUTATES SELF. also returns list of new gamestate(s).
         """
+        message = "\n>>"
+        if not self.has_options:
+            message += "Out of options. "
         self.phase += 1
         # resets stack, mana pools
         self.stack = []
@@ -267,12 +277,11 @@ class GameState:
         self.priority_player_index = self.active_player_index
         # pass turn if we've passed the end of the turn.
         if self.phase == len(self.PHASES):
+            if self.is_tracking_history:
+                self.events_since_previous += message
             return [self.pass_turn()]
         else:
             if self.is_tracking_history:
-                message = "\n>>"
-                if not self.has_options:
-                    message += "Out of options. "
                 old_phase = GameState.PHASES[self.phase - 1]
                 new_phase = GameState.PHASES[self.phase]
                 message += "%s>>%s" % (old_phase, new_phase)

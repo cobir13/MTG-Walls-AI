@@ -233,6 +233,26 @@ class PlayTree:
         else:
             return turn_list[phase]
 
+    def get_latest_no_options(self, turn: int | None = None,
+                              phase: str | int | None = None
+                              ) -> List[GameState]:
+        """Returns the active states which finished their previous
+        phase with the "no more options" flag in their histories.
+        If the states are not tracking history, this will always
+        return the empty list."""
+        # step back through previous gamestates to find the last phase change
+        no_options = []
+        for g in self.get_latest_active(turn, phase):
+            prev = g
+            events = prev.events_since_previous
+            while prev is not None and ">>" not in events:
+                prev = prev.previous_state
+                events = prev.events_since_previous
+            if prev is not None and ">>Out of options" in events:
+                no_options.append(g)
+        return no_options
+
+
     def get_num_active(self, turn: int):
         turn_list: List[List[GameState]] = self._active_states[turn]
         return [len(sub) for sub in turn_list]
