@@ -253,8 +253,8 @@ class GameState:
 
     def pass_phase(self) -> List[GameState]:
         """
-        Increment the phase to the next phase where anyone actually
-        wants to do anything. If everyone is done, pass the turn.
+        Increment the phase to the next phase. If that moves
+        the game into the next turn, pass the turn.
         MUTATES SELF. also returns list of new gamestate(s).
         """
         self.phase += 1
@@ -269,6 +269,14 @@ class GameState:
         if self.phase == len(self.PHASES):
             return [self.pass_turn()]
         else:
+            if self.is_tracking_history:
+                message = "\n>>"
+                if not self.has_options:
+                    message += "Out of options. "
+                old_phase = GameState.PHASES[self.phase - 1]
+                new_phase = GameState.PHASES[self.phase]
+                message += "%s>>%s" % (old_phase, new_phase)
+                self.events_since_previous += message
             return [self]
 
 

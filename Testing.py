@@ -1185,27 +1185,23 @@ if __name__ == "__main__":
 
     game6.active.turn_count = 1  # set to turn 1, not turn 0
     game6.phase = 3  # set to main phase
+    game6.is_tracking_history = True
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_then_end()
     assert tree6.get_num_active(1) == [0, 0, 0, 1, 23, 0, 0, 23]
-    collector = set()
-    for g in tree6.get_latest_active(1, 4):
-        collector.add(str(g.active.pool))
-    assert collector == {"GGGGGAAAAAAA", "GGGGGAAAAAA", "AAAAAAA", "GGGGGAA",
-                         "AAA"}
-    # Math: count based on when the first caretaker is tapped (which action).
-    # 5th: impossible
-    # 4th: 6 ways to order other 3. Caretaker taps other caretaker. 6*1=6
-    # 3rd: 6 ways for which other is left. Caretaker either taps non-caretaker
-    #   or remaining caretaker, so 2 ways. 6*2=12.
-    # 2nd: 3 choices for what tapped first. Caretaker has 3 targets: if target
-    #   is caretaker, other two tap in either order. If not, can tap the other
-    #   and strand the caretaker, or tap both with caretaker. 3*(1*2+2*2)=18
-    # 1st: Caretaker has 4 targets. If target is caretaker, then 6 ways to
-    #   sequence the other 3. 3 ways to not, leaving caretaker and 2 others.
-    #   Either tap caretaker + one of 2 and then remainder, or tap one and then
-    #   tap either caretaker or remainder. 1*6+3*(2+2*2)=24
-
+    for g in tree6.get_latest_active(1, 7):
+        hist_list = g.get_all_history().strip("\n-----").split("\n-----")
+        for ii, history in enumerate(hist_list):
+            if "Activate Axebane" in history:
+                assert "add AAAAA" in history
+            if "Activate Battlement" in history:
+                assert "add GGGGG" in history
+            if "Activate Caretaker" in history:
+                assert "add A" in history
+                # the target that was tapped doesn't activate later
+                target_tapped = history.split("\n")[1][4:-3]
+                assert all([("Activate %s" % target_tapped) not in h
+                            for h in hist_list[ii+1:]])
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
@@ -1214,7 +1210,16 @@ if __name__ == "__main__":
     print("Can PlayTree find 8 mana on turn 3...")
     start_clock = time.perf_counter()
 
+    class EightDrop(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "EightDrop"
+            self.cost = Costs.Cost("8")
+            self.set_power_toughness(8, 8)
+
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
     game.is_tracking_history = True
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
@@ -1222,38 +1227,38 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.Roots()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Caretaker()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Battlement()), Zone.Hand)
+    game.give_to(Cardboard(EightDrop()), Zone.Hand)
     # deck
     for x in range(10):
         game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     # tree. Turn 1.
     tree = PlayTree([game], 5)
     tree.main_phase_then_end()
-    # start, Forest, tap, Caretaker, resolve
-    assert len(tree.get_intermediate(0)) == 5
-    assert len(tree.get_states_no_options(0)) == 1
+    # 4 outcomes: pass, play Forest, tap Forest, play Caretaker. Collapses
+    # to 3 after untap.
+    assert tree.get_num_active(1) == [0, 0, 0, 1, 4, 0, 0, 4]
+    # Start state in main phase; 4 states in combat, cleanup, and next untap
+    assert len(tree.get_intermediate()) == 13
 
     # Turn 2.
     tree.beginning_phases()
-    assert len(
-        tree.get_latest_active(1)) == 3  # played nothing, forest, or caretaker
     tree.main_phase_then_end()
-    assert len(tree.get_intermediate(1)) == 44  # 42  # 53
-    assert len(tree.get_states_no_options(1)) == 6  # 7
+    assert tree.get_num_active(2) == [4, 3, 3, 3, 31, 0, 0, 31]  # empirical
+    assert len(tree.get_intermediate()) == 119  # empirical  # 119
 
     # Turn 3.
     tree.beginning_phases()
-    assert len(tree.get_latest_active(2)) == 12
     tree.main_phase_then_end()
-    intermed = tree.get_intermediate(2)
-    no_opts = tree.get_states_no_options(2)
-    assert len(intermed) == 1144  # 980  # 1638
-    assert len(intermed) == len(set(intermed))
-    assert len(no_opts) == 30  # 62
-    assert max([g.active.pool.cmc() for g in no_opts]) == 8
-    print("      ...done, %0.2f sec."
-          % (time.perf_counter() - start_clock))
-    print("         (~1.20 2022-09-06)")
-    print("         (~0.70 2022-07-22)")
+    # note: had to discard in some, so 31 -> 35.  numbers below are empirical.
+    assert tree.get_num_active(3) == [35, 16, 16, 16, 629, 0, 0, 629]
+    assert len(tree.get_intermediate()) == 2014  # empirical
+    cast_eight = [g for g in tree.get_latest_active(3, 7)
+                  if "EightDrop" in [c.name for c in g.active.field]]
+    assert len(cast_eight) == 1
+
+    print("      ...done, %4.2f sec." % (time.perf_counter() - start_clock))
+    print("             (~1.20 2022-09-06)")
+    print("             (~0.70 2022-07-22)")
 
     # -----------------------------------------------------------------------
 
@@ -1261,6 +1266,9 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
     game = GameState(1)
+    game.active.turn_count = 1  # set to turn 1, not turn 0
+    game.phase = 3  # set to main phase
+    game.is_tracking_history = True
     # field
     game.give_to(Cardboard(Decklist.Plains()), Zone.Field)
     # hand
@@ -1271,7 +1279,7 @@ if __name__ == "__main__":
     for x in range(10):
         game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
 
-    game.is_tracking_history = True
+
     tree = PlayTree([game], 5)
     # only option is play Forest, play Blossoms, draw Island
     tree.main_phase_then_end()
