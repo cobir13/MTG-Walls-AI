@@ -26,7 +26,6 @@ import Match as Match
 import Getters as Get
 import ManaHandler
 import Stack
-import Pilots
 
 
 # ---------------------------------------------------------------------------

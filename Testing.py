@@ -9,6 +9,7 @@ from typing import List
 
 import Getters as Get
 import Abilities
+import Pilots
 import Zone
 from GameState import GameState
 import ManaHandler
@@ -1214,7 +1215,6 @@ if __name__ == "__main__":
     # -----------------------------------------------------------------------
 
     print("Can PlayTree find 8 mana on turn 3...")
-    start_clock = time.perf_counter()
 
 
     class EightDrop(RulesText.Creature):
@@ -1240,6 +1240,7 @@ if __name__ == "__main__":
     for x in range(10):
         game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
     # tree. Turn 1.
+    start_clock = time.perf_counter()
     tree = PlayTree([game], 5)
     tree.main_phase_then_end()
     # 4 outcomes: pass, play Forest, tap Forest, play Caretaker. Collapses
@@ -1267,6 +1268,31 @@ if __name__ == "__main__":
     print("      ...done, %4.2f sec." % (time.perf_counter() - start_clock))
     print("             (~1.20 2022-09-06)")
     print("             (~0.70 2022-07-22)")
+
+
+    # try a speed-test using a smarter pilot
+
+    game2 = game.copy()
+    game2.active.pilot = Pilots.BotEfficient()
+    start_clock = time.perf_counter()
+    tree2 = PlayTree([game2], 5)
+    tree2.main_phase_then_end()
+    assert tree2.get_num_active(1) == [0, 0, 0, 1, 1, 0, 0, 1]
+    tree2.beginning_phases()
+    tree2.main_phase_then_end()
+    assert tree2.get_num_active(2) == [1, 1, 1, 1, 2, 0, 0, 2]  # theory
+    tree2.beginning_phases()
+    tree2.main_phase_then_end()
+    # 4 possibilities: in each from prev 2, caretaker can tap battlement
+    # (dumb) or can tap roots (correct).
+    assert tree2.get_num_active(3) == [2, 2, 2, 2, 4, 0, 0, 4]
+    cast_eight = [g for g in tree2.get_latest_active(3, 7)
+                  if "EightDrop" in [c.name for c in g.active.field]]
+    assert len(cast_eight) == 1
+    assert len(tree2.get_intermediate()) == 31
+
+    print("      smarter: %4.2f sec." % (time.perf_counter() - start_clock))
+
 
     # -----------------------------------------------------------------------
 

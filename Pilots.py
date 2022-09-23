@@ -5,12 +5,13 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 
-from typing import List, TYPE_CHECKING
+from typing import List
 import itertools
 # import tkinter.filedialog
 import tkinter as tk
 
 import Verbs
+
 
 class AbortChoiceError(Exception):
     pass
@@ -209,6 +210,28 @@ class BotTriesAll(Pilot):
         return options + [Verbs.NullVerb()]
 
 
+class BotEfficient(BotTriesAll):
+    def choose_action_to_take(self, options: List[Verbs.UniversalCaster]
+                              ) -> List[Verbs.Verb]:
+        # Only pass if there are no other options left to do
+        if len(options) == 0:
+            return [Verbs.NullVerb()]
+        else:
+            return options
+        # # trim down mana options
+        # mana_options = []
+        # other_options = []
+        # for opt in options:
+        #     if opt.subject.do_effect.is_type(Verbs.AddMana):
+        #         mana_options.append(opt)
+        #     else:
+        #         other_options.append(opt)
+        # if len(mana_options) <= 1:
+        #     return options  # no point in carefully screening mana_opts list
+        # else:
+        #     def sorter(card):
+
+
 class BotTriesFirst(Pilot):
     def choose_exactly_one(self, options: list | tuple,
                            source_name: str = "Choose from:") -> list:
@@ -262,5 +285,3 @@ class HumanPlayer(Pilot):
         # noinspection PyTypeChecker
         return self.choose_exactly_one(options + [Verbs.NullVerb()],
                                        "Pick action to do")
-
-

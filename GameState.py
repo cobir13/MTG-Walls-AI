@@ -13,7 +13,6 @@ import Verbs
 if TYPE_CHECKING:
     from Abilities import TriggeredAbility, TimedAbility
 from Cardboard import Cardboard, CardNull  # actually needs
-import RulesText
 import Getters as Get  # actually needs
 import Zone
 from ManaHandler import ManaPool
@@ -288,7 +287,6 @@ class GameState:
                 self.events_since_previous += message
             return [self]
 
-
     def pass_priority(self) -> List[GameState]:
         """
         The current player with priority has passed priority. Give
@@ -430,14 +428,14 @@ class GameState:
         self.is_tracking_history = was_tracking  # reset tracking to how it was
 
     def step_attack(self):
-        """Handles all of combat. Phase becomes main2. MUTATES."""
+        """Handles the whole combat phase. Phase becomes main2. MUTATES."""
         assert self.phase == GameState.PHASES.index("combat")
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nGo to combat"
         # get a list of all possible attackers
-        player = self.active_player_index
-        field = Zone.Field(player).get(self)
+        # player = self.active_player_index
+        # field = Zone.Field(player).get(self)
         # for card in field:
         #     RulesText.DeclareAttacker().on()
         print("Combat not yet implemented. instead, skip.")
@@ -502,10 +500,6 @@ class GameState:
             return game_list
         else:
             return [self.copy().pass_turn()]
-
-
-
-
 
     # def step_cleanup(self):
     #     if self.is_tracking_history:
@@ -645,6 +639,7 @@ class GameState:
             # legend rule   # TODO
             # Sacrifice().do_it(self, player.player_index, card)
 
+
 # ---------------------------------------------------------------------------
 
 
@@ -682,7 +677,6 @@ class Player:
             True, True, True, False, False, False, False, False]
         self.respond_in_opp_phase = [
             False, False, False, False, False, False, False, False]
-
 
     @property
     def is_my_turn(self):
@@ -782,7 +776,7 @@ class Player:
         return new_player
 
     def get_valid_activations(self, hide_equivalent=True
-                              ) -> List[Verbs.PlayAbility]:
+                              ) -> List[Verbs.UniversalCaster]:
         """
         Find all abilities that can be activated and put on the
         stack right now. Return them as a list of PlayAbility
@@ -813,7 +807,7 @@ class Player:
         return activatables
 
     def get_valid_castables(self, hide_equivalent=True
-                            ) -> List[Verbs.PlayCardboard]:
+                            ) -> List[Verbs.UniversalCaster]:
         """
         Find all cast-able cards that can be put on the stack
         right now. Return them as a list of PlayCardboard Verbs,
