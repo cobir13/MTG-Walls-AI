@@ -196,6 +196,8 @@ class PlayTree:
         for state in self._active_states[-1][GameState.PHASES.index("combat")]:
             state2 = state.copy()
             state2.phase = GameState.PHASES.index("cleanup")
+            if state2.is_tracking_history:
+                state2.events_since_previous += "\n||skip to cleanup"
             self._add_state_to_trackers(state2)
         # run endstep phase
         self.phase_cleanup()

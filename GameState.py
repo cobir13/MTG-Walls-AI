@@ -571,7 +571,7 @@ class GameState:
         different possible order. For all returned GameStates,
         the list of triggers to remove have been removed.
         If super_stack is empty, returns [self].
-        DOES NOT MUTATE.
+        DOES NOT MUTATE, unless explicitly told it is allowed to.
         """
         # if there are triggered abilities to remove from the tracking list,
         # remove them. Just clear the "remove" list and recurse.
@@ -582,6 +582,21 @@ class GameState:
         # base case: no items on super_stack
         if len(self.super_stack) == 0:
             return [self]
+        # trivial case: one item on super_stack
+        elif len(self.super_stack) == 1:
+            state2 = self.copy()
+            caster2 = state2.super_stack.pop()  # verb to add it to stack
+            # put onto the stack of copies of state2. doesn't mutate state2
+            if caster2.can_be_done(state2):
+                # just want gamestates, don't care about verb or tracklist
+                on_stack = [t[0] for t in caster2.do_it(state2)]
+                return [state2] if len(on_stack) == 0 else on_stack
+            else:
+                # If can't resolve ability, still return a GameState where it
+                # was removed from the stack. e.g. invalid targets still
+                # removes the trigger from the super_stack.
+                return [state2]
+        # if reached here, have multiple items on stack. the hard part.
         results: List[GameState] = []
         # active player puts their triggers onto the stack first. So, find the
         # first player in player-order who has a caster on the super_stack.
@@ -599,21 +614,21 @@ class GameState:
         # pick a super_stack caster to cast first.
         decider = self.player_list[player].pilot
         for ii, v in decider.choose_exactly_one(theirs, "Put on stack"):
-            state2 = self.copy()
-            caster2 = state2.super_stack.pop(ii)
+            state3 = self.copy()
+            caster2 = state3.super_stack.pop(ii)  # verb to add it to stack
             # put onto the stack of copies of state2. doesn't mutate state2
-            if caster2.can_be_done(state2):
+            if caster2.can_be_done(state3):
                 # just want gamestates, don't care about verb or tracklist
-                on_stack = [t[0] for t in caster2.do_it(state2)]
+                on_stack = [t[0] for t in caster2.do_it(state3)]
                 if len(on_stack) == 0:  # see note re failing to resolve
-                    results.append(state2)
+                    results.append(state3)
                 else:
                     results += on_stack
             else:
                 # If can't resolve ability, still return a GameState where it
                 # was removed from the stack. e.g. invalid targets still
                 # removes the trigger from the super_stack.
-                results.append(state2)
+                results.append(state3)
         # recurse
         final_results = []
         for state in results:
@@ -621,9 +636,22 @@ class GameState:
         return final_results
 
     def state_based_actions(self):
-        """MUTATES. Performs any state-based actions like killing creatures if
-        toughness is less than 0.
-        Adds any triggered StackAbilities to the super_stack.
+        """MUTATES. Performs any state-based actions like killing
+        creatures if toughness is less than 0. See rule 704.5.
+        If anything triggers as a result of carrying out these
+        state-based actions, this function adds them to the
+        super-stack.
+        -   players with 0 or less life lose the game (I check in
+            the Verb instead)
+        -   players who drew from empty decks lose the game (I check
+            in the Verb instead)
+        -   poison (poinon not implemented)
+        -   tokens disappear (tokens not yet implemented)
+        -   creatures with toughness less than 0 die
+        -   creatures die from lethal damage (damage not yet implemented)
+        -   legend rule (not yet implemented)
+        -   +1/+1 and -1/-1 counters anihilate (not yet implemented)
+
         """
         for player in self.player_list:
             i = 0
@@ -666,17 +694,6 @@ class Player:
         # The following fields are NOT included in get_id
         # how the player makes decisions. ["try_all", "try_one", or "manual"]
         self.pilot: Pilots.Pilot = pilot
-        # untap, upkeep, draw, main1, combat, main2, endstep, cleanup.
-        # Want option to act (rather than pass) during my/opponents phase:
-        self.act_in_my_phase = [
-            False, False, False, True, False, False, False, False]
-        self.act_in_opp_phase = [
-            False, False, False, False, False, False, False, False]
-        # Respond to anything going on the stack during my/opponents phase:
-        self.respond_in_my_phase = [
-            True, True, True, False, False, False, False, False]
-        self.respond_in_opp_phase = [
-            False, False, False, False, False, False, False, False]
 
     @property
     def is_my_turn(self):
@@ -697,9 +714,9 @@ class Player:
         whether this player just wants to auto-pass."""
         assert self.is_my_priority
         if self.is_my_turn:
-            return self.respond_in_my_phase[self.gamestate.phase]
+            return self.pilot.respond_in_my_phase[self.gamestate.phase]
         else:
-            return self.respond_in_opp_phase[self.gamestate.phase]
+            return self.pilot.respond_in_opp_phase[self.gamestate.phase]
 
     @property
     def want_to_act(self) -> bool:
@@ -707,9 +724,9 @@ class Player:
         the stack during this phase and turn, or whether this
         player just wants to auto-pass."""
         if self.is_my_turn:
-            return self.act_in_my_phase[self.gamestate.phase]
+            return self.pilot.act_in_my_phase[self.gamestate.phase]
         else:
-            return self.act_in_opp_phase[self.gamestate.phase]
+            return self.pilot.act_in_opp_phase[self.gamestate.phase]
 
     def __str__(self):
         txt = "Player%i" % self.player_index
