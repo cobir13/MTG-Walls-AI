@@ -20,6 +20,7 @@ from Abilities import ActivatedAbility, TriggeredAbility, TriggerWhenVerb,\
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlayPermanent, AffectPlayer
 import Zone
+from Phases import Phases
 
 
 # ------------------------------------------------------------------------------
@@ -35,9 +36,7 @@ class RulesText:
         self.activated: List[ActivatedAbility] = []  # includes mana abilities
         # triggered by verbs (actions that are done)
         self.trig_verb: List[TriggeredAbility] = []
-        self.trig_upkeep = []
-        self.trig_attack = []
-        self.trig_endstep = []
+        self.trig_timed: List[List[TimedAbility]] = [[] for ph in Phases]
         # I don't actually USE these, but in theory I could in the future
         # self.static = []     #static effects
         # NOTE: cast_destination.player=None, as don't know which player yet
@@ -221,15 +220,13 @@ class Animate(Verbs.AffectCard):
         rules.keywords += self.subject.rules_text.keywords
         rules.activated += self.subject.rules_text.activated
         rules.trig_verb += self.subject.rules_text.trig_verb
-        rules.trig_upkeep += self.subject.rules_text.trig_upkeep
-        rules.trig_attack += self.subject.rules_text.trig_attack
-        rules.trig_endstep += self.subject.rules_text.trig_endstep
+        for ii in range(len(Phases)):
+            rules.trig_timed[ii] += self.subject.rules_text.trig_timed[ii]
         # add a "revert at end of turn" ability
         rules.former = self.subject.rules_text
         abil_name = "revert " + self.subject.name,
-        rules.trig_endstep.append(TimedAbility(abil_name,
-                                               Getters.ConstBool(True),
-                                               Revert()))
+        rules.trig_timed[Phases.ENDSTEP].append(
+            TimedAbility(abil_name, Getters.ConstBool(True), Revert()))
         # overwrite with new RulesText
         self.subject.rules_text = rules
         # add history. maybe check_triggers (add to super_stack, trim inputs)

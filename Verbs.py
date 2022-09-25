@@ -243,9 +243,9 @@ class Verb:
         # `trigger_source` is the card which owns the triggered ability which
         # might be triggering. Not to be confused with `subject`, which is the
         # cause of the Verb which is potentially CAUSING the trigger.
-        for trigger_source, ability in state.trig_event + state.trig_to_remove:
+        for trigger_source, abil in state.trig_event + state.trigs_to_remove:
             # add any abilities that trigger to the super_stack
-            ability.add_any_to_super(state, trigger_source, self)
+            abil.add_any_to_super(state, trigger_source, self)
         for v in self.sub_verbs:
             v.check_triggers(state, to_track)
         return state, self, to_track

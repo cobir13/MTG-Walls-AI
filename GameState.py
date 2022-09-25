@@ -7,18 +7,18 @@ Created on Mon Dec 28 21:13:59 2020
 from __future__ import annotations
 from typing import List, Tuple, Type, TYPE_CHECKING
 
-import Match
-import Verbs
-
 if TYPE_CHECKING:
     from Abilities import TriggeredAbility, TimedAbility
 from Cardboard import Cardboard, CardNull  # actually needs
 import Getters as Get  # actually needs
 import Zone
+import Match
+import Verbs
 from ManaHandler import ManaPool
 from Stack import StackObject
 from Verbs import MoveToZone, DrawCard, Untap, NullVerb
 import Pilots
+from Phases import Phases
 
 
 class GameState:
@@ -40,9 +40,6 @@ class GameState:
     of the game and provides tools for other_input to progress the game.
     """
 
-    PHASES = ["untap", "upkeep", "draw", "main1", "combat", "main2",
-              "endstep", "cleanup"]
-
     def __init__(self, num_players: int = 1):
         # super_stack is a list of StackTrigger waiting to be put onto
         # the real stack. NOTHING CAN BE EXECUTED WHILE STUFF IS ON
@@ -54,7 +51,7 @@ class GameState:
             Player(self)  # adds single new asking_player to the player_list
         self.active_player_index: int = 0
         self.priority_player_index: int = 0
-        self.phase = 0
+        self.phase: Phases = Phases.UNTAP
         # If we are tracking history, then we write down the previous distinct
         # GameState and a string describing how we got from there to here.
         # Things that mutate will add to the string, and things that copy
@@ -62,13 +59,12 @@ class GameState:
         self.is_tracking_history: bool = False
         self.previous_state: GameState | None = None
         self.events_since_previous: str = ""
-        # track triggesr. lists are updated when a card changes zones.
+        # track triggers. lists are updated when a card changes zones.
         # Format is tuple of (source-Cardboard, triggered ability).
-        self.trig_upkeep: List[Tuple[Cardboard, TimedAbility]] = []
-        self.trig_combat: List[Tuple[Cardboard, TimedAbility]] = []
-        self.trig_endstep: List[Tuple[Cardboard, TimedAbility]] = []
+        self.trig_timed: List[List[Tuple[Cardboard, TimedAbility]]] \
+            = [[] for phase in Phases]
         self.trig_event: List[Tuple[Cardboard, TriggeredAbility]] = []
-        self.trig_to_remove: List[Tuple[Cardboard, TriggeredAbility]] = []
+        self.trigs_to_remove: List[Tuple[Cardboard, TriggeredAbility]] = []
 
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id
@@ -81,7 +77,7 @@ class GameState:
 
     def __str__(self):
         txt = "\n".join([str(p) for p in self.player_list])
-        txt += "\nPhase %i (%s)" % (self.phase, GameState.PHASES[self.phase])
+        txt += "\nPhase %s (%s)" % self.phase.name
         if len(self.stack) > 0:
             txt += "\nSTACK:  " + ",".join([str(s) for s in self.stack])
         if len(self.super_stack) > 0:
@@ -90,7 +86,7 @@ class GameState:
 
     def get_id(self):
         players = [p.get_id() for p in self.player_list]
-        phase = "\nPhase %i" % self.phase
+        phase = "\n%s" % self.phase.name
         stack = "[%s]" % ",".join([c.get_id() for c in self.stack])
         super_stack = "[%s]" % ",".join([c.get_id() for c in self.super_stack])
         return "\n".join(players + [phase, stack, super_stack])
@@ -142,14 +138,11 @@ class GameState:
         # copy each trigger in the various trigger-tracker lists
         state.trig_event = [(s.copy(state), ab.copy(state))
                             for s, ab in self.trig_event]
-        state.trig_to_remove = [(s.copy(state), ab.copy(state))
-                                for s, ab in self.trig_to_remove]
-        state.trig_upkeep = [(s.copy(state), ab.copy(state))
-                             for s, ab in self.trig_upkeep]
-        state.trig_combat = [(s.copy(state), ab.copy(state))
-                             for s, ab in self.trig_combat]
-        state.trig_endstep = [(s.copy(state), ab.copy(state))
-                              for s, ab in self.trig_endstep]
+        state.trigs_to_remove = [(s.copy(state), ab.copy(state))
+                                 for s, ab in self.trigs_to_remove]
+        state.trig_timed = [[(s.copy(state), ab.copy(state))
+                             for s, ab in per_phase]
+                            for per_phase in self.trig_timed]
         # return!
         return state, new_track_list
 
@@ -232,8 +225,8 @@ class GameState:
 
     # -------------------------------------------------------------------------
 
-    def pass_turn(self):
-        self.phase = 0
+    def pass_turn(self) -> GameState:
+        self.phase = Phases(0)
         self.active_player_index = ((self.active_player_index + 1)
                                     % len(self.player_list))
         self.priority_player_index: int = self.active_player_index
@@ -257,16 +250,41 @@ class GameState:
             self.events_since_previous += message
         return self
 
-    def pass_phase(self) -> List[GameState]:
+    def can_safely_skip_this_phase(self) -> bool:
+        """
+        If no player wants to take any unilateral actions in this
+        phase, and there are no timed abilities to trigger, and
+        there is nothing currently on the stack, return True. If
+        this phase CANNOT safely be skipped, return False.
+        Meant to be called at the start of a phase before anything
+        else has been done, but has no way to enforce or check
+        that this condition is obeyed.
+        """
+        # cannot skip if there is stuff to resolve on the stack
+        if len(self.stack) > 0 or len(self.super_stack) > 0:
+            return False
+        # cannot skip if there are triggers
+
+
+
+        opts = sum(
+            [len(p.get_valid_activations()) + len(p.get_valid_castables())
+             for p in self.player_list if p.want_to_act])
+        return (opts + len(self.stack)) > 0
+
+
+
+
+
+    def pass_phase(self) -> GameState:
         """
         Increment the phase to the next phase. If that moves
         the game into the next turn, pass the turn.
-        MUTATES SELF. also returns list of new gamestate(s).
+        MUTATES SELF. also returns self.
         """
         message = "\n>>"
         if not self.has_options:
             message += "Out of options. "
-        self.phase += 1
         # resets stack, mana pools
         self.stack = []
         self.super_stack = []
@@ -274,18 +292,18 @@ class GameState:
             player.pool = ManaPool("")
         # active player has priority
         self.priority_player_index = self.active_player_index
-        # pass turn if we've passed the end of the turn.
-        if self.phase == len(self.PHASES):
+        # increment the phase counter. if at end, pass turn instead
+        if self.phase.value == len(Phases):
             if self.is_tracking_history:
                 self.events_since_previous += message
-            return [self.pass_turn()]
+            return self.pass_turn()
         else:
+            new_phase = Phases(self.phase.value + 1)
             if self.is_tracking_history:
-                old_phase = GameState.PHASES[self.phase - 1]
-                new_phase = GameState.PHASES[self.phase]
-                message += "%s>>%s" % (old_phase, new_phase)
+                message += "%s>>%s" % (self.phase.name, new_phase.name)
                 self.events_since_previous += message
-            return [self]
+            self.phase = new_phase
+            return self
 
     def pass_priority(self) -> List[GameState]:
         """
@@ -323,7 +341,7 @@ class GameState:
                 self.priority_player_index = index % len(self.player_list)
             if self.priority_player_index == self.active_player_index:
                 # found active player. everyone passed, so go to next phase
-                return self.pass_phase()
+                return [self.pass_phase()]
             else:
                 # a player who wants to do an action now has priority. return.
                 return [self]
@@ -376,7 +394,7 @@ class GameState:
         the super_stack. The phase becomes "upkeep".
         MUTATES.
         """
-        assert self.phase == GameState.PHASES.index("untap")
+        assert self.phase == Phases.UNTAP
         self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
@@ -392,7 +410,7 @@ class GameState:
             untapper.do_it(self, check_triggers=True)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
-        self.phase = GameState.PHASES.index("upkeep")  # set to next phase
+        self.pass_phase()
 
     def step_upkeep(self):
         """
@@ -400,12 +418,11 @@ class GameState:
         remains "upkeep".
         MUTATES.
         """
-        assert self.phase == GameState.PHASES.index("upkeep")
+        assert self.phase == Phases.UPKEEP
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
-        self.phase = GameState.PHASES.index("upkeep")
-        for card, ability in self.trig_upkeep:
+        for card, ability in self.trig_timed[self.phase.value]:
             # adds triggering abilities to self.super_stack, if meet condition
             ability.add_any_to_super(state=self, source_of_ability=card)
 
@@ -414,32 +431,37 @@ class GameState:
         Draws a card for turn and puts any triggers on the
         super_stack. The phase remains "draw". MUTATES.
         """
-        assert self.phase == GameState.PHASES.index("draw")
+        assert self.phase == Phases.DRAW
         self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
             self.events_since_previous += "\nDraw step"
-        self.phase = GameState.PHASES.index("draw")
         # temporarily turn off tracking for this Draw
         self.is_tracking_history = False
         [drawer] = DrawCard().populate_options(self, self.active_player_index,
                                                CardNull(), None)
         drawer.do_it(self)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
+        for card, ability in self.trig_timed[self.phase.value]:
+            # adds triggering abilities to self.super_stack, if meet condition
+            ability.add_any_to_super(state=self, source_of_ability=card)
 
     def step_attack(self):
         """Handles the whole combat phase. Phase becomes main2. MUTATES."""
-        assert self.phase == GameState.PHASES.index("combat")
+        assert self.phase == Phases.COMBAT
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nGo to combat"
+        for card, ability in self.trig_timed[self.phase.value]:
+            # adds triggering abilities to self.super_stack, if meet condition
+            ability.add_any_to_super(state=self, source_of_ability=card)
         # get a list of all possible attackers
         # player = self.active_player_index
         # field = Zone.Field(player).get(self)
         # for card in field:
         #     RulesText.DeclareAttacker().on()
-        print("Combat not yet implemented. instead, skip.")
-        self.phase = GameState.PHASES.index("main2")
+        print("Combat not yet implemented. instead, skip combat.")
+        self.pass_phase()
 
     def step_endstep(self):
         """
@@ -447,12 +469,11 @@ class GameState:
         remains "endstep".
         MUTATES.
         """
-        assert self.phase == GameState.PHASES.index("endstep")
+        assert self.phase == Phases.ENDSTEP
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nEnd step"
-        self.phase = GameState.PHASES.index("endstep")
-        for card, ability in self.trig_endstep:
+        for card, ability in self.trig_timed[self.phase.value]:
             # adds triggering abilities to self.super_stack, if meet condition
             ability.add_any_to_super(state=self, source_of_ability=card)
 
@@ -467,11 +488,11 @@ class GameState:
         player's next turn.
         DOES NOT MUTATE SELF. Returns new GameStates instead.
         """
-        assert self.phase == GameState.PHASES.index("cleanup")
+        assert self.phase == Phases.CLEANUP
         if len(self.stack) > 0:
             game_list = []
             for g in self.do_priority_action():
-                if g.phase == GameState.PHASES.index("cleanup"):
+                if g.phase == Phases.CLEANUP:
                     game_list += g.step_cleanup()
                 else:
                     game_list.append(g)
@@ -500,30 +521,6 @@ class GameState:
             return game_list
         else:
             return [self.copy().pass_turn()]
-
-    # def step_cleanup(self):
-    #     if self.is_tracking_history:
-    #         self.events_since_previous += "\nCleanup"
-    #     # discard down to 7 cards
-    #     if len(self.hand) > 7:
-    #         discard_list = Choices.choose_exactly_n(self.hand,
-    #                                                 len(self.hand) - 7,
-    #                                                 "discard to hand size")
-    #         if self.is_tracking_history:
-    #             print("discard:", [str(c) for c in discard_list])
-    #         for card in discard_list:
-    #             MoveToZone(ZONE.GRAVE).do_it(self, self.active_player_index,
-    #                                          card,)
-    #     # clear any floating mana
-    #     if self.is_tracking_history and self.pool.cmc() > 0:
-    #         print("end with %s" % (str(self.pool)))
-    #     for color in self.pool.data.keys():
-    #         self.pool.data[color] = 0
-    #     # pass the turn
-    #     if not self.is_my_turn:
-    #         self.turn_count += 1
-    #         self.has_played_land = False
-    #     self.is_my_turn = not self.is_my_turn
 
     # -------------------------------------------------------------------------
 
@@ -575,9 +572,9 @@ class GameState:
         """
         # if there are triggered abilities to remove from the tracking list,
         # remove them. Just clear the "remove" list and recurse.
-        if len(self.trig_to_remove) > 0:
+        if len(self.trigs_to_remove) > 0:
             new_state = self.copy()
-            new_state.trig_to_remove = []
+            new_state.trigs_to_remove = []
             return new_state.clear_super_stack()  # recurse
         # base case: no items on super_stack
         if len(self.super_stack) == 0:
@@ -714,9 +711,9 @@ class Player:
         whether this player just wants to auto-pass."""
         assert self.is_my_priority
         if self.is_my_turn:
-            return self.pilot.respond_in_my_phase[self.gamestate.phase]
+            return self.pilot.respond_in_my_phase[self.gamestate.phase.value]
         else:
-            return self.pilot.respond_in_opp_phase[self.gamestate.phase]
+            return self.pilot.respond_in_opp_phase[self.gamestate.phase.value]
 
     @property
     def want_to_act(self) -> bool:
@@ -882,12 +879,9 @@ class Player:
         # add mechanism to sense triggers from cards in play
         self.gamestate.trig_event += [(card, ab)
                                       for ab in card.rules_text.trig_verb]
-        self.gamestate.trig_upkeep += [(card, ab)
-                                       for ab in card.rules_text.trig_upkeep]
-        self.gamestate.trig_combat += [(card, ab)
-                                       for ab in card.rules_text.trig_attack]
-        self.gamestate.trig_endstep += [(card, ab)
-                                        for ab in card.rules_text.trig_endstep]
+        for ii in range(len(Phases)):
+            self.gamestate.trig_timed[ii] += [(card, ab) for ab in
+                                              card.rules_text.trig_timed[ii]]
 
     def remove_from_field(self, card: Cardboard):
         """Field is sorted and tracks Zone.location."""
@@ -897,16 +891,12 @@ class Player:
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
         # remove mechanism for sensing triggers from this card
-        self.gamestate.trig_to_remove += [t for t in self.gamestate.trig_event
-                                          if t[0] is card]
+        self.gamestate.trigs_to_remove += [t for t in self.gamestate.trig_event
+                                           if t[0] is card]
         self.gamestate.trig_event = [t for t in self.gamestate.trig_event
                                      if t[0] is not card]
-        self.gamestate.trig_upkeep = [t for t in self.gamestate.trig_upkeep
-                                      if t[0] is not card]
-        self.gamestate.trig_combat = [t for t in self.gamestate.trig_combat
-                                      if t[0] is not card]
-        self.gamestate.trig_endstep = [t for t in self.gamestate.trig_endstep
-                                       if t[0] is not card]
+        self.gamestate.trig_timed = [[t for t in phase if t[0] is not card]
+                                     for phase in self.gamestate.trig_timed]
 
     def re_sort_field(self):
         self.field.sort(key=Cardboard.get_id)
