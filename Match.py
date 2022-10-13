@@ -24,8 +24,8 @@ class Pattern:
     def match(self, subject: SUBJECT, state: GameState, player: int,
               source: Cardboard) -> bool:
         """Does the subject match this pattern, as measured
-        in the given state and compared to the given asking_card
-        Cardboard and given Player (player_index)?"""
+        in the given state and compared to the given source
+        Cardboard and given source Player index?"""
         raise Exception
 
     def has_type(self, pattern_type: type) -> bool:

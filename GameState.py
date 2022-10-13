@@ -61,10 +61,15 @@ class GameState:
         self.events_since_previous: str = ""
         # track triggers. lists are updated when a card changes zones.
         # Format is tuple of (source-Cardboard, triggered ability).
+        # These lists are NOT incorporated into the GameState's ID and hash,
+        # since they are derivable from the boardstate if necessary.
         self.trig_timed: List[List[Tuple[Cardboard, TimedAbility]]] \
             = [[] for phase in Phases]
         self.trig_event: List[Tuple[Cardboard, TriggeredAbility]] = []
         self.trigs_to_remove: List[Tuple[Cardboard, TriggeredAbility]] = []
+        # track static effects the same way we track triggers
+        self.statics = []
+        self.statics_to_remove = []
 
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id
@@ -135,7 +140,7 @@ class GameState:
             state.super_stack.append(obj.copy(state))
         # finally, copy the track_list, which can contain any types
         new_track_list = GameState.copy_arbitrary_list(state, track_list)
-        # copy each trigger in the various trigger-tracker lists
+        # copy each trigger and static effect in the various tracker lists
         state.trig_event = [(s.copy(state), ab.copy(state))
                             for s, ab in self.trig_event]
         state.trigs_to_remove = [(s.copy(state), ab.copy(state))
@@ -143,6 +148,10 @@ class GameState:
         state.trig_timed = [[(s.copy(state), ab.copy(state))
                              for s, ab in per_phase]
                             for per_phase in self.trig_timed]
+        state.statics = [(s.copy(state), eff.copy(state))
+                         for s, eff in self.statics]
+        state.statics_to_remove = [(s.copy(state), eff.copy(state))
+                                   for s, eff in self.statics_to_remove]
         # return!
         return state, new_track_list
 
@@ -575,6 +584,7 @@ class GameState:
         if len(self.trigs_to_remove) > 0:
             new_state = self.copy()
             new_state.trigs_to_remove = []
+            new_state.statics_to_remove = []
             return new_state.clear_super_stack()  # recurse
         # base case: no items on super_stack
         if len(self.super_stack) == 0:
@@ -882,6 +892,9 @@ class Player:
         for ii in range(len(Phases)):
             self.gamestate.trig_timed[ii] += [(card, ab) for ab in
                                               card.rules_text.trig_timed[ii]]
+        # add static effects from cards in play
+        self.gamestate.statics += [(card, eff)
+                                   for eff in card.rules_text.static]
 
     def remove_from_field(self, card: Cardboard):
         """Field is sorted and tracks Zone.location."""
@@ -897,6 +910,10 @@ class Player:
                                      if t[0] is not card]
         self.gamestate.trig_timed = [[t for t in phase if t[0] is not card]
                                      for phase in self.gamestate.trig_timed]
+        self.gamestate.statics_to_remove += [t for t in self.gamestate.statics
+                                             if t[0] is card]
+        self.gamestate.statics = [t for t in self.gamestate.statics
+                                  if t[0] is not card]
 
     def re_sort_field(self):
         self.field.sort(key=Cardboard.get_id)

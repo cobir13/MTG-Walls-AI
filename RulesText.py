@@ -38,7 +38,7 @@ class RulesText:
         self.trig_verb: List[TriggeredAbility] = []
         self.trig_timed: List[List[TimedAbility]] = [[] for ph in Phases]
         # I don't actually USE these, but in theory I could in the future
-        # self.static = []     #static effects
+        self.static = []     #static effects
         # NOTE: cast_destination.player=None, as don't know which player yet
         self.cast_destination: Zone.Zone = Zone.Unknown()
         self.effect: Verb | None = None

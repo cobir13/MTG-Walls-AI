@@ -27,7 +27,7 @@ class Getter:
         self.single_output: bool = gives_single_output  # TODO: obsolete?
 
     def get(self, state: GameState, player: int, source: Cardboard):
-        raise Exception
+        raise NotImplementedError
 
     def __str__(self):
         return type(self).__name__
@@ -284,21 +284,21 @@ class ManaValue(Integer):
             return 0
 
 
-class CanAttack(Bool):
-    """Whether the source card, controlled by the given player, can attack
-    right now."""
-    def get(self, state: GameState, player: int, source: Cardboard):
-        is_critter = Match.CardType(Creature).match(self.subject, state,
-                                                    self.player, self.source)
-        is_sick = self.subject.summon_sick
-        has_haste = Match.Keyword("haste").match(self.subject, state,
-                                                 self.player, self.source)
-
-
-        to_check = self.zone.get_absolute_zones(state, player, source)
-        return sum([len([c for c in zone.get(state)
-                         if self.pattern.match(c, state, player, source)])
-                    for zone in to_check])
+# class CanAttack(Bool):
+#     """Whether the source card, controlled by the given player, can attack
+#     right now."""
+#     def get(self, state: GameState, player: int, source: Cardboard):
+#         is_critter = Match.CardType(Creature).match(self.subject, state,
+#                                                     self.player, self.source)
+#         is_sick = self.subject.summon_sick
+#         has_haste = Match.Keyword("haste").match(self.subject, state,
+#                                                  self.player, self.source)
+#
+#
+#         to_check = self.zone.get_absolute_zones(state, player, source)
+#         return sum([len([c for c in zone.get(state)
+#                          if self.pattern.match(c, state, player, source)])
+#                     for zone in to_check])
 
 
 # ---------------------------------------------------------------------------
