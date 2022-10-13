@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List, Tuple, Type, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from Abilities import TriggeredAbility, TimedAbility
+    from Abilities import TriggeredAbility, TimedAbility, StaticAbility
 from Cardboard import Cardboard, CardNull  # actually needs
 import Getters as Get  # actually needs
 import Zone
@@ -68,8 +68,8 @@ class GameState:
         self.trig_event: List[Tuple[Cardboard, TriggeredAbility]] = []
         self.trigs_to_remove: List[Tuple[Cardboard, TriggeredAbility]] = []
         # track static effects the same way we track triggers
-        self.statics = []
-        self.statics_to_remove = []
+        self.statics: List[Tuple[Cardboard, StaticAbility]] = []
+        self.statics_to_remove: List[Tuple[Cardboard, StaticAbility]] = []
 
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id

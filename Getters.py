@@ -27,6 +27,18 @@ class Getter:
         self.single_output: bool = gives_single_output  # TODO: obsolete?
 
     def get(self, state: GameState, player: int, source: Cardboard):
+        """Get the desired value and return it. Accounts for any
+        static effects which may change the result."""
+        iterate_value = self._get(state, player, source)
+        for owner, effect in state.statics + state.statics_to_remove:
+            if effect.is_applicable(self, source, state, player, owner):
+                iterate_value = effect.apply_modifier(iterate_value, state,
+                                                      player, source, owner)
+        return iterate_value
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        """The function which actually knows how to extract
+        the desired value from the GameState."""
         raise NotImplementedError
 
     def __str__(self):
@@ -40,7 +52,7 @@ class Const(Getter):
         Getter.__init__(self, gives_single_output=True)
         self.value = value
 
-    def get(self, state: GameState, player: int, source: Cardboard):
+    def _get(self, state: GameState, player: int, source: Cardboard):
         return self.value
 
     def __str__(self):
@@ -70,8 +82,8 @@ class CardsFrom(Getter):
             zone_or_zones = [zone_or_zones]
         self.zones: List[Zone.Zone] = zone_or_zones
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[Cardboard]:
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[Cardboard]:
         cards: List[Cardboard] = []
         for z in self.zones:
             for z2 in z.get_absolute_zones(state, player, source):
@@ -86,8 +98,8 @@ class PlayerList(Getter):
     def __init__(self):
         super().__init__(True)
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[Player]:
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[Player]:
         return state.player_list
 
 
@@ -95,8 +107,8 @@ class StackList(Getter):
     def __init__(self):
         super().__init__(True)
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[StackObject]:
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[StackObject]:
         return state.stack
 
 
@@ -106,9 +118,9 @@ class You(PlayerList):
     """Returns list of the player matching the pattern
     Match.You (which is, the player calling `get`)."""
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[Player]:
-        return [pl for pl in super().get(state, player, source)
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[Player]:
+        return [pl for pl in super()._get(state, player, source)
                 if Match.You().match(pl, state, player, source)]
 
 
@@ -117,9 +129,9 @@ class Opponents(PlayerList):
     Match.Opponent (which is, all opponents of the player
     calling `get`)."""
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[Player]:
-        return [pl for pl in super().get(state, player, source)
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[Player]:
+        return [pl for pl in super()._get(state, player, source)
                 if Match.Opponent().match(pl, state, player, source)]
 
 
@@ -128,9 +140,9 @@ class Owners(PlayerList):
     Match.Owner (which is, the player who owns the
     asking Cardboard)."""
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[Player]:
-        return [pl for pl in super().get(state, player, source)
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[Player]:
+        return [pl for pl in super()._get(state, player, source)
                 if Match.Owner().match(pl, state, player, source)]
 
 
@@ -139,9 +151,9 @@ class Controllers(PlayerList):
     Match.Owner (which is, the player who controlls the
     asking Cardboard)."""
 
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[Player]:
-        return [pl for pl in super().get(state, player, source)
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[Player]:
+        return [pl for pl in super()._get(state, player, source)
                 if Match.Controller().match(pl, state, player, source)]
 
 
@@ -182,7 +194,7 @@ class ConstBool(Const, Bool):
 # ----------
 
 # class GetManaCost(GetTrait):
-#     def get(self, state: GameState, asker: INPUT) -> ManaCost:
+#     def _get(self, state: GameState, asker: INPUT) -> ManaCost:
 #         raise Exception
 #
 #     @property
@@ -199,7 +211,7 @@ class Count(Integer):
         self.pattern: Match.Pattern = pattern
         self.zone: Zone.Zone = zone
 
-    def get(self, state: GameState, player: int, source: Cardboard):
+    def _get(self, state: GameState, player: int, source: Cardboard):
         to_check = self.zone.get_absolute_zones(state, player, source)
         return sum([len([c for c in zone.get(state)
                          if self.pattern.match(c, state, player, source)])
@@ -212,8 +224,8 @@ class Count(Integer):
 # ----------
 
 class Keywords(StringList):
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[str]:
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[str]:
         try:
             return source.rules_text.keywords
         except AttributeError:
@@ -221,7 +233,7 @@ class Keywords(StringList):
 
 
 class CardName(String):
-    def get(self, state: GameState, player: int, source: Cardboard) -> str:
+    def _get(self, state: GameState, player: int, source: Cardboard) -> str:
         try:
             return source.rules_text.name
         except AttributeError:
@@ -229,8 +241,8 @@ class CardName(String):
 
 
 class Counters(StringList):
-    def get(self, state: GameState, player: int, source: Cardboard
-            ) -> List[str]:
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> List[str]:
         try:
             return source.counters
         except AttributeError:
@@ -238,7 +250,7 @@ class Counters(StringList):
 
 
 class IsTapped(Bool):
-    def get(self, state: GameState, player: int, source: Cardboard) -> bool:
+    def _get(self, state: GameState, player: int, source: Cardboard) -> bool:
         try:
             return source.tapped
         except AttributeError:
@@ -246,7 +258,7 @@ class IsTapped(Bool):
 
 
 class IsUntapped(Bool):
-    def get(self, state: GameState, player: int, source: Cardboard) -> bool:
+    def _get(self, state: GameState, player: int, source: Cardboard) -> bool:
         try:
             return not source.tapped
         except AttributeError:
@@ -254,7 +266,7 @@ class IsUntapped(Bool):
 
 
 class Power(Integer):
-    def get(self, state: GameState, player: int, source: Cardboard) -> int:
+    def _get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
             modifier = sum([int(v[:v.index("/")])
                             for v in Counters().get(state, player, source)
@@ -265,7 +277,7 @@ class Power(Integer):
 
 
 class Toughness(Integer):
-    def get(self, state: GameState, player: int, source: Cardboard) -> int:
+    def _get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
             modifier = sum([int(v[v.index("/") + 1:])
                             for v in source.counters if "/" in v])
@@ -277,7 +289,7 @@ class Toughness(Integer):
 class ManaValue(Integer):
     """ 'card comparator value' """
 
-    def get(self, state: GameState, player: int, source: Cardboard) -> int:
+    def _get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
             return source.rules_text.mana_value
         except AttributeError:
@@ -287,7 +299,7 @@ class ManaValue(Integer):
 # class CanAttack(Bool):
 #     """Whether the source card, controlled by the given player, can attack
 #     right now."""
-#     def get(self, state: GameState, player: int, source: Cardboard):
+#     def _get(self, state: GameState, player: int, source: Cardboard):
 #         is_critter = Match.CardType(Creature).match(self.subject, state,
 #                                                     self.player, self.source)
 #         is_sick = self.subject.summon_sick
@@ -316,7 +328,7 @@ class Repeat(Getter):
             num = ConstInteger(num)
         self.num: Integer = num
 
-    def get(self, state: GameState, player: int, source: Cardboard):
+    def _get(self, state: GameState, player: int, source: Cardboard):
         return self.thing_to_repeat * self.num.get(state, player, source)
 
 
@@ -410,6 +422,7 @@ class Target(Chooser):
 
 class Any(Chooser):
     """Choose any one option from the given list of options"""
+
     def __init__(self, pattern_for_valid: Match.Pattern | None):
         if pattern_for_valid is None:
             pattern_for_valid = Match.Anything()

@@ -6,7 +6,7 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from __future__ import annotations
-from typing import List, Type, TYPE_CHECKING
+from typing import List, Type, TYPE_CHECKING, TypeVar
 
 import Verbs
 import Costs
@@ -18,6 +18,8 @@ import Stack
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
+
+T = TypeVar('T')
 
 
 # ---------------------------------------------------------------------------
@@ -48,8 +50,6 @@ class TriggerWhenVerb:
         return "Trigger(%s,%s)" % (self.verb_type.__name__,
                                    str(self.pattern_for_subject))
 
-
-# ----------
 
 class TriggerWhenMove(TriggerWhenVerb):
 
@@ -110,8 +110,6 @@ class TriggerOnSelfEnter(TriggerWhenMove):
         return "Self ETB"
 
 
-# ----------
-
 class AsEnterEffect(TriggerWhenMove):
     """A specific subcategory of TriggerOnMove.  This is an
     enters-the-battlefield effect except more so: triggered abilities of this
@@ -161,7 +159,6 @@ class ActivatedAbility:
                                            source=source, cause=None,
                                            stack_object=stack_obj)
         return caster
-
 
     def __str__(self):
         return "Ability(%s -> %s)" % (str(self.cost), str(self.effect))
@@ -267,3 +264,49 @@ class TimedAbility:
                             self.effect.copy(new_state))
         abil.__class__ = self.__class__
         return abil
+
+
+# ----------
+
+class StaticAbility:
+    """Broadly speaking, Static Abilities affect the values returned
+    by Getters. For example, a card that gave all merfolk you control
+    +1/+1 and islandwalk would be three StaticAbilities: one to make
+    Get.Power return a value 1 larger than before when called on
+    merfolk you control; one doing the same thing to Get.Toughness;
+    and one to add "islandwalk" to the return list of Get.Keywords.
+    """
+
+    def __init__(self, name: str, getter_to_affect: Type[Get.Getter],
+                 pattern_for_card: Match.CardPattern):
+        self.name: str = name
+        self.getter_to_affect: Type[Get.Getter] = getter_to_affect
+        self.pattern_for_card: Match.CardPattern = pattern_for_card
+
+    def is_applicable(self, getter: Get.Getter, subject: Match.SUBJECT,
+                      state: GameState, player: int, owner: Cardboard,
+                      ) -> bool:
+        """
+        The card `owner` is creating this static ability. Now
+        `player` is calling the Getter `getter` to find out info
+        about `subject` (a Cardboard or Player, usually). This
+        function returns whether this static ability affects the
+        value returned by the Getter?
+        """
+        return (isinstance(getter, self.getter_to_affect)
+                and self.pattern_for_card.match(subject, state, player, owner))
+
+    def apply_modifier(self, value: T, state: GameState, player: int,
+                       source: Cardboard, owner: Cardboard) -> T:
+        """
+        `value` is the value that the Getter is currently
+        reporting. This function applies the effect of the
+        static ability by instead returning a DIFFERENT
+        value -- usually an incremental chang from the
+        given, previous value.
+        This function assumes that the modification SHOULD
+        be applied. It does not recheck whether the
+        StaticAbility is applicable. That is the job of
+        whoever calls this function.
+        """
+        raise NotImplementedError

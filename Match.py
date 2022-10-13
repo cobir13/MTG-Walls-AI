@@ -137,7 +137,7 @@ class CardPattern(Pattern):
               source: Cardboard) -> bool:
         """Subclasses should use try-except to catch
         AttributeErrors, in case of wrong `subject` type."""
-        raise Exception
+        raise NotImplementedError
 
 
 class PlayerPattern(Pattern):
@@ -145,7 +145,7 @@ class PlayerPattern(Pattern):
               source: Cardboard) -> bool:
         """Subclasses should use try-except to catch
         AttributeErrors, in case of wrong `subject` type."""
-        raise Exception
+        raise NotImplementedError
 
 
 # ----------
