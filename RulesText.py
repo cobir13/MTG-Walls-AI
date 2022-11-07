@@ -189,44 +189,44 @@ class DeclareAttacker(AffectPlayer):
 
 # ----------
 
-class Revert(Verbs.AffectCard):
-
-    def do_it(self, state, to_track=[], check_triggers=True):
-        """Reset the subject card back to its previous state. Mutates."""
-        card = self.subject
-        while hasattr(card.rules_text, "former"):
-            card.rules_text = getattr(card.rules_text, "former")
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
-
-
-class Animate(Verbs.AffectCard):
-    """Changes the subject card's RulesText to make it be a
-    creature in addition to whatever else it was."""
-    def __init__(self, creature_type: Creature):
-        super().__init__()
-        self.creature_type = creature_type
-
-    def can_be_done(self, state: GameState) -> bool:
-        return super().can_be_done(state) and self.subject.is_in(Zone.Field)
-
-    def do_it(self, state, to_track=[], check_triggers=True):
-        # make the new RulesText
-        rules = self.creature_type.__init__()
-        # overwrite the name
-        rules.name = self.subject.name
-        # add the previous keywords and abilities in addition to the new ones
-        rules.keywords += self.subject.rules_text.keywords
-        rules.activated += self.subject.rules_text.activated
-        rules.trig_verb += self.subject.rules_text.trig_verb
-        for ii in range(len(Phases)):
-            rules.trig_timed[ii] += self.subject.rules_text.trig_timed[ii]
-        # add a "revert at end of turn" ability
-        rules.former = self.subject.rules_text
-        abil_name = "revert " + self.subject.name,
-        rules.trig_timed[Phases.ENDSTEP].append(
-            TimedAbility(abil_name, Getters.ConstBool(True), Revert()))
-        # overwrite with new RulesText
-        self.subject.rules_text = rules
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+# class Revert(Verbs.AffectCard):
+#
+#     def do_it(self, state, to_track=[], check_triggers=True):
+#         """Reset the subject card back to its previous state. Mutates."""
+#         card = self.subject
+#         while hasattr(card.rules_text, "former"):
+#             card.rules_text = getattr(card.rules_text, "former")
+#         # add history. maybe check_triggers (add to super_stack, trim inputs)
+#         return Verb.do_it(self, state, to_track, check_triggers)
+#
+#
+# class Animate(Verbs.AffectCard):
+#     """Changes the subject card's RulesText to make it be a
+#     creature in addition to whatever else it was."""
+#     def __init__(self, creature_type: Creature):
+#         super().__init__()
+#         self.creature_type = creature_type
+#
+#     def can_be_done(self, state: GameState) -> bool:
+#         return super().can_be_done(state) and self.subject.is_in(Zone.Field)
+#
+#     def do_it(self, state, to_track=[], check_triggers=True):
+#         # make the new RulesText
+#         rules = self.creature_type.__init__()
+#         # overwrite the name
+#         rules.name = self.subject.name
+#         # add the previous keywords and abilities in addition to the new ones
+#         rules.keywords += self.subject.rules_text.keywords
+#         rules.activated += self.subject.rules_text.activated
+#         rules.trig_verb += self.subject.rules_text.trig_verb
+#         for ii in range(len(Phases)):
+#             rules.trig_timed[ii] += self.subject.rules_text.trig_timed[ii]
+#         # add a "revert at end of turn" ability
+#         rules.former = self.subject.rules_text
+#         abil_name = "revert " + self.subject.name,
+#         rules.trig_timed[Phases.ENDSTEP].append(
+#             TimedAbility(abil_name, Getters.ConstBool(True), Revert()))
+#         # overwrite with new RulesText
+#         self.subject.rules_text = rules
+#         # add history. maybe check_triggers (add to super_stack, trim inputs)
+#         return Verb.do_it(self, state, to_track, check_triggers)

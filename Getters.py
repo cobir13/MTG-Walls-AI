@@ -39,7 +39,9 @@ class Getter:
         effects which may change the result.
         """
         iterate_value = self._get(state, player, source)
-        for owner, effect in state.statics + state.statics_to_remove:
+        for static_holder in state.statics + state.statics_to_remove:
+            effect = static_holder.effect
+            owner = static_holder.card
             if effect.is_applicable(self, source, state, player, owner):
                 iterate_value = effect.apply_modifier(iterate_value, state,
                                                       player, source, owner)

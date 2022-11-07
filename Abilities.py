@@ -14,6 +14,7 @@ import Zone
 import Match
 import Getters as Get
 import Stack
+import Phases
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -312,6 +313,12 @@ class StaticAbility:
         """
         raise NotImplementedError
 
+    def copy(self, new_state: GameState | None = None):
+        abil = StaticAbility(self.name, self.getter_to_affect,
+                             self.pattern_for_card, self.params)
+        abil.__class__ = self.__class__
+        return abil
+
 
 class BuffStats(StaticAbility):
     def __init__(self, name: str, pattern_for_card: Match.CardPattern,
@@ -364,5 +371,44 @@ class GrantKeyword(StaticAbility):
         return value + [kw for kw in to_add if kw not in value]
 
 
+# # -----------------------------------------------------------------------
+
+
+
+
+class TriggeredAbilityHolder:
+    """Holds triggered abilities in the GameState tracking lists"""
+    def __init__(self, referred_card: Cardboard, effect: TriggeredAbility):
+        self.card: Cardboard = referred_card
+        self.effect: TriggeredAbility = effect
+
+    def copy(self, state: GameState):
+        return TriggeredAbilityHolder(self.card.copy(state),
+                                      self.effect.copy(state))
+
+
+class TimedAbilityHolder:
+    """Holds timed abilities in the GameState tracking lists"""
+    def __init__(self, referred_card: Cardboard, effect: TimedAbility):
+        self.card: Cardboard = referred_card
+        self.effect: TimedAbility = effect
+
+    def copy(self, state: GameState):
+        return TimedAbilityHolder(self.card.copy(state),
+                                  self.effect.copy(state))
+
+
+class StaticAbilityHolder:
+    """Holds static abilities in the GameState tracking lists"""
+    def __init__(self, referred_card: Cardboard, effect: StaticAbility,
+                 lasts_until: Phases.Phases | None = None):
+        self.card: Cardboard = referred_card
+        self.effect: StaticAbility = effect
+        self.lasts_until: Phases.Phases | None = lasts_until
+
+    def copy(self, state: GameState):
+        return StaticAbilityHolder(self.card.copy(state),
+                                   self.effect.copy(state),
+                                   self.lasts_until)
 
 

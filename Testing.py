@@ -1626,12 +1626,11 @@ if __name__ == "__main__":
 
     # spell that gives +1/+1 until EOT
     # permanent that reduces spell costs by (1)
+    # animation test
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
 
 
 
-    # build a card that grants haste, see if caryatid taps when it enters.
-    # this is a good test of "granting" and also checking like "haste" does.
 
     print("\n\npasses all tests!")
