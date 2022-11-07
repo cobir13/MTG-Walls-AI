@@ -1543,6 +1543,61 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
+
+    print("Testing static abilities on permanents")
+    start_clock = time.perf_counter()
+
+    # give +1/+1 to all mine.  does it affect yours? mine? Then remove granter
+    class Lord(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "Lord"
+            self.cost = Costs.Cost("WW")
+            self.set_power_toughness(2, 2)
+            buff = Abilities.BuffStats("buff mine",
+                                       Match.ControllerControls()
+                                       & Match.CardType(RulesText.Creature),
+                                       (+1, +3))
+            self.static = [buff]
+
+    pop_game = GameState(2)  # a populated game
+    pop_game.give_to(Cardboard(Vanil()), Zone.Field, 0)  # to player 0
+    pop_game.give_to(Cardboard(Choc()), Zone.Field, 0)  # to player 0
+    pop_game.give_to(Cardboard(Lord()), Zone.Field, 0)  # to player 0
+    pop_game.give_to(Cardboard(Vanil()), Zone.Hand, 0)  # to player 0 hand
+    pop_game.give_to(Cardboard(Vanil()), Zone.Field, 1)  # to player 1
+
+    field0 = pop_game.player_list[0].field  # Choc 1/1, Lord 2/2, Vanil 1/2
+    hand0 = pop_game.player_list[0].hand  # Vanil 1/2
+    field1 = pop_game.player_list[1].field  # Vanil 1/2
+    assert [Get.Power().get(pop_game, 0, c) for c in field0] == [2, 3, 2]
+    assert [Get.Power().get(pop_game, 1, c) for c in field0] == [2, 3, 2]
+    assert [Get.Toughness().get(pop_game, 0, c) for c in field0] == [4, 5, 5]
+    # didn't affect player 1's creature
+    assert Get.Power().get(pop_game, 0, field1[0]) == 1
+    assert Get.Power().get(pop_game, 1, field1[0]) == 1  # care asking_player?
+    # didn't affect hand
+    assert Get.Power().get(pop_game, 0, hand0[0]) == 1
+    # remove Lord and check again
+    Verbs.MoveToZone.move(pop_game, field0[1], Zone.Hand(0), True)
+    assert len(pop_game.statics) == 0
+    assert len(pop_game.super_stack) == 0 and len(pop_game.stack) == 0
+    assert len(pop_game.statics_to_remove) == 1  # static ready to be removed,
+    assert Get.Power().get(pop_game, 0, field0[0]) == 2  # but still there now.
+    pop_game.statics_to_remove = []  # I'll manually clear it, for testing.
+    assert [Get.Power().get(pop_game, 0, c) for c in field0] == [1, 1]
+    assert [Get.Toughness().get(pop_game, 0, c) for c in field0] == [1, 2]
+    assert Get.Power().get(pop_game, 1, field1[0]) == 1
+    assert [Get.Toughness().get(pop_game, 0, c) for c in hand0] == [2, 2]
+
+
+    # spell that gives +1/+1 until EOT
+    # permanent that reduces spell costs by (1)
+
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+
+
+
     # build a card that grants haste, see if caryatid taps when it enters.
     # this is a good test of "granting" and also checking like "haste" does.
 

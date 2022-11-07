@@ -6,7 +6,7 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from __future__ import annotations
-from typing import List, Type, TYPE_CHECKING, TypeVar
+from typing import List, Type, Tuple, TYPE_CHECKING, TypeVar
 
 import Verbs
 import Costs
@@ -226,9 +226,9 @@ class TriggeredAbility:
 
 
 class TimedAbility:
-    def __init__(self, name, if_condition: Get.Bool, effect: Verbs.Verb):
+    def __init__(self, name, if_condition: Get.GetBool, effect: Verbs.Verb):
         self.name: str = name
-        self.condition: Get.Bool = if_condition
+        self.condition: Get.GetBool = if_condition
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
 
@@ -278,10 +278,11 @@ class StaticAbility:
     """
 
     def __init__(self, name: str, getter_to_affect: Type[Get.Getter],
-                 pattern_for_card: Match.CardPattern):
+                 pattern_for_card: Match.CardPattern, params):
         self.name: str = name
         self.getter_to_affect: Type[Get.Getter] = getter_to_affect
         self.pattern_for_card: Match.CardPattern = pattern_for_card
+        self.params = params  # parameters used by apply_modifier
 
     def is_applicable(self, getter: Get.Getter, subject: Match.SUBJECT,
                       state: GameState, player: int, owner: Cardboard,
@@ -310,3 +311,28 @@ class StaticAbility:
         whoever calls this function.
         """
         raise NotImplementedError
+
+
+class BuffStats(StaticAbility):
+    def __init__(self, name: str, pattern_for_card: Match.CardPattern,
+                 params: Tuple[int | Get.GetInteger, int | Get.GetInteger],
+                 only_in_play=True):
+        """Buffs usually only affect creatures on the battlefield
+        ("in play"), so this condition can be added automatically.
+        No need to spell it out in pattern_for_card"""
+        full_pattern = pattern_for_card
+        if only_in_play:
+            full_pattern = full_pattern & Match.IsInZone(Zone.Field)
+        super().__init__(name, Get.PowerAndTough, full_pattern, params)
+        p_mod, t_mod = params  # modifiers to power and toughness
+        if isinstance(p_mod, int):
+            p_mod = Get.ConstInteger(p_mod)
+        if isinstance(t_mod, int):
+            t_mod = Get.ConstInteger(t_mod)
+        self.params: Tuple[Get.GetInteger, Get.GetInteger] = (p_mod, t_mod)
+
+    def apply_modifier(self, value: T, state: GameState, player: int,
+                       source: Cardboard, owner: Cardboard) -> T:
+        p_mod = self.params[0].get(state, player, source)
+        t_mod = self.params[1].get(state, player, source)
+        return value[0] + p_mod, value[1] + t_mod

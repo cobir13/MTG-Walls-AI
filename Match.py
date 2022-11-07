@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     SUBJECT = Cardboard | Player  # | StackObject
     from RulesText import RulesText
 import Getters as Get
-# import Zone
+import Zone
 
 
 # #------------------------------------------------------------------------------
@@ -224,18 +224,18 @@ class Untapped(CardPattern):
             return False
 
 
-# class Zone(CardPattern):
-#     def __init__(self, zone: Type[Zone.Zone]):
-#         self.zone: Type[Zone.Zone] = zone
-#
-#     def match(self, subject: Cardboard, state, player, source):
-#         try:
-#             return subject.is_in(self.zone)
-#         except AttributeError:
-#             return False
-#
-#     def __str__(self):
-#         return self.zone.__name__
+class IsInZone(CardPattern):
+    def __init__(self, zone: Type[Zone.Zone]):
+        self.zone: Type[Zone.Zone] = zone
+
+    def match(self, subject: Cardboard, state, player, source):
+        try:
+            return subject.is_in(self.zone)
+        except AttributeError:
+            return False
+
+    def __str__(self):
+        return self.zone.__name__
 
 
 # ----------
