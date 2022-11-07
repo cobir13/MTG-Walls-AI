@@ -1626,6 +1626,7 @@ if __name__ == "__main__":
 
     # spell that gives +1/+1 until EOT
     # permanent that reduces spell costs by (1)
+    # types in list, not as part of class structure
     # animation test
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))

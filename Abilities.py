@@ -129,12 +129,17 @@ class TriggeredAbility:
         abil.__class__ = self.__class__
         return abil
 
+    def add_to_tracker(self, state: GameState, owner: Cardboard):
+        state.trig_event.append(TriggeredAbilityHolder(owner, self))
+
 
 # # -----------------------------------------------------------------------
 
 class TimedAbility:
-    def __init__(self, name, if_condition: Get.GetBool, effect: Verbs.Verb):
+    def __init__(self, name, phase: Phases.Phases,
+                 if_condition: Get.GetBool, effect: Verbs.Verb):
         self.name: str = name
+        self.timing: Phases.Phases = phase
         self.condition: Get.GetBool = if_condition
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
@@ -143,12 +148,15 @@ class TimedAbility:
                          source_of_ability: Cardboard):
         """
         MUTATES.
-        Checks if the given gamestate meets the condition to
-        trigger. If the ability IS triggered, MUTATES
-        the GameState `state` to add a populated
-        AddTriggeredAbility Verb to the super_stack. The
-        controller of the card controls the ability.
+        Checks if it is the right phase for this ability to occur,
+        and also if the GameState meets the necessary conditions
+        (if any) for it to occur.
+        If the ability IS triggered, MUTATES the GameState to add
+        a populated AddTriggeredAbility Verb to the super_stack.
+        The controller of the card controls the ability.
         """
+        if state.phase != self.timing:
+            return  # wrong timing, so do nothing. doesn't fire.
         player = source_of_ability.player_index
         # if meets condition:
         if self.condition.get(state, player, source_of_ability):
@@ -167,10 +175,13 @@ class TimedAbility:
         return "Ability(%s -> %s)" % (str(self.condition), str(self.effect))
 
     def copy(self, new_state: GameState | None = None):
-        abil = TimedAbility(self.name, self.condition,
+        abil = TimedAbility(self.name, self.timing, self.condition,
                             self.effect.copy(new_state))
         abil.__class__ = self.__class__
         return abil
+
+    def add_to_tracker(self, state: GameState, owner: Cardboard):
+        state.trig_timed.append(TimedAbilityHolder(owner, self))
 
 
 # # -----------------------------------------------------------------------
@@ -224,6 +235,9 @@ class StaticAbility:
                              self.pattern_for_card, self.params)
         abil.__class__ = self.__class__
         return abil
+
+    def add_to_tracker(self, state: GameState, owner: Cardboard):
+        state.statics.append(StaticAbilityHolder(owner, self))
 
 
 class BuffStats(StaticAbility):
@@ -279,6 +293,64 @@ class GrantKeyword(StaticAbility):
 
 # # -----------------------------------------------------------------------
 
+class OngoingEffect:
+    """
+    This class is for ongoing effects that are created by another
+    spell or ability. In practice, it is much like a Static
+    Ability in that it affects the values returned by Getters.
+    However, it has an independent existence from the card or
+    ability which created it, and typically lasts until end of
+    turn (rather than until the card generating the static effect
+    leaves play, for example). It is often targetted rather than
+    affecting an entire category of cards, but either is possible.
+    """
+
+    def __init__(self, name: str, getter_to_affect: Type[Get.Getter],
+                 pattern_for_card: Match.CardPattern, duration,
+                 params):
+        self.name: str = name
+        self.getter_to_affect: Type[Get.Getter] = getter_to_affect
+        self.pattern_for_card: Match.CardPattern = pattern_for_card
+        self.duration = duration
+        self.params = params  # parameters used by apply_modifier
+
+    def is_applicable(self, getter: Get.Getter, subject: Match.SUBJECT,
+                      state: GameState, player: int, owner: Cardboard,
+                      ) -> bool:
+        """
+        The card `owner` is creating this static ability. Now
+        `player` is calling the Getter `getter` to find out info
+        about `subject` (a Cardboard or Player, usually). This
+        function returns whether this static ability affects the
+        value returned by the Getter?
+        """
+        return (isinstance(getter, self.getter_to_affect)
+                and self.pattern_for_card.match(subject, state, player, owner))
+
+    def apply_modifier(self, value: T, state: GameState, player: int,
+                       source: Cardboard, owner: Cardboard) -> T:
+        """
+        `value` is the value that the Getter is currently
+        reporting. This function applies the effect of the
+        static ability by instead returning a DIFFERENT
+        value -- usually an incremental chang from the
+        given, previous value.
+        This function assumes that the modification SHOULD
+        be applied. It does not recheck whether the
+        StaticAbility is applicable. That is the job of
+        whoever calls this function.
+        """
+        raise NotImplementedError
+
+    def copy(self, new_state: GameState | None = None):
+        abil = StaticAbility(self.name, self.getter_to_affect,
+                             self.pattern_for_card, self.params)
+        abil.__class__ = self.__class__
+        return abil
+
+    def add_to_tracker(self, state: GameState, owner: Cardboard):
+        state.statics.append(TimedAbilityHolder(owner, self))
+
 
 
 # # -----------------------------------------------------------------------
@@ -319,8 +391,21 @@ class StaticAbilityHolder:
                                    self.lasts_until)
 
 class OngoingEffectHolder:
-    """Holds an ongoing effect as well as the target
-    (NOT the source!) of the effect"""
+    """
+    Holds an ongoing effect as well as the target (NOT the source!)
+    of the effect. One-shot effects no longer need to track their
+    source.
+    """
+    def __init__(self, referred_card: Cardboard, effect: StaticAbility,
+                 lasts_until: Phases.Phases | None = None):
+        self.card: Cardboard = referred_card
+        self.effect: StaticAbility = effect
+        self.lasts_until: Phases.Phases | None = lasts_until
+
+    def copy(self, state: GameState):
+        return StaticAbilityHolder(self.card.copy(state),
+                                   self.effect.copy(state),
+                                   self.lasts_until)
 
 
 

@@ -66,7 +66,7 @@ class GameState:
         # Format is tuple of (source-Cardboard, triggered ability).
         # These lists are NOT incorporated into the GameState's ID and hash,
         # since they are derivable from the boardstate if necessary.
-        self.trig_timed: List[List[TimedAbilityHolder]] = [[] for _ in Phases]
+        self.trig_timed: List[TimedAbilityHolder] = []
         self.trig_event: List[TriggeredAbilityHolder] = []
         self.trigs_to_remove: List[TriggeredAbilityHolder] = []
         # track static effects the same way we track triggers
@@ -145,8 +145,7 @@ class GameState:
         # copy each trigger and static effect in the various tracker lists
         state.trig_event = [h.copy(state) for h in self.trig_event]
         state.trigs_to_remove = [h.copy(state) for h in self.trigs_to_remove]
-        state.trig_timed = [[h.copy(state) for h in per_phase]
-                            for per_phase in self.trig_timed]
+        state.trig_timed = [h.copy(state) for h in self.trig_timed]
         state.statics = [h.copy(state) for h in self.statics]
         state.statics_to_remove = [h.copy(state)
                                    for h in self.statics_to_remove]
@@ -429,8 +428,8 @@ class GameState:
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
-        for ab_holder in self.trig_timed[self.phase.value]:
-            # adds triggering abilities to self.super_stack, if meet condition
+        # adds timed abilities to super_stack, if time & conditions are right
+        for ab_holder in self.trig_timed:
             ab_holder.effect.add_any_to_super(state=self,
                                               source_of_ability=ab_holder.card)
 
@@ -450,8 +449,8 @@ class GameState:
                                                CardNull(), None)
         drawer.do_it(self)
         self.is_tracking_history = was_tracking  # reset tracking to how it was
-        for ab_holder in self.trig_timed[self.phase.value]:
-            # adds triggering abilities to self.super_stack, if meet condition
+        # adds timed abilities to super_stack, if time & conditions are right
+        for ab_holder in self.trig_timed:
             ab_holder.effect.add_any_to_super(state=self,
                                               source_of_ability=ab_holder.card)
 
@@ -461,8 +460,8 @@ class GameState:
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nGo to combat"
-        for ab_holder in self.trig_timed[self.phase.value]:
-            # adds triggering abilities to self.super_stack, if meet condition
+        # adds timed abilities to super_stack, if time & conditions are right
+        for ab_holder in self.trig_timed:
             ab_holder.effect.add_any_to_super(state=self,
                                               source_of_ability=ab_holder.card)
         # get a list of all possible attackers
@@ -483,8 +482,8 @@ class GameState:
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nEnd step"
-        for ab_holder in self.trig_timed[self.phase.value]:
-            # adds triggering abilities to self.super_stack, if meet condition
+        # adds timed abilities to super_stack, if time & conditions are right
+        for ab_holder in self.trig_timed:
             ab_holder.effect.add_any_to_super(state=self,
                                               source_of_ability=ab_holder.card)
 
@@ -890,15 +889,11 @@ class Player:
         self.field.append(card)
         self.re_sort_field()
         # add mechanism to sense triggers from cards in play
-        self.gamestate.trig_event += [TriggeredAbilityHolder(card, ab)
-                                      for ab in card.rules_text.trig_verb]
-        for ii in range(len(Phases)):
-            self.gamestate.trig_timed[ii] += [TimedAbilityHolder(card, ab)
-                                              for ab in
-                                              card.rules_text.trig_timed[ii]]
-        # add static effects from cards in play
-        self.gamestate.statics += [StaticAbilityHolder(card, eff)
-                                   for eff in card.rules_text.static]
+        # noinspection PyTypeChecker
+        for ability in (card.rules_text.trig_verb + card.rules_text.trig_timed
+                        + card.rules_text.static):
+            ability.add_to_tracker(self.gamestate, card)
+
 
     def remove_from_field(self, card: Cardboard):
         """Field is sorted and tracks Zone.location."""
@@ -912,8 +907,8 @@ class Player:
                                            if t.card is card]
         self.gamestate.trig_event = [t for t in self.gamestate.trig_event
                                      if t.card is not card]
-        self.gamestate.trig_timed = [[t for t in phase if t.card is not card]
-                                     for phase in self.gamestate.trig_timed]
+        self.gamestate.trig_timed = [t for t in self.gamestate.trig_timed
+                                     if t.card is not card]
         self.gamestate.statics_to_remove += [t for t in self.gamestate.statics
                                              if t.card is card]
         self.gamestate.statics = [t for t in self.gamestate.statics

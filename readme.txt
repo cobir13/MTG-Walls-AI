@@ -54,7 +54,12 @@ Notes comparing this program to the real Magic:The Gathering rules:
         identical. It cannot distinguish cards based on pointers from the
         stack.
     - Players do not get priority during combat unless something triggers
-        during combat. All combat tricks must be done pre-combat.
+        during combat. All combat tricks must be done pre-combat. (Also I
+        still need to properly code up combat at all, whoops.)
+    - Right now, timed abilities (e.g. "at end of turn") will occur at that
+        time on EACH turn.  There is no way to specify that it should only
+        occur on yours, or on your opponents, or whatever. (Might be a way
+        to add this info to Phases?)
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack

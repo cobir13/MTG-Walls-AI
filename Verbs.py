@@ -544,7 +544,7 @@ class Modal(VerbFactory):
     cast-time, not on resolution."""
 
     def __init__(self, list_of_verbs: List[Verb],
-                 num_to_choose: Get.Integer | int = 1, can_be_less=False):
+                 num_to_choose: Get.GetInteger | int = 1, can_be_less=False):
         super().__init__(2, any([v.copies for v in list_of_verbs]))
         self._inputs = [num_to_choose, can_be_less]
         assert (len(list_of_verbs) > 1)
@@ -552,7 +552,7 @@ class Modal(VerbFactory):
 
 
     @property
-    def num_to_choose(self) -> Get.Integer | int:
+    def num_to_choose(self) -> Get.GetInteger | int:
         return self.inputs[0]
 
     @property
@@ -651,14 +651,14 @@ class Defer(Verb):
 
 
 class VerbManyTimes(VerbFactory):
-    def __init__(self, verb: Verb, num_to_repeat: Get.Integer | int):
+    def __init__(self, verb: Verb, num_to_repeat: Get.GetInteger | int):
         """The number of times to repeat the verb is chosen on casting"""
         super().__init__(1, verb.copies)
         self._sub_verbs = [verb]
         self._inputs = [num_to_repeat]
 
     @property
-    def num_to_repeat(self) -> Get.Integer | int:
+    def num_to_repeat(self) -> Get.GetInteger | int:
         return self.inputs[0]
 
     def populate_options(self, state, player, source, cause
@@ -778,7 +778,7 @@ class PayMana(AffectPlayer, SingleGetterInput):
     """deducts the given amount of mana from the
     subject Player's mana pool."""
 
-    def __init__(self, mana_string: Get.String | str):
+    def __init__(self, mana_string: Get.GetString | str):
         """If mana_string is a getter, it is evaluated during populate"""
         super().__init__(1)
         self._inputs = [mana_string]
@@ -810,7 +810,7 @@ class PayMana(AffectPlayer, SingleGetterInput):
 class AddMana(AffectPlayer, SingleGetterInput):
     """adds the given amount of mana to the player's mana pool"""
 
-    def __init__(self, mana_string: Get.String | str):
+    def __init__(self, mana_string: Get.GetString | str):
         """If mana_string is a getter, it is evaluated during populate"""
         super().__init__(1)
         self._inputs = [mana_string]
@@ -830,7 +830,7 @@ class AddMana(AffectPlayer, SingleGetterInput):
 
 
 class LoseLife(AffectPlayer, SingleGetterInput):
-    def __init__(self, damage_getter: Get.Integer | int):
+    def __init__(self, damage_getter: Get.GetInteger | int):
         """The subject player loses the given amount of life. If
         damage_getter is a getter, it is evaluated during populate"""
         super().__init__(1)
@@ -848,7 +848,7 @@ class LoseLife(AffectPlayer, SingleGetterInput):
 
 
 class GainLife(AffectPlayer, SingleGetterInput):
-    def __init__(self, amount_getter: Get.Integer | int):
+    def __init__(self, amount_getter: Get.GetInteger | int):
         """The subject player gains the given amount of life. If
         amount_getter is a getter, it is evaluated during populate"""
         super().__init__(1)

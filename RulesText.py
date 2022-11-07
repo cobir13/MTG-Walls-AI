@@ -36,7 +36,7 @@ class RulesText:
         self.activated: List[ActivatedAbility] = []  # includes mana abilities
         # triggered by verbs (actions that are done)
         self.trig_verb: List[TriggeredAbility] = []
-        self.trig_timed: List[List[TimedAbility]] = [[] for ph in Phases]
+        self.trig_timed: List[TimedAbility] = []
         self.static: List[StaticAbility] = []  # static effects
         # NOTE: cast_destination.player=None, as don't know which player yet
         self.cast_destination: Zone.Zone = Zone.Unknown()
