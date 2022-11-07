@@ -82,7 +82,7 @@ class GameState:
 
     def __str__(self):
         txt = "\n".join([str(p) for p in self.player_list])
-        txt += "\nPhase %s (%s)" % self.phase.name
+        txt += "\nPhase %s" % self.phase.name
         if len(self.stack) > 0:
             txt += "\nSTACK:  " + ",".join([str(s) for s in self.stack])
         if len(self.super_stack) > 0:

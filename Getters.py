@@ -96,6 +96,9 @@ class ConstString(Const, GetString):
     pass
 
 
+class ConstStringList(Const, GetStringList):
+    pass
+
 class ConstBool(Const, GetBool):
     pass
 
@@ -279,8 +282,6 @@ class Toughness(GetInteger):
 
 
 class ManaValue(GetInteger):
-    """ 'card comparator value' """
-
     def _get(self, state: GameState, player: int, source: Cardboard) -> int:
         try:
             return source.rules_text.mana_value
@@ -303,6 +304,9 @@ class ManaValue(GetInteger):
 #         return sum([len([c for c in zone.get(state)
 #                          if self.pattern.match(c, state, player, source)])
 #                     for zone in to_check])
+
+
+# class CanTapSymbol
 
 
 # ---------------------------------------------------------------------------

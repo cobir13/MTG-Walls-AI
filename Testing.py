@@ -1560,6 +1560,19 @@ if __name__ == "__main__":
                                        (+1, +3))
             self.static = [buff]
 
+    class GiverOfHaste(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "GiverOfHaste"
+            self.cost = Costs.Cost("2R")
+            self.set_power_toughness(0, 3)
+            buff = Abilities.GrantKeyword("Haste all",
+                                          Match.CardType(RulesText.Creature),
+                                          ["haste"])
+            self.static = [buff]
+
+
+
     pop_game = GameState(2)  # a populated game
     pop_game.give_to(Cardboard(Vanil()), Zone.Field, 0)  # to player 0
     pop_game.give_to(Cardboard(Choc()), Zone.Field, 0)  # to player 0
@@ -1589,6 +1602,26 @@ if __name__ == "__main__":
     assert [Get.Toughness().get(pop_game, 0, c) for c in field0] == [1, 2]
     assert Get.Power().get(pop_game, 1, field1[0]) == 1
     assert [Get.Toughness().get(pop_game, 0, c) for c in hand0] == [2, 2]
+
+    # give a caryatid haste
+    pop_game.give_to(Cardboard(Decklist.Caryatid()), Zone.Field, 0)
+    assert len(pop_game.active.get_valid_activations()) == 0
+    pop_game.give_to(Cardboard(GiverOfHaste()), Zone.Field, 0)
+    assert len(pop_game.active.get_valid_activations()) == 1
+    assert all(["haste" in Get.Keywords().get(pop_game, 0, c)
+                for c in field0 + field1])
+    # pull the Giver of Haste
+    Verbs.MoveToZone.move(pop_game, field0[2], Zone.Hand(0), True)
+    assert len(pop_game.statics_to_remove) == 1  # static ready to be removed,
+    pop_game.statics_to_remove = []  # I'll manually clear it, for testing.
+    assert not any(["haste" in Get.Keywords().get(pop_game, 0, c)
+                    for c in field0 + field1])
+    assert len(pop_game.active.get_valid_activations()) == 0
+
+
+
+
+
 
 
     # spell that gives +1/+1 until EOT

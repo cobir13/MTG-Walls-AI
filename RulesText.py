@@ -48,7 +48,7 @@ class RulesText:
 
     @property
     def mana_cost(self):
-        return self.cost.mana_cost
+        return self.cost.base_mana_cost
 
     def add_keywords(self, words: List[str]):
         self.keywords += [w.lower() for w in words]

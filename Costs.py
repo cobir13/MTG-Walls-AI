@@ -14,22 +14,24 @@ class Cost:
         """If cost includes paying mana, that should be the
         first argument. Otherwise, proceed directly to Verb
         arguments."""
-        self.mana_cost: ManaCost | None = None  # overwrite later if exists
+        self.base_mana_cost: ManaCost | None = None  # to overwrite later
         if len(args) > 0:
             if isinstance(args[0], str):
-                self.mana_cost = ManaCost(args[0])
+                self.base_mana_cost = ManaCost(args[0])
                 args = args[1:]
             elif isinstance(args[0], ManaCost):
-                self.mana_cost = args[0]
+                self.base_mana_cost = args[0]
                 args = args[1:]
         self.additional: List[Verb] = list(args)
         self.num_inputs = sum([v.num_inputs for v in self.additional])
-        self.mana_value = 0
-        if self.mana_cost is not None:
-            self.mana_value = self.mana_cost.cmc()
+        # pre-calculate mana_value integer because it never changes
+        if self.base_mana_cost is None:
+            self.mana_value = 0
+        else:
+            self.mana_value = self.base_mana_cost.cmc()
 
     def _get_multi_verb(self) -> Verb:
-        if self.mana_cost is None:
+        if self.base_mana_cost is None:
             if len(self.additional) == 0:
                 return NullVerb()
             elif len(self.additional) == 1:
@@ -37,7 +39,7 @@ class Cost:
             else:  # longer than 1
                 return MultiVerb(self.additional)
         else:
-            mana_verb = PayMana(str(self.mana_cost))
+            mana_verb = PayMana(str(self.base_mana_cost))
             if len(self.additional) > 0:
                 # noinspection PyTypeChecker
                 return MultiVerb([mana_verb] + self.additional[:])
@@ -52,7 +54,7 @@ class Cost:
         nothing needs to be done. If the cost cannot be paid,
         return [] to mean that there is no valid way in which to
         pay the cost."""
-        if self.mana_cost is None and len(self.additional) == 0:
+        if self.base_mana_cost is None and len(self.additional) == 0:
             return [None]
         else:
             opts = self._get_multi_verb().populate_options(state, controller,
@@ -60,10 +62,10 @@ class Cost:
             return [v for v in opts if v.can_be_done(state)]
 
     def __str__(self):
-        if self.mana_cost is not None and len(self.additional) > 0:
-            return str(self.mana_cost) + "+" + str(self._get_multi_verb())
-        elif self.mana_cost is not None:
-            return str(self.mana_cost)
+        if self.base_mana_cost is not None and len(self.additional) > 0:
+            return str(self.base_mana_cost) + "+" + str(self._get_multi_verb())
+        elif self.base_mana_cost is not None:
+            return str(self.base_mana_cost)
         elif len(self.additional) > 0:
             return str(self._get_multi_verb())
         else:  # both are None, essentially

@@ -319,20 +319,50 @@ class BuffStats(StaticAbility):
                  only_in_play=True):
         """Buffs usually only affect creatures on the battlefield
         ("in play"), so this condition can be added automatically.
-        No need to spell it out in pattern_for_card"""
-        full_pattern = pattern_for_card
+        No need to spell it out in pattern_for_card.
+        Params is a pair of integers representing power and toughness
+        modifications to the creature's base power and toughness.
+        """
+        full_pattern = pattern_for_card  # TODO: & Match.IsType(Creature)
         if only_in_play:
             full_pattern = full_pattern & Match.IsInZone(Zone.Field)
-        super().__init__(name, Get.PowerAndTough, full_pattern, params)
         p_mod, t_mod = params  # modifiers to power and toughness
         if isinstance(p_mod, int):
             p_mod = Get.ConstInteger(p_mod)
         if isinstance(t_mod, int):
             t_mod = Get.ConstInteger(t_mod)
-        self.params: Tuple[Get.GetInteger, Get.GetInteger] = (p_mod, t_mod)
+        super().__init__(name, Get.PowerAndTough, full_pattern, (p_mod, t_mod))
+        self.params: Tuple[Get.GetInteger, Get.GetInteger]
 
-    def apply_modifier(self, value: T, state: GameState, player: int,
-                       source: Cardboard, owner: Cardboard) -> T:
+    def apply_modifier(self, value: Tuple[int, int], state: GameState,
+                       player: int, source: Cardboard, owner: Cardboard
+                       ) -> Tuple[int, int]:
         p_mod = self.params[0].get(state, player, source)
         t_mod = self.params[1].get(state, player, source)
         return value[0] + p_mod, value[1] + t_mod
+
+
+class GrantKeyword(StaticAbility):
+    def __init__(self, name: str, pattern_for_card: Match.CardPattern,
+                 params: List[str] | Get.GetStringList,
+                 only_in_play=True):
+        """Keywords usually only aply to creatures on the battlefield
+        ("in play"), so this condition can be added automatically.
+        No need to spell it out in pattern_for_card.
+        Params are the list of keywords to grant."""
+        full_pattern = pattern_for_card
+        if only_in_play:
+            full_pattern = full_pattern & Match.IsInZone(Zone.Field)
+        if isinstance(params, list):
+            params = Get.ConstStringList(params)
+        super().__init__(name, Get.Keywords, full_pattern, params)
+        self.params: Get.GetStringList
+
+    def apply_modifier(self, value: List[str], state: GameState, player: int,
+                       source: Cardboard, owner: Cardboard) -> List[str]:
+        to_add = self.params.get(state, player, source)
+        return value + [kw for kw in to_add if kw not in value]
+
+
+
+
