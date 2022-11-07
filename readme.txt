@@ -89,3 +89,56 @@ Notes for future improvements or speedups:
     - PlayTree does a lot of copying. At least once per phase. Can maybe
         do better than that by grouping some of the beginning phases?
 
+-------------------------------------------------------------------------------
+
+
+
+The process of taking an action, in GameState.do_priority_action:
+
+1)  The GameState asks the player with priority to choose an action to take,
+    or choose to pass to the next player. Possible actions are found using:
+
+    A) Player.get_valid_castables
+        Look at all cards in the Player's hand to see if any of them are
+        castable (as determined by Cardboard.valid_caster). For each one that
+        can be cast, return a Verbs.UniversalCaster object which will be
+        responsible for casting that card.
+
+    B) Player.get_valid_activations
+        Same idea, but for abilities. For each ability that can be activated
+        right now, return a Verbs.UniversalCaster object which is responsible
+        for casting it
+
+    Note: the UniversalCasters already contain StackObjects, which in turn
+    refer to the thing (Cardboard or ability) which that StackObject would
+    hold while on the stack. The StackObject holds Verbs for paying the cost
+    of the spell/ability and carrying out the effect of the spell/ability,
+    but these are not populated yet. They still lack execution details.
+
+2) The Player's Pilot selects one of these actions to try, or chooses to pass.
+
+3) The UniversalCaster is performed (`do_it`):
+    A) Populate the Verb that will pay the cost of this casting/activation.
+        The Verb has still not been performed, but all choices or variables
+        or targets have now been locked in. (For example: choices for
+        sacrificing creatures, or the final mana cost to pay given that
+        Thalia is making the spell cost 1 more to cast.)
+    B) Populate the Verb that will perform the effect, such as by choosing
+        targets.
+    C) Put StackObject containing the card/ability onto the stack
+    D) Execute the payment Verb (`do_it`). Costs have now been paid.
+    E) Put any triggers from paying the cost onto the super_stack, then
+        divvy up those triggers onto the stack itself. (For example: if the
+        cost included sacrificing creatures, and you have a Mayhem Devil in
+        play which triggers whenever a creature is sacrificed.)
+
+4) Items on the stack are resolved (GameState.resolve_top_of_stack)
+    A) Removes the StackObject from the stack
+    B) Execute the effect Verb (`do_it`)
+    C) If the thing on the stack was a card (`Cardboard`), move it to the
+        appropriate zone. Generally, permanents go onto the field and spells
+        go into the graveyard.
+    D) Put any triggers from doing all this onto the super_stack, then
+        divvy up those triggers onto the stack itself. (For example: if the
+        card was a creature, then Soul Warden would trigger to gain you 1
+        life when that creature enters the battlefield.)

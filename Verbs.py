@@ -765,6 +765,13 @@ class NullVerb(Verb):
 
 
 class SingleGetterInput(Verb):
+    """
+    A parent class for when the first input to the Verb is itself
+    a Getter that must be called at populate-time. When populating
+    the Verb, this class finds the value of the Getter and uses
+    that value for the populated Verb.
+    """
+
     def populate_options(self, state, player, source, cause) -> List[Verb]:
         [base] = super().populate_options(state, player, source, cause)
         if isinstance(base.inputs[0], Get.Getter):
@@ -1062,6 +1069,12 @@ class ActivateOnlyAsSorcery(Verb):
 
     def add_self_to_state_history(self, state):
         return  # doesn't mark itself as having done anything
+
+
+# class AddOngoingEffect(Verb):
+#     effect that I'm adding should be in the input, not init
+
+
 
 
 class Shuffle(AffectPlayer):
