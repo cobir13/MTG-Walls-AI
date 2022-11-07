@@ -62,7 +62,7 @@ class Caretaker(Creature):
                                 Verbs.Tap().on(
                                     Get.Any(Match.Another() & Match.Untapped()
                                             & Match.CardType(Creature)),
-                                    Get.CardsFrom(Zone.Field(Get.You()))
+                                    Get.CardListFrom(Zone.Field(Get.You()))
                                 )),
                            Verbs.AddMana("A"))
 
@@ -162,7 +162,7 @@ class Company(RulesText.Instant):
         self.cost = Cost("3G")
         self.effect = Verbs.Defer(
             Verbs.LookDoThenDo(
-                Get.CardsFrom(Zone.DeckTopN(Get.You(), 6)),
+                Get.CardListFrom(Zone.DeckTopN(Get.You(), 6)),
                 Get.Chooser(Match.CardType(Creature)
                             & Match.ManaValue("<=", 3),
                             2, can_be_fewer=True),

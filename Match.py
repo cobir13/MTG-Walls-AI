@@ -301,7 +301,7 @@ class Controller(PlayerPattern):
 class NumericPattern(Pattern):
     """ 'card comparator value' """
 
-    def __init__(self, comparator: str, value: int, getter: Get.Integer):
+    def __init__(self, comparator: str, value: int, getter: Get.GetInteger):
         assert (comparator in [">", "<", "=", "==", "<=", ">=", "!=", ])
         self.comparator = comparator
         self.value = value

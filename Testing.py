@@ -112,44 +112,44 @@ if __name__ == "__main__":
     assert Get.Count(Match.Toughness(">", 1), Zone.Field(0)
                      ).get(game1, 0, vanil0) == 1
     assert len(Get.AllWhich(Match.Toughness(">", 1)
-                            ).pick(Get.CardsFrom(Zone.Field(0)),
+                            ).pick(Get.CardListFrom(Zone.Field(0)),
                                    game1, 0, vanil0)[0]) == 1  # you=player1
     assert Get.AllWhich(Match.Toughness(">", 1)
-                        ).pick(Get.CardsFrom(Zone.Field(0)),
+                        ).pick(Get.CardListFrom(Zone.Field(0)),
                                game1, 0, vanil0)[0][0] is vanil0
     assert len(Get.AllWhich(Match.Toughness(">", 1)
-                            ).pick(Get.CardsFrom(Zone.Field(0)),
+                            ).pick(Get.CardListFrom(Zone.Field(0)),
                                    game1, 1, vanil0)) == 1  # still player0
     assert len(Get.AllWhich(Match.Toughness(">", 1)
-                            ).pick(Get.CardsFrom(Zone.Field(None)),
+                            ).pick(Get.CardListFrom(Zone.Field(None)),
                                    game1, 0, choc0)[0]) == 2  # all players
     assert len(Get.AllWhich(Match.Toughness(">", 1)
-                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                            ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, vanil0)[0]) == 1  # you=player0
     assert len(Get.AllWhich(Match.Toughness(">", 1)
-                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                            ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 1, choc0)[0]) == 1  # you=player1
     assert len(Get.AllWhich(Match.Toughness(">", 1)
-                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                            ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, vanil0)[0]) == 1  # you=player0
     assert len(Get.AllWhich(Match.YouControl()
-                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                            ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, vanil0)[0]) == 2  # you=player0
     assert len(Get.AllWhich(Match.YouControl()
-                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                            ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, choc0)[0]) == 2  # you=player0
     assert len(Get.AllWhich(Match.YouControl()
-                            ).pick(Get.CardsFrom(Zone.Field(Get.You())),
+                            ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 1, choc0)[0]) == 1  # you=player1
     assert len(
         Get.AllWhich(
             Match.YouControl()
-        ).pick(Get.CardsFrom(Zone.Field(Get.Controllers())),
+        ).pick(Get.CardListFrom(Zone.Field(Get.Controllers())),
                game1, 0, choc0)[0]) == 2  # controller=0
     assert len(
         Get.AllWhich(
             Match.CardType(RulesText.Creature)
-        ).pick(Get.CardsFrom(Zone.Field(None)),
+        ).pick(Get.CardListFrom(Zone.Field(None)),
                game1, 1, choc0)[0]) == 3  # all players
 
     # test copying
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     # try to destroy the world!
     wrath = Verbs.Defer(
         Verbs.Destroy().on(Get.AllWhich(Match.CardType(RulesText.Creature)),
-                           Get.CardsFrom(Zone.Field(None))))
+                           Get.CardListFrom(Zone.Field(None))))
     assert wrath.copies
     [wrath] = wrath.populate_options(gameG, 0, None, None)
     gameH = wrath.do_it(gameG)[0][0]

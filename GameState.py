@@ -510,7 +510,7 @@ class GameState:
             choose_which = Get.Chooser(Match.Anything(),
                                        num_to_choose=len(self.active.hand) - 7,
                                        can_be_fewer=False)
-            get_from_hand = Get.CardsFrom(Zone.Hand(self.active_player_index))
+            get_from_hand = Get.CardListFrom(Zone.Hand(self.active_player_index))
             discarder = Verbs.DiscardCard().on(subject_chooser=choose_which,
                                                option_getter=get_from_hand,
                                                allowed_to_fail=False)

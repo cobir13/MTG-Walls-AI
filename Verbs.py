@@ -451,7 +451,7 @@ class AffectCard(Verb):
 
     def on(self,
            subject_chooser: Get.AllWhich,
-           option_getter: Get.CardsFrom,
+           option_getter: Get.CardListFrom,
            allowed_to_fail: bool = True) -> ApplyToTargets:
         return ApplyToTargets(subject_chooser, option_getter,
                               self, allowed_to_fail)
@@ -493,7 +493,7 @@ class ApplyToTargets(VerbFactory):
     """
 
     def __init__(self, subject_chooser: Get.AllWhich,
-                 option_getter: Get.CardsFrom | Get.PlayerList | Get.StackList,
+                 option_getter: Get.CardListFrom | Get.PlayerList | Get.StackList,
                  verb: AffectCard | AffectPlayer | AffectStack,
                  allowed_to_fail: bool = True):
         super().__init__(3, copies=verb.copies)
@@ -682,16 +682,15 @@ class LookDoThenDo(VerbFactory):
     As usual, selection is made at cast-time and should be wrapped
     in a Defer if resolution-time is desired (as it usually is)."""
 
-    def __init__(self, look_at: Get.CardsFrom, choose: Get.AllWhich,
+    def __init__(self, look_at: Get.CardListFrom, choose: Get.AllWhich,
                  do_to_chosen: AffectCard,
                  do_to_others: AffectCard):
-        super().__init__(2, ((not choose.single_output)
-                             or do_to_chosen.copies or do_to_others.copies))
+        super().__init__(2, (do_to_chosen.copies or do_to_others.copies))
         self._inputs = [look_at, choose]
         self._sub_verbs = [do_to_chosen, do_to_others]
 
     @property
-    def option_getter(self) -> Get.CardsFrom:
+    def option_getter(self) -> Get.CardListFrom:
         return self.inputs[0]
 
     @property

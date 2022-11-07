@@ -5,7 +5,7 @@ Created on Sun Jun 26 18:08:14 2022
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from GameState import GameState, Player
@@ -13,22 +13,31 @@ if TYPE_CHECKING:
     from Stack import StackObject
 
     TARGET = int | Cardboard | StackObject
+    TRAIT = int | Tuple[int, int] | str | List[str] | bool
 
 import Pilots
 import Match
 import Zone
 
 
-# #------------------------------------------------------------------------------
-# #------------------------------------------------------------------------------
+# #--------------------------------------------------------------------------
+# #--------------------------------------------------------------------------
+
 
 class Getter:
-    def __init__(self, gives_single_output: bool):
-        self.single_output: bool = gives_single_output  # TODO: obsolete?
-
     def get(self, state: GameState, player: int, source: Cardboard):
-        """Get the desired value and return it. Accounts for any
-        static effects which may change the result."""
+        """
+        Return the value of the parameter or concept we are
+        interested in. `state` is the GameState to look in,
+        and `player` and `source` are the player and card
+        which are causing us to look.
+        For example, the card may have an ability which
+        requires knowing the number of creatures in play. In
+        that case, `source` is that card and `player` is the
+        index of that card's controlling Player.
+        The returned value takes into account any static
+        effects which may change the result.
+        """
         iterate_value = self._get(state, player, source)
         for owner, effect in state.statics + state.statics_to_remove:
             if effect.is_applicable(self, source, state, player, owner):
@@ -45,11 +54,35 @@ class Getter:
         return type(self).__name__
 
 
+class GetInteger(Getter):
+    """Return type of the Getter is an integer"""
+    pass
+
+
+class GetIntPair(Getter):
+    """Return type of the Getter is a pair (tuple) of integers"""
+    pass
+
+
+class GetBool(Getter):
+    """Return type of the Getter is a bool"""
+    pass
+
+
+class GetString(Getter):
+    """Return type of the Getter is a single string"""
+    pass
+
+
+class GetStringList(Getter):
+    """Return type of the Getter is a list of strings"""
+    pass
+
+
 class Const(Getter):
     """Returns a constant value, defined at initialization"""
 
     def __init__(self, value):
-        Getter.__init__(self, gives_single_output=True)
         self.value = value
 
     def _get(self, state: GameState, player: int, source: Cardboard):
@@ -59,25 +92,24 @@ class Const(Getter):
         return str(self.value)
 
 
-class GetTrait(Getter):
-    """Return the value of a specified trait, usually
-    of the given source Cardboard but potentially of
-    the given Player or GameState. Intended to check
-    values which might be affected by static abilities
-    etc.
-    """
-
-    def __init__(self):
-        Getter.__init__(self, gives_single_output=True)
+class ConstString(Const, GetString):
+    pass
 
 
-class CardsFrom(Getter):
+class ConstBool(Const, GetBool):
+    pass
+
+
+class ConstInteger(Const, GetInteger):
+    pass
+
+
+class CardListFrom(Getter):
     """Returns a list of cards (Cardboards) from the
     given zone. Handes the zone being relative rather
     than absolute, if needed."""
 
     def __init__(self, zone_or_zones: Zone.Zone | List[Zone.Zone]):
-        super().__init__(True)
         if not isinstance(zone_or_zones, list):
             zone_or_zones = [zone_or_zones]
         self.zones: List[Zone.Zone] = zone_or_zones
@@ -95,18 +127,12 @@ class CardsFrom(Getter):
 
 
 class PlayerList(Getter):
-    def __init__(self):
-        super().__init__(True)
-
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[Player]:
         return state.player_list
 
 
 class StackList(Getter):
-    def __init__(self):
-        super().__init__(True)
-
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[StackObject]:
         return state.stack
@@ -159,37 +185,6 @@ class Controllers(PlayerList):
 
 # ---------------------------------------------------------------------------
 
-class Integer(GetTrait):
-    """Return type of the trait is an integer"""
-    pass
-
-
-class ConstInteger(Const, Integer):
-    pass
-
-
-class StringList(GetTrait):
-    """Return type of the trait is a list of strings"""
-    pass
-
-
-class Bool(GetTrait):
-    """Return type of the trait is a bool"""
-    pass
-
-
-class String(GetTrait):
-    """Return type of the trait is a single string"""
-    pass
-
-
-class ConstString(Const, String):
-    pass
-
-
-class ConstBool(Const, Bool):
-    pass
-
 
 # ----------
 
@@ -197,13 +192,10 @@ class ConstBool(Const, Bool):
 #     def _get(self, state: GameState, asker: INPUT) -> ManaCost:
 #         raise Exception
 #
-#     @property
-#     def single_output(self):
-#         return True
 
 # ----------
 
-class Count(Integer):
+class Count(GetInteger):
     """Get the number of Cardboards which match all given pattern."""
 
     def __init__(self, pattern: Match.Pattern, zone: Zone.Zone):
@@ -211,7 +203,7 @@ class Count(Integer):
         self.pattern: Match.Pattern = pattern
         self.zone: Zone.Zone = zone
 
-    def _get(self, state: GameState, player: int, source: Cardboard):
+    def _get(self, state: GameState, player: int, source: Cardboard) -> int:
         to_check = self.zone.get_absolute_zones(state, player, source)
         return sum([len([c for c in zone.get(state)
                          if self.pattern.match(c, state, player, source)])
@@ -223,7 +215,7 @@ class Count(Integer):
 
 # ----------
 
-class Keywords(StringList):
+class Keywords(GetStringList):
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[str]:
         try:
@@ -232,7 +224,7 @@ class Keywords(StringList):
             return []
 
 
-class CardName(String):
+class CardName(GetString):
     def _get(self, state: GameState, player: int, source: Cardboard) -> str:
         try:
             return source.rules_text.name
@@ -240,7 +232,7 @@ class CardName(String):
             return ""
 
 
-class Counters(StringList):
+class Counters(GetStringList):
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[str]:
         try:
@@ -249,7 +241,7 @@ class Counters(StringList):
             return []
 
 
-class IsTapped(Bool):
+class IsTapped(GetBool):
     def _get(self, state: GameState, player: int, source: Cardboard) -> bool:
         try:
             return source.tapped
@@ -257,36 +249,36 @@ class IsTapped(Bool):
             return False
 
 
-class IsUntapped(Bool):
-    def _get(self, state: GameState, player: int, source: Cardboard) -> bool:
+class PowerAndTough(GetIntPair):
+    def _get(self, state: GameState, player: int, source: Cardboard
+             ) -> Tuple[int, int]:
         try:
-            return not source.tapped
+            power_mod = sum([int(v[:v.index("/")])
+                             for v in Counters().get(state, player, source)
+                             if "/" in v])
+            tough_mod = sum([int(v[v.index("/") + 1:])
+                             for v in Counters().get(state, player, source)
+                             if "/" in v])
+            power = source.rules_text.power + power_mod
+            toughness = source.rules_text.toughness + tough_mod
+            return power, toughness
         except AttributeError:
-            return False
+            return 0, 0
 
 
-class Power(Integer):
-    def _get(self, state: GameState, player: int, source: Cardboard) -> int:
-        try:
-            modifier = sum([int(v[:v.index("/")])
-                            for v in Counters().get(state, player, source)
-                            if "/" in v])
-            return source.rules_text.power + modifier
-        except AttributeError:
-            return 0
+class Power(GetInteger):
+    # Overrides get (not _get), because uses PowerAndTough rather than own _get
+    def get(self, state: GameState, player: int, source: Cardboard):
+        return PowerAndTough().get(state, player, source)[0]
 
 
-class Toughness(Integer):
-    def _get(self, state: GameState, player: int, source: Cardboard) -> int:
-        try:
-            modifier = sum([int(v[v.index("/") + 1:])
-                            for v in source.counters if "/" in v])
-            return source.rules_text.toughness + modifier
-        except AttributeError:
-            return 0
+class Toughness(GetInteger):
+    # Overrides get (not _get), because uses PowerAndTough rather than own _get
+    def get(self, state: GameState, player: int, source: Cardboard):
+        return PowerAndTough().get(state, player, source)[1]
 
 
-class ManaValue(Integer):
+class ManaValue(GetInteger):
     """ 'card comparator value' """
 
     def _get(self, state: GameState, player: int, source: Cardboard) -> int:
@@ -296,7 +288,7 @@ class ManaValue(Integer):
             return 0
 
 
-# class CanAttack(Bool):
+# class CanAttack(GetBool):
 #     """Whether the source card, controlled by the given player, can attack
 #     right now."""
 #     def _get(self, state: GameState, player: int, source: Cardboard):
@@ -321,19 +313,18 @@ class Repeat(Getter):
     Useful for repeating a string, list, etc. Or
     multiplying a number, I guess."""
 
-    def __init__(self, thing_to_repeat, num: Integer | int):
-        Getter.__init__(self, gives_single_output=num.single_output)
+    def __init__(self, thing_to_repeat, num: GetInteger | int):
         self.thing_to_repeat = thing_to_repeat
         if isinstance(num, int):
             num = ConstInteger(num)
-        self.num: Integer = num
+        self.num: GetInteger = num
 
     def _get(self, state: GameState, player: int, source: Cardboard):
         return self.thing_to_repeat * self.num.get(state, player, source)
 
 
-class RepeatString(Repeat, String):
-    def __init__(self, thing_to_repeat: str, num: Integer | int):
+class RepeatString(Repeat, GetString):
+    def __init__(self, thing_to_repeat: str, num: GetInteger | int):
         super().__init__(thing_to_repeat, num)
 
 
@@ -347,7 +338,6 @@ class AllWhich:
 
     def __init__(self, pattern_for_valid: Match.Pattern):
         self.pattern = pattern_for_valid
-        self.single_output = True
 
     def pick(self, options, state: GameState, player: int, card: Cardboard
              ) -> List[tuple]:
@@ -361,8 +351,7 @@ class AllWhich:
         card: source Cardboard for context
         Returns all valid selections from among the given options.
         Specifically, returns a list of tuples, each of which are
-        a set of mutually valid options. `self.single_output`
-        describes whether it returns one tuple or many.
+        a set of mutually valid options.
         """
         if not isinstance(options, list):
             options = options.get(state, player, card)
@@ -385,12 +374,11 @@ class All(AllWhich):
 class Chooser(AllWhich):
 
     def __init__(self, pattern_for_valid: Match.Pattern,
-                 num_to_choose: Integer | int, can_be_fewer: bool):
+                 num_to_choose: GetInteger | int, can_be_fewer: bool):
         super().__init__(pattern_for_valid)
-        self.single_output = False
         if isinstance(num_to_choose, int):
             num_to_choose = ConstInteger(num_to_choose)
-        self.num_to_choose: Integer = num_to_choose
+        self.num_to_choose: GetInteger = num_to_choose
         self.can_be_less = can_be_fewer
 
     def pick(self, options, state: GameState, player: int, card: Cardboard
