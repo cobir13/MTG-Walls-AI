@@ -8,6 +8,8 @@ Created on Sun Jun 26 18:08:14 2022
 from __future__ import annotations
 from typing import TYPE_CHECKING, List, Type
 
+import Verbs
+
 if TYPE_CHECKING:
     from Cardboard import Cardboard
     from GameState import GameState, Player
@@ -355,3 +357,96 @@ class ManaValue(NumericPattern):
 
     def __init__(self, comparator: str, value: int):
         super().__init__(comparator, value, Get.ManaValue())
+
+
+# # -----------------------------------------------------------------------
+
+class DetectVerbDone:
+
+    # pattern_for_verb, pattern_for_subject_, pattern_for_subject, etc...
+
+    def __init__(self, verb_type: Type[Verbs.Verb],
+                 pattern_for_subject: Pattern):
+        self.verb_type = verb_type
+        self.pattern_for_subject = pattern_for_subject
+
+    def is_triggered(self,
+                     state: GameState,
+                     source_of_ability: Cardboard,
+                     verb: Verbs.Verb):
+        ability_owner = source_of_ability.player_index
+        return (verb.is_type(self.verb_type)  # isinstance can't see sub-verbs
+                and self.pattern_for_subject.match(verb.subject, state,
+                                                   ability_owner,
+                                                   source_of_ability))
+
+    def __str__(self):
+        return "Trigger(%s,%s)" % (self.verb_type.__name__,
+                                   str(self.pattern_for_subject))
+
+
+class DetectMoveDone(DetectVerbDone):
+
+    def __init__(self, pattern_for_subject: Pattern,
+                 origin: Zone.Zone | None, destination: Zone.Zone | None):
+        super().__init__(Verbs.MoveToZone, pattern_for_subject)
+        self.origin: Zone.Zone | None = origin
+        self.destination: Zone.Zone | None = destination
+
+    def is_triggered(self, state: GameState, source_of_ability: Cardboard,
+                     verb: Verbs.Verb):
+        pl = source_of_ability.player_index
+        origins: List[Zone] = [self.origin]
+        if self.origin is not None and not self.origin.is_fixed:
+            origins = self.origin.get_absolute_zones(state, pl,
+                                                     source_of_ability)
+        dests: List[Zone] = [self.destination]
+        if self.destination is not None and not self.destination.is_fixed:
+            dests = self.destination.get_absolute_zones(state, pl,
+                                                        source_of_ability)
+        return (super().is_triggered(state, source_of_ability, verb)
+                and isinstance(verb, Verbs.MoveToZone)
+                and (self.origin is None
+                     or any([verb.origin.is_contained_in(z) for z in origins]))
+                and (self.destination is None
+                     or any([verb.destination.is_contained_in(z)
+                             for z in dests]))
+                )
+
+
+class NeverDetect(DetectVerbDone):
+    def __init__(self):
+        super().__init__(Verbs.NullVerb, Nothing())
+
+    def __str__(self):
+        return ""
+
+
+class AlwaysDetect(DetectVerbDone):
+    def __init__(self):
+        super().__init__(Verbs.NullVerb, Anything())
+
+    def __str__(self):
+        return ""
+
+    def is_triggered(self, *args, **kwargs):
+        return True
+
+
+class DetectSelfEnter(DetectMoveDone):
+    def __init__(self):
+        super().__init__(IsSelf(), None, Zone.Field(Get.Controllers()))
+
+    def __str__(self):
+        return "Self ETB"
+
+
+class DetectAsEnter(DetectMoveDone):
+    """A specific subcategory of DetectMoveDone.  This is an
+    enters-the-battlefield effect except more so: triggered abilities of this
+    type bypass the stack and are handled IMMEDIATELY when the super_stack is
+    cleared. This can be seen in `GameState.clear_super_stack`.
+    """
+
+    def __init__(self):
+        super().__init__(IsSelf(), None, Zone.Field(Get.Controllers()))

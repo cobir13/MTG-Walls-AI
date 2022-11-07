@@ -15,6 +15,7 @@ import Match
 import Getters as Get
 import Stack
 import Phases
+from Match import DetectVerbDone, DetectAsEnter
 
 if TYPE_CHECKING:
     from GameState import GameState
@@ -23,106 +24,7 @@ if TYPE_CHECKING:
 T = TypeVar('T')
 
 
-# ---------------------------------------------------------------------------
-
-
-class TriggerWhenVerb:
-
-    # pattern_for_verb, pattern_for_subject_, pattern_for_subject, etc...
-
-    def __init__(self,
-                 verb_type: Type[Verbs.Verb],
-                 pattern_for_subject: Match.Pattern
-                 ):
-        self.verb_type = verb_type
-        self.pattern_for_subject = pattern_for_subject
-
-    def is_triggered(self,
-                     state: GameState,
-                     source_of_ability: Cardboard,
-                     verb: Verbs.Verb):
-        ability_owner = source_of_ability.player_index
-        return (verb.is_type(self.verb_type)  # isinstance can't see sub-verbs
-                and self.pattern_for_subject.match(verb.subject, state,
-                                                   ability_owner,
-                                                   source_of_ability))
-
-    def __str__(self):
-        return "Trigger(%s,%s)" % (self.verb_type.__name__,
-                                   str(self.pattern_for_subject))
-
-
-class TriggerWhenMove(TriggerWhenVerb):
-
-    def __init__(self, pattern_for_subject: Match.Pattern,
-                 origin: Zone.Zone | None,
-                 destination: Zone.Zone | None):
-        super().__init__(Verbs.MoveToZone, pattern_for_subject)
-        self.origin: Zone.Zone | None = origin
-        self.destination: Zone.Zone | None = destination
-
-    def is_triggered(self,
-                     state: GameState,
-                     source_of_ability: Cardboard,
-                     verb: Verbs.Verb):
-        pl = source_of_ability.player_index
-        origins: List[Zone] = [self.origin]
-        if self.origin is not None and not self.origin.is_fixed:
-            origins = self.origin.get_absolute_zones(state, pl,
-                                                     source_of_ability)
-        dests: List[Zone] = [self.destination]
-        if self.destination is not None and not self.destination.is_fixed:
-            dests = self.destination.get_absolute_zones(state, pl,
-                                                        source_of_ability)
-        return (super().is_triggered(state, source_of_ability, verb)
-                and isinstance(verb, Verbs.MoveToZone)
-                and (self.origin is None
-                     or any([verb.origin.is_contained_in(z) for z in origins]))
-                and (self.destination is None
-                     or any([verb.destination.is_contained_in(z)
-                             for z in dests]))
-                )
-
-
-class NeverTrigger(TriggerWhenVerb):
-    def __init__(self):
-        super().__init__(Verbs.NullVerb, Match.Nothing())
-
-    def __str__(self):
-        return ""
-
-
-class AlwaysTrigger(TriggerWhenVerb):
-    def __init__(self):
-        super().__init__(Verbs.NullVerb, Match.Nothing())
-
-    def __str__(self):
-        return ""
-
-    def is_triggered(self, *args, **kwargs):
-        return True
-
-
-class TriggerOnSelfEnter(TriggerWhenMove):
-    def __init__(self):
-        super().__init__(Match.IsSelf(), None, Zone.Field(Get.Controllers()))
-
-    def __str__(self):
-        return "Self ETB"
-
-
-class AsEnterEffect(TriggerWhenMove):
-    """A specific subcategory of TriggerOnMove.  This is an
-    enters-the-battlefield effect except more so: triggered abilities of this
-    type bypass the stack and are handled IMMEDIATELY when the super_stack is
-    cleared. This can be seen in `GameState.clear_super_stack`.
-    """
-
-    def __init__(self):
-        super().__init__(Match.IsSelf(), None, Zone.Field(Get.Controllers()))
-
-
-# ----------
+# # -----------------------------------------------------------------------
 
 class ActivatedAbility:
     def __init__(self, name, cost: Costs.Cost, effect: Verbs.Verb):
@@ -177,10 +79,12 @@ class ActivatedAbility:
         return abil
 
 
+# # -----------------------------------------------------------------------
+
 class TriggeredAbility:
-    def __init__(self, name, trigger: TriggerWhenVerb, effect: Verbs.Verb):
+    def __init__(self, name, trigger: DetectVerbDone, effect: Verbs.Verb):
         self.name: str = name
-        self.trigger: TriggerWhenVerb = trigger
+        self.trigger: DetectVerbDone = trigger
         self.effect: Verbs.Verb = effect
         self.num_inputs = effect.num_inputs
 
@@ -201,7 +105,7 @@ class TriggeredAbility:
             # Note: pay, effect verbs not yet populated. AddTriggeredAbility
             # does that later.
             caster = Verbs.AddTriggeredAbility()
-            if isinstance(self.trigger, AsEnterEffect):
+            if isinstance(self.trigger, DetectAsEnter):
                 caster = Verbs.AddAsEntersAbility()
             [caster] = caster.populate_options(state, player,
                                                source=source_of_ability,
@@ -225,6 +129,8 @@ class TriggeredAbility:
         abil.__class__ = self.__class__
         return abil
 
+
+# # -----------------------------------------------------------------------
 
 class TimedAbility:
     def __init__(self, name, if_condition: Get.GetBool, effect: Verbs.Verb):
@@ -267,7 +173,7 @@ class TimedAbility:
         return abil
 
 
-# ----------
+# # -----------------------------------------------------------------------
 
 class StaticAbility:
     """Broadly speaking, Static Abilities affect the values returned
@@ -375,6 +281,7 @@ class GrantKeyword(StaticAbility):
 
 
 
+# # -----------------------------------------------------------------------
 
 class TriggeredAbilityHolder:
     """Holds triggered abilities in the GameState tracking lists"""
@@ -410,5 +317,10 @@ class StaticAbilityHolder:
         return StaticAbilityHolder(self.card.copy(state),
                                    self.effect.copy(state),
                                    self.lasts_until)
+
+class OngoingEffectHolder:
+    """Holds an ongoing effect as well as the target
+    (NOT the source!) of the effect"""
+
 
 

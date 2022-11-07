@@ -11,7 +11,7 @@ import Match as Match
 import Verbs
 from Costs import Cost
 
-from Abilities import TriggerWhenMove, AsEnterEffect, TriggerOnSelfEnter
+from Match import DetectMoveDone, DetectSelfEnter, DetectAsEnter
 import Getters as Get
 
 
@@ -119,7 +119,7 @@ class Blossoms(Creature):
         self.cost = Cost("1G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
-        self.add_triggered("Blossoms etb draw", TriggerOnSelfEnter(),
+        self.add_triggered("Blossoms etb draw", DetectSelfEnter(),
                            Verbs.DrawCard())
 
 
@@ -133,7 +133,7 @@ class Omens(Creature):
         self.cost = Cost("1W")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
-        self.add_triggered("Omens etb draw", TriggerOnSelfEnter(),
+        self.add_triggered("Omens etb draw", DetectSelfEnter(),
                            Verbs.DrawCard())
 
 
@@ -148,8 +148,8 @@ class Arcades(Creature):
         self.add_keywords(["flying", "vigilance"])
         self.set_power_toughness(3, 5)
         self.add_triggered("Arcades draw trigger",
-                           TriggerWhenMove(Match.Keyword("defender"), None,
-                                           Zone.Field(Get.Controllers())),
+                           DetectMoveDone(Match.Keyword("defender"), None,
+                                          Zone.Field(Get.Controllers())),
                            Verbs.DrawCard())
 
 
@@ -229,7 +229,7 @@ class TempleGarden(Forest, Plains):
         self.name = "TempleGarden"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           AsEnterEffect(),
+                           DetectAsEnter(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.PayLife(2)]))
                            )
@@ -242,7 +242,7 @@ class BreedingPool(Forest, Island):
         self.name = "BreedingPool"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           AsEnterEffect(),
+                           DetectAsEnter(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.PayLife(2)]))
                            )
@@ -255,7 +255,7 @@ class HallowedFountain(Plains, Island):
         self.name = "HallowedFountain"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           AsEnterEffect(),
+                           DetectAsEnter(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.PayLife(2)]))
                            )
@@ -270,7 +270,7 @@ class WindsweptHeath(Land):
         self.name = "WindsweptHeath"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
-                           TriggerOnSelfEnter(),
+                           DetectSelfEnter(),
                            Verbs.PayLife(1)
                            + Verbs.Sacrifice()
                            + Verbs.Defer(
@@ -288,7 +288,7 @@ class MistyRainforest(Land):
         self.name = "MistyRainforest"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
-                           TriggerOnSelfEnter(),
+                           DetectSelfEnter(),
                            Verbs.PayLife(1)
                            + Verbs.Sacrifice()
                            + Verbs.Defer(
@@ -306,7 +306,7 @@ class FloodedStrand(Land):
         self.name = "WindsweptHeath"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
-                           TriggerOnSelfEnter(),
+                           DetectSelfEnter(),
                            Verbs.PayLife(1)
                            + Verbs.Sacrifice()
                            + Verbs.Defer(

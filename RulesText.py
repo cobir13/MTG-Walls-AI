@@ -15,8 +15,8 @@ import Verbs
 if TYPE_CHECKING:
     from GameState import GameState
 
-from Abilities import ActivatedAbility, TriggeredAbility, TriggerWhenVerb,\
-    TimedAbility, StaticAbility
+from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility, StaticAbility
+from Match import DetectVerbDone
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlayPermanent, AffectPlayer
 import Zone
@@ -56,7 +56,7 @@ class RulesText:
     def add_activated(self, name: str, cost: Costs.Cost, effect: Verb):
         self.activated.append(ActivatedAbility(name, cost, effect))
 
-    def add_triggered(self, name: str, trigger: TriggerWhenVerb, effect: Verb):
+    def add_triggered(self, name: str, trigger: DetectVerbDone, effect: Verb):
         self.trig_verb.append(TriggeredAbility(name, trigger, effect))
 
 

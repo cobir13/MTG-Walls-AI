@@ -197,7 +197,7 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("5")
             self.set_power_toughness(8, 8)
             self.add_triggered("Orb see tap adds R",
-                               Abilities.TriggerWhenVerb(
+                               Match.DetectVerbDone(
                                    Verbs.Tap,
                                    Match.ControllerControls()
                                ),
@@ -211,7 +211,7 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("1B")
             self.set_power_toughness(0, 1)
             self.add_triggered("Artist drains when dies",
-                               Abilities.TriggerWhenMove(
+                               Match.DetectMoveDone(
                                    Match.CardType(RulesText.Creature),
                                    Zone.Field(None),
                                    Zone.Grave(None)
