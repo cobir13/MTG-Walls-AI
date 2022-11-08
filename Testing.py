@@ -1558,7 +1558,8 @@ if __name__ == "__main__":
             a = Abilities.StaticAbility(Abilities.BuffStats("buff mine",
                                                             (+1, +3)),
                                         Match2.ControllerControls()
-                                        & Match2.CardType(RulesText.Creature))
+                                        & Match2.CardType(RulesText.Creature)
+                                        & Match2.IsInZone(Zone.Field))
             self.static = [a]
 
     class GiverOfHaste(RulesText.Creature):
@@ -1569,15 +1570,16 @@ if __name__ == "__main__":
             self.set_power_toughness(0, 3)
             buff = Abilities.StaticAbility(Abilities.GrantKeyword("Haste all",
                                                                   ['haste']),
-                                           Match2.CardType(RulesText.Creature))
+                                           Match2.CardType(RulesText.Creature)
+                                           & Match2.IsInZone(Zone.Field))
             self.static = [buff]
 
 
 
     pop_game = GameState(2)  # a populated game
     pop_game.give_to(Cardboard(Vanil()), Zone.Field, 0)  # to player 0
-    pop_game.give_to(Cardboard(Choc()), Zone.Field, 0)  # to player 0
     pop_game.give_to(Cardboard(Lord()), Zone.Field, 0)  # to player 0
+    pop_game.give_to(Cardboard(Choc()), Zone.Field, 0)  # to player 0, AFTER.
     pop_game.give_to(Cardboard(Vanil()), Zone.Hand, 0)  # to player 0 hand
     pop_game.give_to(Cardboard(Vanil()), Zone.Field, 1)  # to player 1
 

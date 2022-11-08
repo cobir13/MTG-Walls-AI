@@ -8,11 +8,11 @@ Created on Sun Jun 26 18:08:14 2022
 from __future__ import annotations
 from typing import List, Type
 
+import Getters as Get
 import Verbs
 from Cardboard import Cardboard
 from GameState import GameState, Player
 from RulesText import RulesText
-import Getters as Get
 import Zone
 
 
@@ -409,8 +409,8 @@ class VerbPattern(Pattern):
         trait.
         """
         self.verb_type: Type[Verbs.Verb] = verb_type
-        self.pattern_for_subject: Pattern | None = pattern_for_subject,
-        self.pattern_for_source: CardPattern | None = pattern_for_source,
+        self.pattern_for_subject: Pattern | None = pattern_for_subject
+        self.pattern_for_source: CardPattern | None = pattern_for_source
         self.pattern_for_player: PlayerPattern | None = pattern_for_player
 
 
@@ -449,11 +449,14 @@ class VerbPattern(Pattern):
 
     def _match(self, subject: Verbs.Verb, state: GameState,
                asking_player: int, asking_card: Cardboard) -> bool:
-        raise NotImplementedError
+        return True  # in basic VerbPattern, no additional work to do here
 
     def __str__(self):
-        return "Trigger(%s,%s)" % (self.verb_type.__name__,
-                                   str(self.pattern_for_subject))
+        if self.pattern_for_subject is not None:
+            subj = str(self.pattern_for_subject)
+        else:
+            subj = "any"
+        return "(if subject %s becomes %s)" % (subj, self.verb_type.__name__)
 
 
 class MoveType(VerbPattern):
@@ -486,6 +489,21 @@ class MoveType(VerbPattern):
                      or any([subject.destination.is_contained_in(z)
                              for z in dests]))
                 )
+
+    def __str__(self):
+        if self.pattern_for_subject is not None:
+            subj = str(self.pattern_for_subject)
+        else:
+            subj = "any"
+        if self.origin is None:
+            orig = ""
+        else:
+            orig = " from " + str(self.origin)
+        if self.destination is None:
+            dest = ""
+        else:
+            dest = " to " + str(self.destination)
+        return "(if subject %s moves%s%s)" % (subj, orig, dest)
 
 
 class SelfEnter(MoveType):

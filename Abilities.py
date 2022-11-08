@@ -11,15 +11,18 @@ from typing import List, Type, Tuple, TYPE_CHECKING, TypeVar
 import Verbs
 import Costs
 # import Zone
-import Match2
-from Match2 import VerbPattern, SelfAsEnter
 import Getters as Get
 import Stack
 import Phases
 
+
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
+    # from Match2 import SelfAsEnter
+    from Match2 import VerbPattern
+    import Match2
+
 
 T = TypeVar('T')
 
@@ -106,7 +109,9 @@ class TriggeredAbility:
             # Note: pay, effect verbs not yet populated. AddTriggeredAbility
             # does that later.
             caster = Verbs.AddTriggeredAbility()
-            if isinstance(self.condition, SelfAsEnter):
+            # if isinstance(self.condition, SelfAsEnter):
+            # I can't use isinstance without causing circular imports
+            if type(self.condition).__name__ == "SelfAsEnter":
                 caster = Verbs.AddAsEntersAbility()
             [caster] = caster.populate_options(state, player,
                                                source=source_of_ability,
@@ -116,7 +121,7 @@ class TriggeredAbility:
                 state.super_stack.append(caster)
 
     def __str__(self):
-        return "Ability(%s -> %s)" % (str(self.condition), str(self.effect))
+        return "TrigAbility(%s -> %s)" % (str(self.condition), str(self.effect))
 
     def get_id(self):
         return str(self)
@@ -222,6 +227,14 @@ class ModificationEffect:
         """
         raise NotImplementedError
 
+    def _string_params(self) -> str:
+        """Format the params nicely to be printed for debug, tracking."""
+        raise NotImplementedError
+
+    def __str__(self):
+        return "%s modified by %s" % (self.getter_to_affect.__name__,
+                                      self._string_params())
+
 
 class BuffStats(ModificationEffect):
     def __init__(self, name: str,
@@ -245,6 +258,10 @@ class BuffStats(ModificationEffect):
         t_mod = self.params[1].get(state, player, source)
         return orig[0] + p_mod, orig[1] + t_mod
 
+    def _string_params(self) -> str:
+        """Format the params nicely to be printed for debug, tracking."""
+        return "+%s/+%s" % (str(self.params[0]), str(self.params[1]))
+
 
 class GrantKeyword(ModificationEffect):
     def __init__(self, name: str, params: List[str] | Get.GetStringList):
@@ -259,6 +276,9 @@ class GrantKeyword(ModificationEffect):
         to_add = self.params.get(state, player, source)
         return orig + [kw for kw in to_add if kw not in orig]
 
+    def _string_params(self) -> str:
+        """Format the params nicely to be printed for debug, tracking."""
+        return "+%s" % ",".join(self.params)
 
 # ----------
 
@@ -296,6 +316,9 @@ class ReplacementEffect:
         """
         raise NotImplementedError
 
+    def __str__(self):
+        return "%s replace by %s" % (str(self.verb_to_affect),
+                                     str(self.params))
 
 # ----------
 
@@ -357,13 +380,15 @@ class StaticAbility:
         return self.effect.apply_modifier(value, state, player, source, owner)
 
     def copy(self, new_state: GameState | None = None):
-        abil = StaticAbility(self.name, self.effect,
-                             self.applies_to)
+        abil = StaticAbility(self.effect, self.applies_to)
         abil.__class__ = self.__class__
         return abil
 
     def add_to_tracker(self, state: GameState, owner: Cardboard):
         state.statics.append(StaticAbilityHolder(owner, self))
+
+    def __str__(self):
+        return "Static %s for %s" % (str(self.effect), str(self.applies_to))
 
 
 # # -----------------------------------------------------------------------
@@ -455,6 +480,9 @@ class TriggeredAbilityHolder:
         return TriggeredAbilityHolder(self.card.copy(state),
                                       self.effect.copy(state))
 
+    def __str__(self):
+        return "{%s, %s}" %(str(self.card), str(self.effect))
+
 
 class TimedAbilityHolder:
     """Holds timed abilities in the GameState tracking lists"""
@@ -466,6 +494,9 @@ class TimedAbilityHolder:
     def copy(self, state: GameState):
         return TimedAbilityHolder(self.card.copy(state),
                                   self.effect.copy(state))
+
+    def __str__(self):
+        return "{%s, %s}" %(str(self.card), str(self.effect))
 
 
 class StaticAbilityHolder:
@@ -482,6 +513,8 @@ class StaticAbilityHolder:
                                    self.static_ability.copy(state),
                                    self.lasts_until)
 
+    def __str__(self):
+        return "{%s, %s}" % (str(self.card), str(self.static_ability))
 
 # class OngoingEffectHolder:
 #     """
