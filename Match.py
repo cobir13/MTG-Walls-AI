@@ -30,15 +30,15 @@ class Pattern:
         Cardboard and given source Player index?"""
         raise Exception
 
-    def has_type(self, pattern_type: type) -> bool:
-        return isinstance(self, pattern_type)
-
-    def get_type(self, pattern_type: type) -> List[Pattern]:
-        if isinstance(self, pattern_type):
-            # noinspection PyTypeChecker
-            return [self]
-        else:
-            return []
+    # def has_type(self, pattern_type: type) -> bool:
+    #     return isinstance(self, pattern_type)
+    #
+    # def get_type(self, pattern_type: type) -> List[Pattern]:
+    #     if isinstance(self, pattern_type):
+    #         # noinspection PyTypeChecker
+    #         return [self]
+    #     else:
+    #         return []
     
     def __str__(self):
         return type(self).__name__
@@ -63,14 +63,14 @@ class _AnyOf(Pattern):
         return any([p.match(subject, state, player, source)
                     for p in self.patterns])
 
-    def has_type(self, pattern_type: type):
-        return any([p.has_type(pattern_type) for p in self.patterns])
-
-    def get_type(self, pattern_type: type):
-        sub_patterns = []
-        for p in self.patterns:
-            sub_patterns += p.get_type(pattern_type)
-        return sub_patterns
+    # def has_type(self, pattern_type: type):
+    #     return any([p.has_type(pattern_type) for p in self.patterns])
+    #
+    # def get_type(self, pattern_type: type):
+    #     sub_patterns = []
+    #     for p in self.patterns:
+    #         sub_patterns += p.get_type(pattern_type)
+    #     return sub_patterns
 
     def __str__(self):
         return " or ".join([str(p) for p in self.patterns])
@@ -86,14 +86,14 @@ class _AllOf(Pattern):
         return all([p.match(subject, state, player, source)
                     for p in self.patterns])
 
-    def has_type(self, pattern_type: type):
-        return any([p.has_type(pattern_type) for p in self.patterns])
-
-    def get_type(self, pattern_type: type):
-        sub_patterns = []
-        for p in self.patterns:
-            sub_patterns += p.get_type(pattern_type)
-        return sub_patterns
+    # def has_type(self, pattern_type: type):
+    #     return any([p.has_type(pattern_type) for p in self.patterns])
+    #
+    # def get_type(self, pattern_type: type):
+    #     sub_patterns = []
+    #     for p in self.patterns:
+    #         sub_patterns += p.get_type(pattern_type)
+    #     return sub_patterns
 
     def __str__(self):
         return " and ".join([str(p) for p in self.patterns])
@@ -106,11 +106,11 @@ class _Negated(Pattern):
     def match(self, subject, state, player, source) -> bool:
         return not self.pattern.match(subject, state, player, source)
 
-    def has_type(self, pattern_type: type):
-        return self.pattern.has_type(pattern_type)
-
-    def get_type(self, pattern_type: type):
-        return self.pattern.get_type(pattern_type)
+    # def has_type(self, pattern_type: type):
+    #     return self.pattern.has_type(pattern_type)
+    #
+    # def get_type(self, pattern_type: type):
+    #     return self.pattern.get_type(pattern_type)
 
     def __str__(self):
         return "not " + str(self.pattern)

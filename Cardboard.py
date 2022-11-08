@@ -214,9 +214,6 @@ class Cardboard:
             if len([eff for eff in effects if eff.can_be_done(state)]) == 0:
                 return None  # no valid way to choose effects
         # if reached here, ability can be done!  build a caster for it
-        stack_obj = Stack.StackAbility(controller=player, obj=self,
-                                       pay_cost=None, do_effect=None)
-        # figure out which verb can be used to cast this object
         stack_obj = Stack.StackCardboard(controller=player, obj=self,
                                          pay_cost=None, do_effect=None)
         caster: PlayCardboard = self.rules_text.caster_verb()

@@ -7,20 +7,19 @@ Created on Mon Dec 28 21:13:28 2020
 from __future__ import annotations
 from typing import List, TYPE_CHECKING, Type
 
-import Getters
-import Match as Match
+import Match2
 import Costs
-import Verbs
 
 if TYPE_CHECKING:
     from GameState import GameState
+    from Match2 import VerbPattern
 
-from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility, StaticAbility
-from Match import DetectVerbDone
+from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility,\
+    StaticAbility
+
 from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
     PlayCardboard, PlayLand, PlayPermanent, AffectPlayer
 import Zone
-from Phases import Phases
 
 
 # ------------------------------------------------------------------------------
@@ -56,8 +55,8 @@ class RulesText:
     def add_activated(self, name: str, cost: Costs.Cost, effect: Verb):
         self.activated.append(ActivatedAbility(name, cost, effect))
 
-    def add_triggered(self, name: str, trigger: DetectVerbDone, effect: Verb):
-        self.trig_verb.append(TriggeredAbility(name, trigger, effect))
+    def add_triggered(self, name: str, condition: VerbPattern, effect: Verb):
+        self.trig_verb.append(TriggeredAbility(name, condition, effect))
 
 
 # ----------------------------------------------------------------------------
@@ -140,11 +139,11 @@ class TapSymbol(Tap):
     """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
 
     def can_be_done(self, state: GameState) -> bool:
-        is_critter = Match.CardType(Creature).match(self.subject, state,
-                                                    self.player, self.source)
+        is_critter = Match2.CardType(Creature).match(self.subject, state,
+                                                     self.player, self.source)
         is_sick = self.subject.summon_sick
-        has_haste = Match.Keyword("haste").match(self.subject, state,
-                                                 self.player, self.source)
+        has_haste = Match2.Keyword("haste").match(self.subject, state,
+                                                  self.player, self.source)
         return (super().can_be_done(state)
                 and (not is_critter or not is_sick or has_haste))
 
@@ -156,20 +155,20 @@ class DeclareAttacker(AffectPlayer):
     """`source` is attacking card. `subject` is player (index)
     being attacked."""
     def can_be_done(self, state: GameState) -> bool:
-        is_critter = Match.CardType(Creature).match(self.subject, state,
-                                                    self.player, self.source)
+        is_critter = Match2.CardType(Creature).match(self.subject, state,
+                                                     self.player, self.source)
         is_sick = self.subject.summon_sick
-        has_haste = Match.Keyword("haste").match(self.subject, state,
-                                                 self.player, self.source)
-        is_defender = Match.Keyword("defender").match(self.subject, state,
-                                                      self.player, self.source)
+        has_haste = Match2.Keyword("haste").match(self.subject, state,
+                                                  self.player, self.source)
+        is_defend = Match2.Keyword("defender").match(self.subject, state,
+                                                     self.player, self.source)
         return (super().can_be_done(state)
                 and (is_critter and (not is_sick or has_haste)
-                     and not is_defender))
+                     and not is_defend))
 
     def do_it(self, state, to_track=[], check_triggers=True):
-        has_vig = Match.Keyword("vigilance").match(self.subject, state,
-                                                   self.player, self.source)
+        has_vig = Match2.Keyword("vigilance").match(self.subject, state,
+                                                    self.player, self.source)
         if not has_vig:
             tapper = Tap()
             [tapper] = tapper.populate_options(state, self.player, self.source,

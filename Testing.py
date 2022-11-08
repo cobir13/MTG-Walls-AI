@@ -18,7 +18,7 @@ from Cardboard import Cardboard
 from PlayTree import PlayTree
 import Verbs
 import Stack
-import Match
+import Match2
 import time
 import RulesText
 import Costs
@@ -100,55 +100,55 @@ if __name__ == "__main__":
         assert True
 
     # test some getters
-    assert Match.Power("=", 1).match(vanil0, game1, 0, vanil0)
-    assert Match.YouControl().match(vanil0, game1, 0, vanil0)
-    assert not Match.YouControl().match(vanil1, game1, 0, vanil0)
-    assert Match.OppControls().match(vanil1, game1, 0, vanil0)
+    assert Match2.Power("=", 1).match(vanil0, game1, 0, vanil0)
+    assert Match2.YouControl().match(vanil0, game1, 0, vanil0)
+    assert not Match2.YouControl().match(vanil1, game1, 0, vanil0)
+    assert Match2.OppControls().match(vanil1, game1, 0, vanil0)
     assert Zone.Field(Get.Controllers()
                       ).get_absolute_zones(game1, 1, vanil0)[0].player == 0
     assert Zone.Field(Get.Controllers()
                       ).get_absolute_zones(game1, 1, vanil1)[0].player == 1
     # test matchers and CardsFromZone
-    assert Get.Count(Match.Toughness(">", 1), Zone.Field(0)
+    assert Get.Count(Match2.Toughness(">", 1), Zone.Field(0)
                      ).get(game1, 0, vanil0) == 1
-    assert len(Get.AllWhich(Match.Toughness(">", 1)
+    assert len(Get.AllWhich(Match2.Toughness(">", 1)
                             ).pick(Get.CardListFrom(Zone.Field(0)),
                                    game1, 0, vanil0)[0]) == 1  # you=player1
-    assert Get.AllWhich(Match.Toughness(">", 1)
+    assert Get.AllWhich(Match2.Toughness(">", 1)
                         ).pick(Get.CardListFrom(Zone.Field(0)),
                                game1, 0, vanil0)[0][0] is vanil0
-    assert len(Get.AllWhich(Match.Toughness(">", 1)
+    assert len(Get.AllWhich(Match2.Toughness(">", 1)
                             ).pick(Get.CardListFrom(Zone.Field(0)),
                                    game1, 1, vanil0)) == 1  # still player0
-    assert len(Get.AllWhich(Match.Toughness(">", 1)
+    assert len(Get.AllWhich(Match2.Toughness(">", 1)
                             ).pick(Get.CardListFrom(Zone.Field(None)),
                                    game1, 0, choc0)[0]) == 2  # all players
-    assert len(Get.AllWhich(Match.Toughness(">", 1)
+    assert len(Get.AllWhich(Match2.Toughness(">", 1)
                             ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, vanil0)[0]) == 1  # you=player0
-    assert len(Get.AllWhich(Match.Toughness(">", 1)
+    assert len(Get.AllWhich(Match2.Toughness(">", 1)
                             ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 1, choc0)[0]) == 1  # you=player1
-    assert len(Get.AllWhich(Match.Toughness(">", 1)
+    assert len(Get.AllWhich(Match2.Toughness(">", 1)
                             ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, vanil0)[0]) == 1  # you=player0
-    assert len(Get.AllWhich(Match.YouControl()
+    assert len(Get.AllWhich(Match2.YouControl()
                             ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, vanil0)[0]) == 2  # you=player0
-    assert len(Get.AllWhich(Match.YouControl()
+    assert len(Get.AllWhich(Match2.YouControl()
                             ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 0, choc0)[0]) == 2  # you=player0
-    assert len(Get.AllWhich(Match.YouControl()
+    assert len(Get.AllWhich(Match2.YouControl()
                             ).pick(Get.CardListFrom(Zone.Field(Get.You())),
                                    game1, 1, choc0)[0]) == 1  # you=player1
     assert len(
         Get.AllWhich(
-            Match.YouControl()
+            Match2.YouControl()
         ).pick(Get.CardListFrom(Zone.Field(Get.Controllers())),
                game1, 0, choc0)[0]) == 2  # controller=0
     assert len(
         Get.AllWhich(
-            Match.CardType(RulesText.Creature)
+            Match2.CardType(RulesText.Creature)
         ).pick(Get.CardListFrom(Zone.Field(None)),
                game1, 1, choc0)[0]) == 3  # all players
 
@@ -197,9 +197,9 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("5")
             self.set_power_toughness(8, 8)
             self.add_triggered("Orb see tap adds R",
-                               Match.DetectVerbDone(
+                               Match2.VerbPattern(
                                    Verbs.Tap,
-                                   Match.ControllerControls()
+                                   Match2.ControllerControls()
                                ),
                                Verbs.AddMana("R")
                                )
@@ -211,8 +211,8 @@ if __name__ == "__main__":
             self.cost = Costs.Cost("1B")
             self.set_power_toughness(0, 1)
             self.add_triggered("Artist drains when dies",
-                               Match.DetectMoveDone(
-                                   Match.CardType(RulesText.Creature),
+                               Match2.MoveType(
+                                   Match2.CardType(RulesText.Creature),
                                    Zone.Field(None),
                                    Zone.Grave(None)
                                ),
@@ -284,7 +284,7 @@ if __name__ == "__main__":
     chocE = gameE.player_list[0].field[0]
     assert chocE.player_index == 0
     artist = gameE.player_list[1].field[0]
-    s = artist.rules_text.trig_verb[0].trigger
+    s = artist.rules_text.trig_verb[0].condition
     assert s.pattern_for_subject.match(chocE, gameE, 0, artist)
     [destroyer] = Verbs.Destroy().populate_options(gameE, 0, chocE, None)
     assert destroyer.can_be_done(gameE)
@@ -308,7 +308,7 @@ if __name__ == "__main__":
             for g in [gameE, gameF, gameG]] == [20, 20, 21]
     # try to destroy the world!
     wrath = Verbs.Defer(
-        Verbs.Destroy().on(Get.AllWhich(Match.CardType(RulesText.Creature)),
+        Verbs.Destroy().on(Get.AllWhich(Match2.CardType(RulesText.Creature)),
                            Get.CardListFrom(Zone.Field(None))))
     assert wrath.copies
     [wrath] = wrath.populate_options(gameG, 0, None, None)
@@ -924,7 +924,8 @@ if __name__ == "__main__":
     # 5 valid targets (4 unique).  1 fetchland & color-testing Rocks in hand.
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 1  # play fetch
-    matcher = Match.CardType(Decklist.Forest) | Match.CardType(Decklist.Island)
+    matcher = (Match2.CardType(Decklist.Forest)
+               | Match2.CardType(Decklist.Island))
     assert len([c for c in game.active.deck if
                 matcher.match(c, game, player, game.active.hand[0])]) == 5
 
@@ -1554,11 +1555,11 @@ if __name__ == "__main__":
             self.name = "Lord"
             self.cost = Costs.Cost("WW")
             self.set_power_toughness(2, 2)
-            buff = Abilities.BuffStats("buff mine",
-                                       Match.ControllerControls()
-                                       & Match.CardType(RulesText.Creature),
-                                       (+1, +3))
-            self.static = [buff]
+            a = Abilities.StaticAbility(Abilities.BuffStats("buff mine",
+                                                            (+1, +3)),
+                                        Match2.ControllerControls()
+                                        & Match2.CardType(RulesText.Creature))
+            self.static = [a]
 
     class GiverOfHaste(RulesText.Creature):
         def __init__(self):
@@ -1566,9 +1567,9 @@ if __name__ == "__main__":
             self.name = "GiverOfHaste"
             self.cost = Costs.Cost("2R")
             self.set_power_toughness(0, 3)
-            buff = Abilities.GrantKeyword("Haste all",
-                                          Match.CardType(RulesText.Creature),
-                                          ["haste"])
+            buff = Abilities.StaticAbility(Abilities.GrantKeyword("Haste all",
+                                                                  ['haste']),
+                                           Match2.CardType(RulesText.Creature))
             self.static = [buff]
 
 
@@ -1619,7 +1620,26 @@ if __name__ == "__main__":
     assert len(pop_game.active.get_valid_activations()) == 0
 
 
-
+    # class DaughterOfBuff(RulesText.Creature):
+    #     def __init__(self):
+    #         super().__init__()
+    #         self.name = "DaughterOfBuff"
+    #         self.cost = Costs.Cost("W")
+    #         self.set_power_toughness(1, 2)
+    #         self.add_activated("Buff a target",
+    #                            Costs.Cost(RulesText.TapSymbol()),
+    #                            Verbs.AddOngoingEffect(
+    #                                Abilities.OngoingEffect("buff +1/+1",
+    #                                                        )
+    #                            )
+    #
+    #
+    #                            )
+    #
+    #
+    #         buff = Abilities.GrantKeyword("Haste all",
+    #                                       Match2.CardType(RulesText.Creature),
+    #                                       ["haste"])
 
 
 

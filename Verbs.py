@@ -22,7 +22,7 @@ if TYPE_CHECKING:
                   Tuple[int | Cardboard | StackObject | None]]
 
 import Zone
-import Match as Match
+import Match2
 import Getters as Get
 import ManaHandler
 import Stack
@@ -493,7 +493,8 @@ class ApplyToTargets(VerbFactory):
     """
 
     def __init__(self, subject_chooser: Get.AllWhich,
-                 option_getter: Get.CardListFrom | Get.PlayerList | Get.StackList,
+                 option_getter: (Get.CardListFrom | Get.PlayerList
+                                 | Get.StackList),
                  verb: AffectCard | AffectPlayer | AffectStack,
                  allowed_to_fail: bool = True):
         super().__init__(3, copies=verb.copies)
@@ -549,7 +550,6 @@ class Modal(VerbFactory):
         self._inputs = [num_to_choose, can_be_less]
         assert (len(list_of_verbs) > 1)
         self._sub_verbs = list_of_verbs
-
 
     @property
     def num_to_choose(self) -> Get.GetInteger | int:
@@ -1071,10 +1071,25 @@ class ActivateOnlyAsSorcery(Verb):
         return  # doesn't mark itself as having done anything
 
 
-# class AddOngoingEffect(Verb):
-#     effect that I'm adding should be in the input, not init
-
-
+# class AddOngoingEffect(AffectCard):
+#     """
+#     Adds the given OngoingEffect to the list of active static
+#     effects of the GameState. If the OngoingEffect requires
+#     a target, the subject of this Verb will be set as the
+#     target. (Otherwise the subject is unused.) It is assumed
+#     that the source of this Verb is also the source of the
+#     effect.
+#     """
+#     def __init__(self, effect: Abilities.OngoingEffect):
+#         super().__init__(num_inputs=1, copies=False)
+#         self._inputs = [effect]
+#
+#     @property
+#     def ongoing_effect(self) -> Abilities.OngoingEffect:
+#         return self.inputs[0]
+#
+#     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+#         self.ongoing_effect.add_to_tracker()
 
 
 class Shuffle(AffectPlayer):
@@ -1243,8 +1258,8 @@ class Destroy(MoveToZone):
                 and self.subject.is_in(Zone.Field))
 
     def do_it(self, state, to_track=[], check_triggers=True):
-        if Match.Keyword("indestructible").match(self.subject, state,
-                                                 self.player, self.source):
+        if Match2.Keyword("indestructible").match(self.subject, state,
+                                                  self.player, self.source):
             return [(state, NullVerb(), to_track)]  # nothing to trigger
         else:
             return super().do_it(state, to_track, check_triggers)
@@ -1266,7 +1281,7 @@ class SearchDeck(VerbFactory):
     """
 
     def __init__(self, zone_to_move_to: Zone.Zone, num_to_find: int,
-                 pattern: Match.Pattern):
+                 pattern: Match2.Pattern):
         super().__init__(3, True)
         self._inputs = [zone_to_move_to, num_to_find, pattern]
 
@@ -1572,8 +1587,8 @@ class PlaySorcery(PlayCardboard):
         doable = super().can_be_done(state)
         stack_empty = len(state.stack) == 0
         card = self.subject.obj
-        has_flash = Match.Keyword("flash").match(card, state,
-                                                 self.player, card)
+        has_flash = Match2.Keyword("flash").match(card, state,
+                                                  self.player, card)
         return doable and (stack_empty or has_flash)
 
 
@@ -1583,6 +1598,6 @@ class PlayPermanent(PlayCardboard):
         doable = super().can_be_done(state)
         stack_empty = len(state.stack) == 0
         card = self.subject.obj
-        has_flash = Match.Keyword("flash").match(card, state,
-                                                 self.player, card)
+        has_flash = Match2.Keyword("flash").match(card, state,
+                                                  self.player, card)
         return doable and (stack_empty or has_flash)

@@ -7,11 +7,12 @@ Created on Tue Dec 29 11:50:12 2020
 import RulesText
 from RulesText import Creature, Land, TapSymbol  # , Instant, Sorcery
 import Zone
-import Match as Match
+import Match2
+from Match2 import MoveType, SelfEnter, SelfAsEnter
 import Verbs
 from Costs import Cost
 
-from Match import DetectMoveDone, DetectSelfEnter, DetectAsEnter
+
 import Getters as Get
 
 
@@ -60,8 +61,8 @@ class Caretaker(Creature):
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
                                 Verbs.Tap().on(
-                                    Get.Any(Match.Another() & Match.Untapped()
-                                            & Match.CardType(Creature)),
+                                    Get.Any(Match2.Another() & Match2.Untapped()
+                                            & Match2.CardType(Creature)),
                                     Get.CardListFrom(Zone.Field(Get.You()))
                                 )),
                            Verbs.AddMana("A"))
@@ -83,7 +84,7 @@ class Battlement(Creature):
             Verbs.AddMana(
                 Get.RepeatString(
                     "G",
-                    Get.Count(Match.Keyword("defender"),
+                    Get.Count(Match2.Keyword("defender"),
                               Zone.Field(Get.You()))))
         )
 
@@ -104,7 +105,7 @@ class Axebane(Creature):
             Verbs.AddMana(
                 Get.RepeatString(
                     "A",
-                    Get.Count(Match.Keyword("defender"),
+                    Get.Count(Match2.Keyword("defender"),
                               Zone.Field(Get.You()))))
         )
 
@@ -119,8 +120,7 @@ class Blossoms(Creature):
         self.cost = Cost("1G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
-        self.add_triggered("Blossoms etb draw", DetectSelfEnter(),
-                           Verbs.DrawCard())
+        self.add_triggered("Blossoms etb draw", SelfEnter(), Verbs.DrawCard())
 
 
 # -----------------------------------------------------------------------------
@@ -133,8 +133,7 @@ class Omens(Creature):
         self.cost = Cost("1W")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
-        self.add_triggered("Omens etb draw", DetectSelfEnter(),
-                           Verbs.DrawCard())
+        self.add_triggered("Omens etb draw", SelfEnter(), Verbs.DrawCard())
 
 
 # -----------------------------------------------------------------------------
@@ -148,8 +147,8 @@ class Arcades(Creature):
         self.add_keywords(["flying", "vigilance"])
         self.set_power_toughness(3, 5)
         self.add_triggered("Arcades draw trigger",
-                           DetectMoveDone(Match.Keyword("defender"), None,
-                                          Zone.Field(Get.Controllers())),
+                           MoveType(Match2.Keyword("defender"),
+                                    None, Zone.Field(Get.Controllers())),
                            Verbs.DrawCard())
 
 
@@ -163,8 +162,8 @@ class Company(RulesText.Instant):
         self.effect = Verbs.Defer(
             Verbs.LookDoThenDo(
                 Get.CardListFrom(Zone.DeckTopN(Get.You(), 6)),
-                Get.Chooser(Match.CardType(Creature)
-                            & Match.ManaValue("<=", 3),
+                Get.Chooser(Match2.CardType(Creature)
+                            & Match2.ManaValue("<=", 3),
                             2, can_be_fewer=True),
                 Verbs.MoveToZone(Zone.Field(Get.You())),
                 Verbs.MoveToZone(Zone.DeckBottom(Get.You()))
@@ -229,7 +228,7 @@ class TempleGarden(Forest, Plains):
         self.name = "TempleGarden"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           DetectAsEnter(),
+                           SelfAsEnter(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.PayLife(2)]))
                            )
@@ -242,7 +241,7 @@ class BreedingPool(Forest, Island):
         self.name = "BreedingPool"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           DetectAsEnter(),
+                           SelfAsEnter(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.PayLife(2)]))
                            )
@@ -255,7 +254,7 @@ class HallowedFountain(Plains, Island):
         self.name = "HallowedFountain"
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
-                           DetectAsEnter(),
+                           SelfAsEnter(),
                            Verbs.Defer(Verbs.Modal([Verbs.Tap(),
                                                     Verbs.PayLife(2)]))
                            )
@@ -270,14 +269,14 @@ class WindsweptHeath(Land):
         self.name = "WindsweptHeath"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
-                           DetectSelfEnter(),
+                           SelfEnter(),
                            Verbs.PayLife(1)
                            + Verbs.Sacrifice()
                            + Verbs.Defer(
                                Verbs.SearchDeck(Zone.Field(Get.You()),
                                                 1,
-                                                Match.CardType(Forest)
-                                                | Match.CardType(Plains)))
+                                                Match2.CardType(Forest)
+                                                | Match2.CardType(Plains)))
                            )
 
 
@@ -288,14 +287,14 @@ class MistyRainforest(Land):
         self.name = "MistyRainforest"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
-                           DetectSelfEnter(),
+                           SelfEnter(),
                            Verbs.PayLife(1)
                            + Verbs.Sacrifice()
                            + Verbs.Defer(
                                Verbs.SearchDeck(Zone.Field(Get.You()),
                                                 1,
-                                                Match.CardType(Forest)
-                                                | Match.CardType(Island)))
+                                                Match2.CardType(Forest)
+                                                | Match2.CardType(Island)))
                            )
 
 
@@ -306,14 +305,14 @@ class FloodedStrand(Land):
         self.name = "WindsweptHeath"
         # activating for two colors comes from the two inheritances
         self.add_triggered("GW fetch etb",
-                           DetectSelfEnter(),
+                           SelfEnter(),
                            Verbs.PayLife(1)
                            + Verbs.Sacrifice()
                            + Verbs.Defer(
                                Verbs.SearchDeck(Zone.Field(Get.You()),
                                                 1,
-                                                Match.CardType(Island)
-                                                | Match.CardType(Plains)))
+                                                Match2.CardType(Island)
+                                                | Match2.CardType(Plains)))
                            )
 
 # =============================================================================

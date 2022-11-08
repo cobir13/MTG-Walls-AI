@@ -15,8 +15,7 @@ if TYPE_CHECKING:
     TARGET = int | Cardboard | StackObject
     TRAIT = int | Tuple[int, int] | str | List[str] | bool
 
-import Pilots
-import Match
+import Match2
 import Zone
 
 
@@ -40,11 +39,11 @@ class Getter:
         """
         iterate_value = self._get(state, player, source)
         for static_holder in state.statics + state.statics_to_remove:
-            effect = static_holder.effect
+            ability = static_holder.static_ability
             owner = static_holder.card
-            if effect.is_applicable(self, source, state, player, owner):
-                iterate_value = effect.apply_modifier(iterate_value, state,
-                                                      player, source, owner)
+            if ability.is_applicable(self, state, player, source, owner):
+                iterate_value = ability.apply_modifier(iterate_value, state,
+                                                       player, source, owner)
         return iterate_value
 
     def _get(self, state: GameState, player: int, source: Cardboard):
@@ -101,6 +100,7 @@ class ConstString(Const, GetString):
 class ConstStringList(Const, GetStringList):
     pass
 
+
 class ConstBool(Const, GetBool):
     pass
 
@@ -147,45 +147,45 @@ class StackList(Getter):
 
 class You(PlayerList):
     """Returns list of the player matching the pattern
-    Match.You (which is, the player calling `get`)."""
+    Match2.You (which is, the player calling `get`)."""
 
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[Player]:
         return [pl for pl in super()._get(state, player, source)
-                if Match.You().match(pl, state, player, source)]
+                if Match2.You().match(pl, state, player, source)]
 
 
 class Opponents(PlayerList):
     """Returns list of the player matching the pattern
-    Match.Opponent (which is, all opponents of the player
+    Match2.Opponent (which is, all opponents of the player
     calling `get`)."""
 
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[Player]:
         return [pl for pl in super()._get(state, player, source)
-                if Match.Opponent().match(pl, state, player, source)]
+                if Match2.Opponent().match(pl, state, player, source)]
 
 
 class Owners(PlayerList):
     """Returns list of the player matching the pattern
-    Match.Owner (which is, the player who owns the
+    Match2.Owner (which is, the player who owns the
     asking Cardboard)."""
 
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[Player]:
         return [pl for pl in super()._get(state, player, source)
-                if Match.Owner().match(pl, state, player, source)]
+                if Match2.Owner().match(pl, state, player, source)]
 
 
 class Controllers(PlayerList):
     """Returns list of the player matching the pattern
-    Match.Owner (which is, the player who controlls the
+    Match2.Owner (which is, the player who controlls the
     asking Cardboard)."""
 
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> List[Player]:
         return [pl for pl in super()._get(state, player, source)
-                if Match.Controller().match(pl, state, player, source)]
+                if Match2.Controller().match(pl, state, player, source)]
 
 
 # ---------------------------------------------------------------------------
@@ -203,9 +203,9 @@ class Controllers(PlayerList):
 class Count(GetInteger):
     """Get the number of Cardboards which match all given pattern."""
 
-    def __init__(self, pattern: Match.Pattern, zone: Zone.Zone):
+    def __init__(self, pattern: Match2.CardPattern, zone: Zone.Zone):
         super().__init__()
-        self.pattern: Match.Pattern = pattern
+        self.pattern: Match2.CardPattern = pattern
         self.zone: Zone.Zone = zone
 
     def _get(self, state: GameState, player: int, source: Cardboard) -> int:
@@ -295,10 +295,10 @@ class ManaValue(GetInteger):
 #     """Whether the source card, controlled by the given player, can attack
 #     right now."""
 #     def _get(self, state: GameState, player: int, source: Cardboard):
-#         is_critter = Match.CardType(Creature).match(self.subject, state,
+#         is_critter = Match2.CardType(Creature).match(self.subject, state,
 #                                                     self.player, self.source)
 #         is_sick = self.subject.summon_sick
-#         has_haste = Match.Keyword("haste").match(self.subject, state,
+#         has_haste = Match2.Keyword("haste").match(self.subject, state,
 #                                                  self.player, self.source)
 #
 #
@@ -342,7 +342,7 @@ class AllWhich:
     """return subsets of the given list, of all objects
      which match the specified pattern."""
 
-    def __init__(self, pattern_for_valid: Match.Pattern):
+    def __init__(self, pattern_for_valid: Match2.Pattern):
         self.pattern = pattern_for_valid
 
     def pick(self, options, state: GameState, player: int, card: Cardboard
@@ -371,7 +371,7 @@ class AllWhich:
 
 class All(AllWhich):
     def __init__(self):
-        super().__init__(Match.Anything())
+        super().__init__(Match2.Anything())
 
     def __str__(self):
         return "all of "
@@ -379,7 +379,7 @@ class All(AllWhich):
 
 class Chooser(AllWhich):
 
-    def __init__(self, pattern_for_valid: Match.Pattern,
+    def __init__(self, pattern_for_valid: Match2.Pattern,
                  num_to_choose: GetInteger | int, can_be_fewer: bool):
         super().__init__(pattern_for_valid)
         if isinstance(num_to_choose, int):
@@ -417,7 +417,7 @@ class Target(Chooser):
 class Any(Chooser):
     """Choose any one option from the given list of options"""
 
-    def __init__(self, pattern_for_valid: Match.Pattern | None):
+    def __init__(self, pattern_for_valid: Match2.Pattern | None):
         if pattern_for_valid is None:
-            pattern_for_valid = Match.Anything()
+            pattern_for_valid = Match2.Anything()
         super().__init__(pattern_for_valid, 1, False)

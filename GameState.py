@@ -5,7 +5,7 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, Tuple, Type, TYPE_CHECKING
+from typing import List, Tuple, Type
 
 # if TYPE_CHECKING:
 #     from Abilities import TriggeredAbilityHolder, TimedAbilityHolder
@@ -15,7 +15,7 @@ from Abilities import StaticAbilityHolder  # actual need
 from Cardboard import Cardboard, CardNull  # actual need
 import Getters as Get  # actually needs
 import Zone
-import Match
+import Match2
 import Verbs
 from ManaHandler import ManaPool
 from Stack import StackObject
@@ -259,7 +259,7 @@ class GameState:
     def can_safely_skip_this_phase(self) -> bool:
         """
         If no player wants to take any unilateral actions in this
-        phase, and there are no timed abilities to trigger, and
+        phase, and there are no timed abilities to condition, and
         there is nothing currently on the stack, return True. If
         this phase CANNOT safely be skipped, return False.
         Meant to be called at the start of a phase before anything
@@ -508,7 +508,7 @@ class GameState:
                     game_list.append(g)
         elif len(self.active.hand) > 7:
             # discard down to 7 cards
-            choose_which = Get.Chooser(Match.Anything(),
+            choose_which = Get.Chooser(Match2.Anything(),
                                        num_to_choose=len(self.active.hand) - 7,
                                        can_be_fewer=False)
             get_from_hand = Get.CardListFrom(Zone.Hand(
