@@ -184,14 +184,15 @@ class PlayerPattern(Pattern):
 # # ---------- CARD PATTERNS ----------------------------------------------
 
 class CardType(CardPattern):
-    def __init__(self, card_type: Type[RulesText]):
-        self.type_to_match: Type[RulesText] = card_type
+    def __init__(self, card_type: str):
+        self.type_to_match: str = card_type.lower()
 
     def _match(self, subject: Cardboard, state, asking_player, asking_card):
-        return subject.has_type(self.type_to_match)
+        its_types = Get.CardTypes().get(state, asking_player, subject)
+        return self.type_to_match in its_types
 
     def __str__(self):
-        return "is-" + self.type_to_match.__name__
+        return "is-" + self.type_to_match
 
 
 class Keyword(CardPattern):
@@ -231,12 +232,12 @@ class Counter(CardPattern):
 
 class Tapped(CardPattern):
     def _match(self, subject: Cardboard, state, asking_player, asking_card):
-        return subject.tapped
+        return Get.IsTapped().get(state, asking_player, asking_card)
 
 
 class Untapped(CardPattern):
     def _match(self, subject: Cardboard, state, asking_player, asking_card):
-        return not subject.tapped
+        return not Get.IsTapped().get(state, asking_player, asking_card)
 
 
 class IsInZone(CardPattern):

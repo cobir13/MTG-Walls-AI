@@ -146,11 +146,8 @@ if __name__ == "__main__":
             Match2.YouControl()
         ).pick(Get.CardListFrom(Zone.Field(Get.Controllers())),
                game1, 0, choc0)[0]) == 2  # controller=0
-    assert len(
-        Get.AllWhich(
-            Match2.CardType(RulesText.Creature)
-        ).pick(Get.CardListFrom(Zone.Field(None)),
-               game1, 1, choc0)[0]) == 3  # all players
+    assert len(Get.AllWhich(Match2.CardType("creature")).pick(  # all players
+        Get.CardListFrom(Zone.Field(None)), game1, 1, choc0)[0]) == 3
 
     # test copying
     gameB, [chocB] = game1.copy_and_track([choc0])
@@ -212,7 +209,7 @@ if __name__ == "__main__":
             self.set_power_toughness(0, 1)
             self.add_triggered("Artist drains when dies",
                                Match2.MoveType(
-                                   Match2.CardType(RulesText.Creature),
+                                   Match2.CardType("creature"),
                                    Zone.Field(None),
                                    Zone.Grave(None)
                                ),
@@ -308,7 +305,7 @@ if __name__ == "__main__":
             for g in [gameE, gameF, gameG]] == [20, 20, 21]
     # try to destroy the world!
     wrath = Verbs.Defer(
-        Verbs.Destroy().on(Get.AllWhich(Match2.CardType(RulesText.Creature)),
+        Verbs.Destroy().on(Get.AllWhich(Match2.CardType("creature")),
                            Get.CardListFrom(Zone.Field(None))))
     assert wrath.copies
     [wrath] = wrath.populate_options(gameG, 0, None, None)
@@ -546,7 +543,7 @@ if __name__ == "__main__":
     assert activ_game is not game_orig
     new_roots = activ_game.active.field[0]
     assert roots is not new_roots
-    assert new_roots.has_type(Decklist.Roots)
+    assert new_roots.name == "Roots"
     assert len(roots.counters) == 0  # no counters on original
     assert len(new_roots.counters) == 2  # -0/-1 and @used
     assert activ_game.active.pool == ManaHandler.ManaPool("G")
@@ -924,8 +921,7 @@ if __name__ == "__main__":
     # 5 valid targets (4 unique).  1 fetchland & color-testing Rocks in hand.
     assert len(game.active.get_valid_activations()) == 0
     assert len(game.active.get_valid_castables()) == 1  # play fetch
-    matcher = (Match2.CardType(Decklist.Forest)
-               | Match2.CardType(Decklist.Island))
+    matcher = (Match2.CardType("forest") | Match2.CardType("island"))
     assert len([c for c in game.active.deck if
                 matcher.match(c, game, player, game.active.hand[0])]) == 5
 
@@ -1325,8 +1321,8 @@ if __name__ == "__main__":
     assert len(final.active.hand) == 2
     assert len(final.active.field) == 3
     assert len(final.active.deck) == 9
-    assert any([c.has_type(Decklist.Island) for c in final.active.hand])
-    assert not any([c.has_type(Decklist.Island) for c in final.active.field])
+    assert any(["island" in c.cardtypes for c in final.active.hand])
+    assert not any(["island" in c.cardtypes for c in final.active.field])
 
     # play next turn: draw Island, play Island, play Blossoms, draw Island
     tree2 = PlayTree([final], 5)
@@ -1340,8 +1336,8 @@ if __name__ == "__main__":
     assert len(final2.active.hand) == 2
     assert len(final2.active.field) == 5
     assert len(final2.active.deck) == 7
-    assert (any([c.has_type(Decklist.Island) for c in final2.active.hand]))
-    assert (any([c.has_type(Decklist.Island) for c in final2.active.field]))
+    assert (any(["island" in c.cardtypes for c in final2.active.hand]))
+    assert (any(["island" in c.cardtypes for c in final2.active.field]))
 
     # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
     final2.give_to(Cardboard(Decklist.Caryatid()), Zone.Hand)
@@ -1438,13 +1434,13 @@ if __name__ == "__main__":
         assert len(u.active.deck + u.active.field) == 6
         num_in_field[len(u.active.field)] += 1
         assert len(u.active.grave) == 1
-        if any([c.has_type(Decklist.Axebane) for c in u.active.field]):
+        if any([c.name == "Axebane" for c in u.active.field]):
             assert (
-                not any([c.has_type(Decklist.Axebane) for c in u.active.deck]))
-        if any([c.has_type(Decklist.Battlement) for c in u.active.field]):
+                not any([c.name == "Axebane" for c in u.active.deck]))
+        if any([c.name == "Battlement" for c in u.active.field]):
             assert (not any(
-                [c.has_type(Decklist.Battlement) for c in u.active.deck]))
-        assert (not any([c.has_type(RulesText.Land) for c in u.active.field]))
+                [c.name == "Battlement" for c in u.active.deck]))
+        assert (not any(["land" in c.cardtypes for c in u.active.field]))
     assert num_in_field == [1, 4, 6]
 
     # deck of 5 forests on top, one Caretaker, then 10 islands
@@ -1460,9 +1456,9 @@ if __name__ == "__main__":
     assert (len(universes) == 2)
     u = [g for g in universes if g.active.field != []][0]
     # now should be islands on top (index -1), forests on bottom (index 0)
-    assert all([c.has_type(Decklist.Island) for c in u.active.deck[-10:]])
-    assert all([c.has_type(Decklist.Forest) for c in u.active.deck[:5]])
-    assert u.active.deck[-6].has_type(Decklist.Island)
+    assert all([c.name == "Island" for c in u.active.deck[-10:]])
+    assert all([c.name == "Forest" for c in u.active.deck[:5]])
+    assert u.active.deck[-6].name == "Island"
     assert len(u.active.field) == 1
     assert len(u.active.grave) == 1
 
@@ -1529,14 +1525,14 @@ if __name__ == "__main__":
     for _ in range(10):
         gameF.give_to(Cardboard(Decklist.Island()), Zone.DeckBottom, 0)
     # should be forests on top
-    assert all([c.has_type(Decklist.Forest) for c in gameF.active.deck[-6:]])
+    assert all([c.name == "Forest" for c in gameF.active.deck[-6:]])
     # cast Collected Company
     universes = cast_and_resolve_company(gameF)
     assert len(universes) == 1
     u = universes[0]
     # now should be islands on top, forests on bottom
-    assert all([c.has_type(Decklist.Island) for c in u.active.deck[-10:]])
-    assert all([c.has_type(Decklist.Forest) for c in u.active.deck[:6]])
+    assert all([c.name == "Island" for c in u.active.deck[-10:]])
+    assert all([c.name == "Forest" for c in u.active.deck[:6]])
     assert len(u.active.field) == 0
     assert len(u.active.grave) == 1
 
@@ -1558,7 +1554,7 @@ if __name__ == "__main__":
             a = Abilities.StaticAbility(Abilities.BuffStats("buff mine",
                                                             (+1, +3)),
                                         Match2.ControllerControls()
-                                        & Match2.CardType(RulesText.Creature)
+                                        & Match2.CardType("creature")
                                         & Match2.IsInZone(Zone.Field))
             self.static = [a]
 
@@ -1570,7 +1566,7 @@ if __name__ == "__main__":
             self.set_power_toughness(0, 3)
             buff = Abilities.StaticAbility(Abilities.GrantKeyword("Haste all",
                                                                   ['haste']),
-                                           Match2.CardType(RulesText.Creature)
+                                           Match2.CardType("creature")
                                            & Match2.IsInZone(Zone.Field))
             self.static = [buff]
 

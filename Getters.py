@@ -229,6 +229,14 @@ class Keywords(GetStringList):
             return []
 
 
+class CardTypes(GetStringList):
+    def _get(self, state, player, source) -> List[str]:
+        try:
+            return source.rules_text.cardtypes
+        except AttributeError:
+            return []
+
+
 class CardName(GetString):
     def _get(self, state: GameState, player: int, source: Cardboard) -> str:
         try:
@@ -252,6 +260,18 @@ class IsTapped(GetBool):
             return source.tapped
         except AttributeError:
             return False
+
+
+class CanTapSymbol(GetBool):
+    def _get(self, state: GameState, player: int, source: Cardboard) -> bool:
+        is_creature = "creature" in CardTypes().get(state, player, source)
+        is_hasty = "haste" in Keywords().get(state, player, source)
+        try:
+            is_sick = source.summon_sick
+        except AttributeError:
+            is_sick = False
+        is_tapped = IsTapped().get(state, player, source)
+        return (not is_creature or is_hasty or not is_sick) and not is_tapped
 
 
 class PowerAndTough(GetIntPair):
@@ -307,8 +327,6 @@ class ManaValue(GetInteger):
 #                          if self.pattern.match(c, state, player, source)])
 #                     for zone in to_check])
 
-
-# class CanTapSymbol
 
 
 # ---------------------------------------------------------------------------

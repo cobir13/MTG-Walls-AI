@@ -994,6 +994,17 @@ class Untap(AffectCard):
         return Verb.do_it(self, state, to_track, check_triggers)
 
 
+class TapSymbol(Tap):
+    """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
+
+    def can_be_done(self, state: GameState) -> bool:
+        return (super().can_be_done(state)
+                and Get.CanTapSymbol().get(state, self.player, self.subject))
+
+    def __str__(self):
+        return "{T}"
+
+
 class AddCounter(AffectCard):
     """Adds the given counter string to the subject card"""
 

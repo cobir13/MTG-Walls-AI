@@ -115,6 +115,10 @@ class Cardboard:
     def effect(self) -> Verb | None:
         return self.rules_text.effect
 
+    @property
+    def cardtypes(self) -> List[str]:
+        return self.rules_text.cardtypes
+
     def get_activated(self):
         return self.rules_text.activated
 
@@ -143,10 +147,10 @@ class Cardboard:
         # equivalent or not. I defined EquivTo as a more intuitive, descriptive
         # definition of equality that I use for comparing two GameStates.
 
-    def has_type(self, card_type: Type[RulesText]) -> bool:
-        """Returns bool: "this Cardboard refers to a card which is the given
-        RulesText type (in addition to possibly other types as well)" """
-        return isinstance(self.rules_text, card_type)
+    # def has_type(self, card_type: str) -> bool:
+    #     """Returns bool: "this Cardboard refers to a card which is the given
+    #     RulesText type (in addition to possibly other types as well)" """
+    #     return isinstance(self.rules_text, card_type)
 
     def is_in(self, zone: Type[Zone]):
         return isinstance(self.zone, zone)
@@ -370,9 +374,6 @@ class CardNull(Cardboard):
         return False
 
     def __eq__(self, other):
-        return False
-
-    def has_type(self, card_type: type) -> bool:
         return False
 
     def mana_value(self):

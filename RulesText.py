@@ -7,18 +7,14 @@ Created on Mon Dec 28 21:13:28 2020
 from __future__ import annotations
 from typing import List, TYPE_CHECKING, Type
 
-import Match2
-import Costs
-
 if TYPE_CHECKING:
-    from GameState import GameState
     from Match2 import VerbPattern
 
+import Costs
 from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility,\
     StaticAbility
-
-from Verbs import MarkAsPlayedLand, NullVerb, Tap, Verb, \
-    PlayCardboard, PlayLand, PlayPermanent, AffectPlayer
+from Verbs import MarkAsPlayedLand, NullVerb, Verb, PlayCardboard, PlayLand,\
+    PlayPermanent
 import Zone
 
 
@@ -30,7 +26,8 @@ class RulesText:
     def __init__(self):
         self.name: str = ""
         self.cost: Costs.Cost = Costs.Cost()  # no mana or Verb costs
-        self.keywords: List[str] = []
+        self.keywords: List[str] = []  # all lowercase
+        self.cardtypes: List[str] = []  # all lowercase
         # activated abilities
         self.activated: List[ActivatedAbility] = []  # includes mana abilities
         # triggered by verbs (actions that are done)
@@ -68,6 +65,7 @@ class Permanent(RulesText):
     def __init__(self):
         super().__init__()
         self.cast_destination = Zone.Field(player=None)
+        self.cardtypes.append("permanent")
 
 
 class Creature(Permanent):
@@ -76,20 +74,11 @@ class Creature(Permanent):
         super().__init__()
         self.power = 0
         self.toughness = 0
+        self.cardtypes.append("creature")
 
     def set_power_toughness(self, power: int, toughness: int):
         self.power = power
         self.toughness = toughness
-
-
-# class Human(Creature):
-#     pass
-
-# class Plant(Creature):
-#     pass
-
-# class Wall(Creature):
-#     pass
 
 
 class Land(Permanent):
@@ -98,6 +87,7 @@ class Land(Permanent):
     def __init__(self):
         super().__init__()
         self.cost = Costs.Cost(MarkAsPlayedLand())
+        self.cardtypes.append("land")
 
 
 # ---------------------------------------------------------------------------
@@ -125,65 +115,51 @@ class Spell(RulesText):
 class Instant(Spell):
     def __init__(self):
         super().__init__()
+        self.cardtypes.append("instant")
 
 
 class Sorcery(Spell):
     def __init__(self):
         super().__init__()
+        self.cardtypes.append("sorcery")
 
 
 # ---------------------------------------------------------------------------
 
 
-class TapSymbol(Tap):
-    """{T}. `subject` gets tapped if it's not a summoning-sick creature"""
-
-    def can_be_done(self, state: GameState) -> bool:
-        is_critter = Match2.CardType(Creature).match(self.subject, state,
-                                                     self.player, self.source)
-        is_sick = self.subject.summon_sick
-        has_haste = Match2.Keyword("haste").match(self.subject, state,
-                                                  self.player, self.source)
-        return (super().can_be_done(state)
-                and (not is_critter or not is_sick or has_haste))
-
-    def __str__(self):
-        return "{T}"
-
-
-class DeclareAttacker(AffectPlayer):
-    """`source` is attacking card. `subject` is player (index)
-    being attacked."""
-    def can_be_done(self, state: GameState) -> bool:
-        is_critter = Match2.CardType(Creature).match(self.subject, state,
-                                                     self.player, self.source)
-        is_sick = self.subject.summon_sick
-        has_haste = Match2.Keyword("haste").match(self.subject, state,
-                                                  self.player, self.source)
-        is_defend = Match2.Keyword("defender").match(self.subject, state,
-                                                     self.player, self.source)
-        return (super().can_be_done(state)
-                and (is_critter and (not is_sick or has_haste)
-                     and not is_defend))
-
-    def do_it(self, state, to_track=[], check_triggers=True):
-        has_vig = Match2.Keyword("vigilance").match(self.subject, state,
-                                                    self.player, self.source)
-        if not has_vig:
-            tapper = Tap()
-            [tapper] = tapper.populate_options(state, self.player, self.source,
-                                               self.cause)
-            tapper = tapper.replace_subject(self.subject)
-            tapper.do_it(state, check_triggers=False)
-            # add tapper to sub_verbs, to be visible to triggers for tapping
-            new_self = self.replace_verb(0, tapper)
-            return Verb.do_it(new_self, state, to_track, check_triggers)
-        else:
-            # no visible action. Is no attacker list to add to, for example.
-            return Verb.do_it(self, state, to_track, check_triggers)
-
-    def __str__(self):
-        return "Attack with " + str(self.subject)
+# class DeclareAttacker(AffectPlayer):
+#     """`source` is attacking card. `subject` is player (index)
+#     being attacked."""
+#     def can_be_done(self, state: GameState) -> bool:
+#         is_critter = Match2.CardType(Creature).match(self.subject, state,
+#                                                      self.player, self.source)
+#         is_sick = self.subject.summon_sick
+#         has_haste = Match2.Keyword("haste").match(self.subject, state,
+#                                                   self.player, self.source)
+#         is_defend = Match2.Keyword("defender").match(self.subject, state,
+#                                                      self.player, self.source)
+#         return (super().can_be_done(state)
+#                 and (is_critter and (not is_sick or has_haste)
+#                      and not is_defend))
+#
+#     def do_it(self, state, to_track=[], check_triggers=True):
+#         has_vig = Match2.Keyword("vigilance").match(self.subject, state,
+#                                                     self.player, self.source)
+#         if not has_vig:
+#             tapper = Tap()
+#             [tapper] = tapper.populate_options(state, self.player, self.source,
+#                                                self.cause)
+#             tapper = tapper.replace_subject(self.subject)
+#             tapper.do_it(state, check_triggers=False)
+#             # add tapper to sub_verbs, to be visible to triggers for tapping
+#             new_self = self.replace_verb(0, tapper)
+#             return Verb.do_it(new_self, state, to_track, check_triggers)
+#         else:
+#             # no visible action. Is no attacker list to add to, for example.
+#             return Verb.do_it(self, state, to_track, check_triggers)
+#
+#     def __str__(self):
+#         return "Attack with " + str(self.subject)
 
 
 # ----------

@@ -5,18 +5,17 @@ Created on Tue Dec 29 11:50:12 2020
 @author: Cobi
 """
 import RulesText
-from RulesText import Creature, Land, TapSymbol  # , Instant, Sorcery
+from RulesText import Creature, Land  # , Instant, Sorcery
 import Zone
 import Match2
 from Match2 import MoveType, SelfEnter, SelfAsEnter
 import Verbs
+from Verbs import TapSymbol
 from Costs import Cost
 
 
 import Getters as Get
 
-
-# TAP = Cost("", [TapSymbol()])
 
 # -----------------------------------------------------------------------------
 
@@ -25,6 +24,7 @@ class Roots(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Roots"
+        self.cardtypes.extend(["plant", "wall"])
         self.cost = Cost("1G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 5)
@@ -41,6 +41,7 @@ class Caryatid(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Caryatid"
+        self.cardtypes.append("plant")
         self.cost = Cost("1G")
         self.add_keywords(["defender", "hexproof"])
         self.set_power_toughness(0, 3)
@@ -55,14 +56,16 @@ class Caretaker(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Caretaker"
+        self.cardtypes.append("dryad")
         self.cost = Cost("G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 3)
         self.add_activated("Caretaker add Au",
                            Cost(TapSymbol(),
                                 Verbs.Tap().on(
-                                    Get.Any(Match2.Another() & Match2.Untapped()
-                                            & Match2.CardType(Creature)),
+                                    Get.Any(Match2.Another()
+                                            & Match2.Untapped()
+                                            & Match2.CardType("creature")),
                                     Get.CardListFrom(Zone.Field(Get.You()))
                                 )),
                            Verbs.AddMana("A"))
@@ -75,6 +78,7 @@ class Battlement(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Battlement"
+        self.cardtypes.append("wall")
         self.cost = Cost("1G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
@@ -96,6 +100,7 @@ class Axebane(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Axebane"
+        self.cardtypes.extend(["human", "druid"])
         self.cost = Cost("2G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 3)
@@ -117,6 +122,7 @@ class Blossoms(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Blossoms"
+        self.cardtypes.extend(["plant", "wall"])
         self.cost = Cost("1G")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
@@ -130,6 +136,7 @@ class Omens(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Omens"
+        self.cardtypes.extend(["plant", "wall"])
         self.cost = Cost("1W")
         self.add_keywords(["defender"])
         self.set_power_toughness(0, 4)
@@ -143,6 +150,7 @@ class Arcades(Creature):
     def __init__(self):
         super().__init__()
         self.name = "Arcades"
+        self.cardtypes.extend(["elder", "dragon"])
         self.cost = Cost("1WUG")
         self.add_keywords(["flying", "vigilance"])
         self.set_power_toughness(3, 5)
@@ -162,7 +170,7 @@ class Company(RulesText.Instant):
         self.effect = Verbs.Defer(
             Verbs.LookDoThenDo(
                 Get.CardListFrom(Zone.DeckTopN(Get.You(), 6)),
-                Get.Chooser(Match2.CardType(Creature)
+                Get.Chooser(Match2.CardType("creature")
                             & Match2.ManaValue("<=", 3),
                             2, can_be_fewer=True),
                 Verbs.MoveToZone(Zone.Field(Get.You())),
@@ -179,6 +187,7 @@ class Forest(Land):
     def __init__(self):
         super().__init__()
         self.name = "Forest"
+        self.cardtypes.extend(["basic", "forest"])
         self.add_activated("Forest add G", Cost(TapSymbol()),
                            Verbs.AddMana("G"))
 
@@ -188,6 +197,7 @@ class Plains(Land):
     def __init__(self):
         super().__init__()
         self.name = "Plains"
+        self.cardtypes.extend(["basic", "plains"])
         self.add_activated("Plains add W", Cost(TapSymbol()),
                            Verbs.AddMana("W"))
 
@@ -197,6 +207,7 @@ class Island(Land):
     def __init__(self):
         super().__init__()
         self.name = "Island"
+        self.cardtypes.extend(["basic", "island"])
         self.add_activated("Island add U", Cost(TapSymbol()),
                            Verbs.AddMana("U"))
 
@@ -206,6 +217,7 @@ class Swamp(Land):
     def __init__(self):
         super().__init__()
         self.name = "Swamp"
+        self.cardtypes.extend(["basic", "swamp"])
         self.add_activated("Swamp add B", Cost(TapSymbol()),
                            Verbs.AddMana("B"))
 
@@ -215,6 +227,7 @@ class Mountain(Land):
     def __init__(self):
         super().__init__()
         self.name = "Mountain"
+        self.cardtypes.extend(["basic", "plains"])
         self.add_activated("Mountain add R", Cost(TapSymbol()),
                            Verbs.AddMana("R"))
 
@@ -226,6 +239,7 @@ class TempleGarden(Forest, Plains):
     def __init__(self):
         super().__init__()
         self.name = "TempleGarden"
+        self.cardtypes = [t for t in self.cardtypes if t != "basic"]
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            SelfAsEnter(),
@@ -239,6 +253,7 @@ class BreedingPool(Forest, Island):
     def __init__(self):
         super().__init__()
         self.name = "BreedingPool"
+        self.cardtypes = [t for t in self.cardtypes if t != "basic"]
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            SelfAsEnter(),
@@ -252,6 +267,7 @@ class HallowedFountain(Plains, Island):
     def __init__(self):
         super().__init__()
         self.name = "HallowedFountain"
+        self.cardtypes = [t for t in self.cardtypes if t != "basic"]
         # activating for two colors comes from the two inheritances
         self.add_triggered("shock",
                            SelfAsEnter(),
@@ -275,8 +291,8 @@ class WindsweptHeath(Land):
                            + Verbs.Defer(
                                Verbs.SearchDeck(Zone.Field(Get.You()),
                                                 1,
-                                                Match2.CardType(Forest)
-                                                | Match2.CardType(Plains)))
+                                                Match2.CardType("forest")
+                                                | Match2.CardType("forest")))
                            )
 
 
@@ -293,8 +309,8 @@ class MistyRainforest(Land):
                            + Verbs.Defer(
                                Verbs.SearchDeck(Zone.Field(Get.You()),
                                                 1,
-                                                Match2.CardType(Forest)
-                                                | Match2.CardType(Island)))
+                                                Match2.CardType("forest")
+                                                | Match2.CardType("island")))
                            )
 
 
@@ -311,8 +327,8 @@ class FloodedStrand(Land):
                            + Verbs.Defer(
                                Verbs.SearchDeck(Zone.Field(Get.You()),
                                                 1,
-                                                Match2.CardType(Island)
-                                                | Match2.CardType(Plains)))
+                                                Match2.CardType("island")
+                                                | Match2.CardType("plains")))
                            )
 
 # =============================================================================
