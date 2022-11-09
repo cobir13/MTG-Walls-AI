@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 import Costs
 from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility,\
-    StaticAbility
+    ContinousEffect
 from Verbs import MarkAsPlayedLand, NullVerb, Verb, PlayCardboard, PlayLand,\
     PlayPermanent
 import Zone
@@ -33,7 +33,7 @@ class RulesText:
         # triggered by verbs (actions that are done)
         self.trig_verb: List[TriggeredAbility] = []
         self.trig_timed: List[TimedAbility] = []
-        self.static: List[StaticAbility] = []  # static effects
+        self.static: List[ContinousEffect] = []  # static effects
         # NOTE: cast_destination.player=None, as don't know which player yet
         self.cast_destination: Zone.Zone = Zone.Unknown()
         self.effect: Verb | None = None
@@ -122,44 +122,6 @@ class Sorcery(Spell):
     def __init__(self):
         super().__init__()
         self.cardtypes.append("sorcery")
-
-
-# ---------------------------------------------------------------------------
-
-
-# class DeclareAttacker(AffectPlayer):
-#     """`source` is attacking card. `subject` is player (index)
-#     being attacked."""
-#     def can_be_done(self, state: GameState) -> bool:
-#         is_critter = Match2.CardType(Creature).match(self.subject, state,
-#                                                      self.player, self.source)
-#         is_sick = self.subject.summon_sick
-#         has_haste = Match2.Keyword("haste").match(self.subject, state,
-#                                                   self.player, self.source)
-#         is_defend = Match2.Keyword("defender").match(self.subject, state,
-#                                                      self.player, self.source)
-#         return (super().can_be_done(state)
-#                 and (is_critter and (not is_sick or has_haste)
-#                      and not is_defend))
-#
-#     def do_it(self, state, to_track=[], check_triggers=True):
-#         has_vig = Match2.Keyword("vigilance").match(self.subject, state,
-#                                                     self.player, self.source)
-#         if not has_vig:
-#             tapper = Tap()
-#             [tapper] = tapper.populate_options(state, self.player, self.source,
-#                                                self.cause)
-#             tapper = tapper.replace_subject(self.subject)
-#             tapper.do_it(state, check_triggers=False)
-#             # add tapper to sub_verbs, to be visible to triggers for tapping
-#             new_self = self.replace_verb(0, tapper)
-#             return Verb.do_it(new_self, state, to_track, check_triggers)
-#         else:
-#             # no visible action. Is no attacker list to add to, for example.
-#             return Verb.do_it(self, state, to_track, check_triggers)
-#
-#     def __str__(self):
-#         return "Attack with " + str(self.subject)
 
 
 # ----------

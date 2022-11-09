@@ -7,9 +7,6 @@ Created on Mon Dec 28 21:13:59 2020
 from __future__ import annotations
 from typing import List, Tuple, Type
 
-# if TYPE_CHECKING:
-#     from Abilities import TriggeredAbilityHolder, TimedAbilityHolder
-#     from Abilities import StaticAbilityHolder
 from Abilities import TriggeredAbilityHolder, TimedAbilityHolder  # actual need
 from Abilities import StaticAbilityHolder  # actual need
 from Cardboard import Cardboard, CardNull  # actual need
@@ -864,15 +861,19 @@ class Player:
     # -----------
 
     def add_to_hand(self, card: Cardboard):
-        """Hand is sorted and tracks Zone.location."""
+        """Maintains that Hand is sorted and tracks Zone.location."""
         card.zone = Zone.Hand(self.player_index)
         self.hand.append(card)
         self.re_sort_hand()
 
     def remove_from_hand(self, card: Cardboard):
-        """Field is sorted and tracks Zone.location."""
+        """
+        Removes card from Hand and adds it to Unknown zone.
+        Maintains that Hand is sorted and tracks Zone.location.
+        """
         index = card.zone.location
         self.hand.pop(index)
+        card.zone = Zone.Unknown()
         # order didn't change, so no need to re-sort. just fix indexing.
         for ii in range(index, len(self.hand)):
             self.hand[ii].zone.location = ii
@@ -884,7 +885,7 @@ class Player:
             self.hand[ii].zone.location = ii
 
     def add_to_field(self, card: Cardboard):
-        """Field is sorted and tracks Zone.location."""
+        """Maintains that Field is sorted and tracks Zone.location."""
         card.zone = Zone.Field(self.player_index)
         self.field.append(card)
         self.re_sort_field()
@@ -896,9 +897,13 @@ class Player:
 
 
     def remove_from_field(self, card: Cardboard):
-        """Field is sorted and tracks Zone.location."""
+        """
+        Removes card from field and adds it to Unknown zone.
+        Maintains that Field is sorted and tracks Zone.location.
+        """
         index = card.zone.location
         self.field.pop(index)
+        card.zone = Zone.Unknown()
         # order didn't change, so no need to re-sort. just fix indexing.
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
@@ -910,9 +915,9 @@ class Player:
         self.gamestate.trig_timed = [t for t in self.gamestate.trig_timed
                                      if t.card is not card]
         self.gamestate.statics_to_remove += [t for t in self.gamestate.statics
-                                             if t.card is card]
+                                             if t.should_keep(self.gamestate)]
         self.gamestate.statics = [t for t in self.gamestate.statics
-                                  if t.card is not card]
+                                  if t.should_keep(self.gamestate)]
 
     def re_sort_field(self):
         self.field.sort(key=Cardboard.get_id)
@@ -921,15 +926,19 @@ class Player:
             self.field[ii].zone.location = ii
 
     def add_to_grave(self, card: Cardboard):
-        """Grave is sorted and tracks Zone.location."""
+        """Maintains that Grave is sorted and tracks Zone.location."""
         card.zone = Zone.Grave(self.player_index)
         self.grave.append(card)
         self.re_sort_grave()
 
     def remove_from_grave(self, card: Cardboard):
-        """Grave is sorted and tracks Zone.location."""
+        """
+        Removes card from Grave and adds it to Unknown zone.
+        Maintains that Grave is sorted and tracks Zone.location.
+        """
         index = card.zone.location
         self.grave.pop(index)
+        card.zone = Zone.Unknown()
         # order didn't change, so no need to re-sort. just fix indexing.
         for ii in range(index, len(self.grave)):
             self.grave[ii].zone.location = ii
@@ -941,7 +950,11 @@ class Player:
             self.grave[ii].zone.location = ii
 
     def add_to_deck(self, card: Cardboard, dist_from_bottom: int):
-        """Deck is not sorted but DOES track Zone.location."""
+        """
+        Adds card to the deck at the given distance from the bottom
+        of the deck. The Deck is not maintained as sorted, but it
+        IS maintained to track Zone.location.
+        """
         # deck[0] is bottom, deck[-1] is top
         if dist_from_bottom < 0:
             # insert has strange negative indexing. otherwise 0 and -1 would
@@ -954,9 +967,14 @@ class Player:
             self.deck[ii].zone.location = ii
 
     def remove_from_deck(self, card: Cardboard):
-        """Deck is not sorted but DOES track Zone.location."""
+        """
+        Removes card from the Deck and adds it to Unknown zone.
+        The Deck is not maintained as sorted, but it IS maintained
+        to track Zone.location.
+        """
         index = card.zone.location
         self.deck.pop(index)
+        card.zone = Zone.Unknown()
         # order didn't change, but need to fix indexing.
         for ii in range(index, len(self.deck)):
             self.deck[ii].zone.location = ii

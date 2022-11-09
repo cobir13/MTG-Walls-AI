@@ -22,6 +22,15 @@ import Zone
 # #--------------------------------------------------------------------------
 # #--------------------------------------------------------------------------
 
+class GetterQuery:
+    """A convenient way to bundle a Getter along with the arguments
+    being passed into it at the moment."""
+    def __init__(self, getter, state, player, source):
+        self.getter = getter
+        self.state = state
+        self.player = player
+        self.source = source
+
 
 class Getter:
     def get(self, state: GameState, player: int, source: Cardboard):
@@ -38,12 +47,11 @@ class Getter:
         effects which may change the result.
         """
         iterate_value = self._get(state, player, source)
-        for static_holder in state.statics + state.statics_to_remove:
-            ability = static_holder.static_ability
-            owner = static_holder.card
-            if ability.is_applicable(self, state, player, source, owner):
-                iterate_value = ability.apply_modifier(iterate_value, state,
-                                                       player, source, owner)
+        query = GetterQuery(self, state, player, source)
+        for holder in state.statics + state.statics_to_remove:
+            if holder.is_applicable(query, state):
+                iterate_value = holder.get_new_value(iterate_value, state,
+                                                     player, source)
         return iterate_value
 
     def _get(self, state: GameState, player: int, source: Cardboard):

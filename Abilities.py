@@ -14,17 +14,23 @@ import Costs
 import Getters as Get
 import Stack
 import Phases
-
+import Zone
+import Match2
 
 if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
-    # from Match2 import SelfAsEnter
     from Match2 import VerbPattern
     import Match2
 
-
 T = TypeVar('T')
+
+# Abilities either cause Verbs to occur (activated, triggered, timed) or
+# cause Effects to apply (replacement effects, modification effects). Note
+# that one possible Verb is the Verb to apply an effect (e.g. "target creature
+# gets +1/+1 until end of turn"), but that there are other ways for Effects
+# to apply (mainly static abilities)
+
 
 
 # # -----------------------------------------------------------------------
@@ -121,7 +127,8 @@ class TriggeredAbility:
                 state.super_stack.append(caster)
 
     def __str__(self):
-        return "TrigAbility(%s -> %s)" % (str(self.condition), str(self.effect))
+        return "TrigAbility(%s -> %s)" % (
+        str(self.condition), str(self.effect))
 
     def get_id(self):
         return str(self)
@@ -192,38 +199,54 @@ class TimedAbility:
 
 # # -----------------------------------------------------------------------
 
-class ModificationEffect:
+class ContinousEffect:
     """
-    Broadly speaking, Effects change the values returned by Getters.
+    Broadly speaking, Effects change the values returned by Getters
+    (modification effect) or the Verbs that actually execute when
+    you try to perform a Verb (replacement effects).
     For example, a card that gave all merfolk you control +1/+1
-    and islandwalk would be two ModificationEffects: one to make
+    and islandwalk would be two m odification effects: one to make
     Get.PowerAndTough return a value 1 larger than before, and one
     to add "islandwalk" to the return list of Get.Keywords.
+    For example, a card that prevented all damage would be a
+    replacement effect: DealDamage is being replaced with NullVerb.
     """
 
-    def __init__(self, name: str, getter_to_affect: Type[Get.Getter], params):
-        """params are parameters used by apply_modifier, in subclasses"""
+    def __init__(self, name: str,
+                 thing_to_affect: Match2.QueryPattern | Match2.VerbPattern,
+                 duration: Tuple[str, Phases.Phases] | Get.GetBool | None,
+                 params):
+        """
+        duration: - until ( "mine" | "your" | "next", Phase)
+                  - until GetBool becomes False
+                  - None. Holder endures until permanent leaves play
+        params are parameters used by apply_modifier, in subclasses
+        """
         self.name: str = name
-        self.getter_to_affect: Type[Get.Getter] = getter_to_affect
+        self.condition: Match2.QueryPattern | Match2.VerbPattern = \
+            thing_to_affect
+        self.duration = duration
         self.params = params  # parameters used by apply_modifier
-
-    def right_type_to_affect(self, getter) -> bool:
-        return isinstance(getter, self.getter_to_affect)
+        if isinstance(self.condition, Match2.VerbPattern):
+            self.modifies = "verb"
+        else:
+            self.modifies = "getter"
 
     def apply_modifier(self, orig: T, state: GameState, player: int,
                        source: Cardboard, owner: Cardboard) -> T:
         """
-        `orig` is the value that the Getter is currently
-        reporting. This function applies the effect of the
-        static ability by instead returning a DIFFERENT
-        value -- usually an incremental chang from the
-        given, previous value.
+        `orig` is the value that the Getter is currently reporting
+        or the Verb that is planning to execute. This function
+        applies the effect of the static ability by instead
+        returning a DIFFERENT value -- usually an incremental
+        change from the previous Getter value or a new Verb to
+        execute based on the old Verb.
         `player` and `source` are the Player (index) and source
-        Cardboard causing the Getter to be asked, respectively.
-        This function assumes that the modification SHOULD
-        be applied. It does not recheck whether the
-        Effect is applicable. That is the job of
-        whoever calls this function.
+        Cardboard causing the Getter to be asked or the Verb to be
+        run, respectively.
+        This function assumes that the modification SHOULD be
+        applied. It does not recheck whether the Effect is
+        applicable. That is the job of whoever calls this function.
         """
         raise NotImplementedError
 
@@ -232,23 +255,70 @@ class ModificationEffect:
         raise NotImplementedError
 
     def __str__(self):
-        return "%s modified by %s" % (self.getter_to_affect.__name__,
-                                      self._string_params())
+        if isinstance(self.duration, tuple):
+            timesup = "%s %s" % (self.duration[0], str(self.duration[1]))
+        elif self.duration is None:
+            timesup = "leaves"
+        else:
+            timesup = str(self.duration)
+        return "%s modified by %s until %s" % (str(self.condition),
+                                               self._string_params(), timesup)
+
+    def calcuate_duration(self, state, owner
+                          ) -> Tuple[int, Phases.Phases] | Get.GetBool | None:
+        """turn relative time ("my next end step") into absolute"""
+        if isinstance(self.duration, tuple):
+            turn = state.total_turns
+            # if already passed the phase this turn, soonest is next turn
+            if self.duration[1] >= state.phase:
+                turn += 1
+            # now increment until we find the right player
+            if self.duration[0] == "mine":
+                while turn % len(state.player_list) != owner.player_index:
+                    turn += 1
+            elif self.duration[0] == "your":
+                while turn % len(state.player_list) == owner.player_index:
+                    turn += 1
+            return turn, self.duration[1]
+        else:
+            return self.duration
+
+    def add_to_tracker(self, state: GameState, owner: Cardboard):
+        """For static abilities which add themselves directly
+        to the GameState when the creature is in play. Other
+        ways of applying the effect should use the appropriate
+        Verb instead of using this function."""
+        h = StaticAbilityHolder(source=owner,
+                                controller=owner.player_index,
+                                effect=self,
+                                duration=self.calcuate_duration(state, owner),
+                                target=self.condition
+                                )
+        state.statics.append(h)
 
 
-class BuffStats(ModificationEffect):
-    def __init__(self, name: str,
+class BuffStats(ContinousEffect):
+    def __init__(self, name: str, duration,
+                 pattern_for_source: Match2.CardPattern | None,
+                 pattern_for_player: Match2.PlayerPattern | None,
                  params: Tuple[int | Get.GetInteger, int | Get.GetInteger]):
         """
         Params is a pair of integers representing power and toughness
         modifications to the creature's base power and toughness.
+        This class automatically assumes that you only want to affect
+        creatures in play, so no need to specify the card type or the
+        zone.
         """
         p_mod, t_mod = params  # modifiers to power and toughness
         if isinstance(p_mod, int):
             p_mod = Get.ConstInteger(p_mod)
         if isinstance(t_mod, int):
             t_mod = Get.ConstInteger(t_mod)
-        super().__init__(name, Get.PowerAndTough, (p_mod, t_mod))
+        card_pattern = (pattern_for_source & Match2.CardType("creature")
+                        & Match2.IsInZone(Zone.Field))
+        pattern = Match2.QueryPattern(Get.PowerAndTough, card_pattern,
+                                      pattern_for_player)
+        super().__init__(name, pattern, duration, (p_mod, t_mod))
         self.params: Tuple[Get.GetInteger, Get.GetInteger]
 
     def apply_modifier(self, orig: Tuple[int, int], state: GameState,
@@ -263,12 +333,17 @@ class BuffStats(ModificationEffect):
         return "+%s/+%s" % (str(self.params[0]), str(self.params[1]))
 
 
-class GrantKeyword(ModificationEffect):
-    def __init__(self, name: str, params: List[str] | Get.GetStringList):
+class GrantKeyword(ContinousEffect):
+    def __init__(self, name: str, duration,
+                 pattern_for_source: Match2.CardPattern | None,
+                 pattern_for_player: Match2.PlayerPattern | None,
+                 params: List[str] | Get.GetStringList):
         """Params are a list of keywords to grant."""
         if isinstance(params, list):
             params = Get.ConstStringList(params)
-        super().__init__(name, Get.Keywords, params)
+        pattern = Match2.QueryPattern(Get.Keywords, pattern_for_source,
+                                      pattern_for_player)
+        super().__init__(name, pattern, duration, params)
         self.params: Get.GetStringList
 
     def apply_modifier(self, orig: List[str], state: GameState, player: int,
@@ -280,193 +355,76 @@ class GrantKeyword(ModificationEffect):
         """Format the params nicely to be printed for debug, tracking."""
         return "+%s" % ",".join(self.params)
 
-# ----------
 
 
-class ReplacementEffect:
-    """
-    In general, this effect prevents a Verb from occuring and
-    instead replaces it with a different, modified version of
-    the same Verb.
-    """
 
-    def __init__(self, name: str, verb_to_affect: Type[Verbs.Verb], params):
-        """params are parameters used by apply_modifier, in subclasses"""
-        self.name: str = name
-        self.verb_to_affect: Type[Verbs.Verb] = verb_to_affect
-        self.params = params  # parameters used by apply_modifier
 
-    def right_type_to_affect(self, getter) -> bool:
-        return (isinstance(getter, Verbs.Verb)
-                and getter.is_type(self.verb_to_affect))
+# # -----------------------------------------------------------------------
 
-    def apply_modifier(self, orig: Verbs.Verb, state: GameState, player: int,
-                       source: Cardboard, owner: Cardboard) -> Verbs.Verb:
+
+class ActiveAbilityHolder:
+    """Holds active abilities (static, triggered, timed) in the
+    GameState tracking lists"""
+
+    def __init__(self, source: Cardboard, controller: int,
+                 effect: ContinousEffect,
+                 duration, target):
         """
-        `orig` is the original Verb which is now being replaced.
-        This function applies the ReplacementEffect by returning
-        a new, different Verb which should be run instead of the
-        original Verb.
-        `player` and `source` are the Player (index) and source
-        Cardboard of the Verb, respectively.
-        This function assumes that the modification SHOULD
-        be applied. It does not recheck whether the
-        Effect is applicable. That is the job of
-        whoever calls this function.
+        duration: - turn and phase. if later than that, remove this holder.
+                  - bool or GetBool. if False, remove this holder
+                  - None. Holder endures until permanent leaves play
+        target: - VerbPattern (for replacement effects)
+                - QueryPattern (for modification effects)
         """
-        raise NotImplementedError
 
-    def __str__(self):
-        return "%s replace by %s" % (str(self.verb_to_affect),
-                                     str(self.params))
+        self.source: Cardboard = source  # card creating the ability
+        self.controller: int = controller  # player controlling the ability
+        self.effect: ContinousEffect = effect
+        self.duration: Tuple[int, Phases.Phases] | Get.GetBool | None = duration
+        self.target: VerbPattern | Match2.QueryPattern = target
+        self.modifies: str = self.effect.modifies
 
-# ----------
+    def copy(self, state: GameState):
+        return ActiveAbilityHolder(self.source.copy(state), self.controller,
+                                   self.effect, self.duration,
+                                   self.target)
 
+    def is_applicable(self, subject: Verbs.Verb | Get.GetterQuery,
+                      state: GameState):
+        """This active ability cares about the given Verb or Getter"""
+        return self.target.match(subject, state, self.controller, self.source)
 
-class StaticAbility:
-    """
-    Static abilities appear on permanents and apply for as long as
-    the permanent remains in play. The given effect will be applied
-    to all cards or verbs which meet the given criteria.
-    Note: This class works for BOTH ModificationEffects AND
-    ReplacementEffects.
-    """
-
-    def __init__(self,
-                 effect: ModificationEffect | ReplacementEffect,
-                 applies_to: Match2.CardPattern | Match2.VerbPattern):
-
-        self.name: str = effect.name
-        self.effect: ModificationEffect | ReplacementEffect = effect
-        self.applies_to: Match2.CardPattern | Match2.VerbPattern = applies_to
-
-    def is_applicable(self, target: Get.Getter | Verbs.Verb,
-                      state: GameState, player: int, source: Cardboard,
-                      owner: Cardboard) -> bool:
-        """
-        The card `owner` is creating this static ability. Now a
-        Verb or a Getter has occurred, and we need to see if this
-        Effect applies to it or not.
-        `player` and `source` are the Player and Cardboard causing
-        the Verb to be performed or the Getter to be asked (the
-        `player` and `source` arguments to Getter.get or fields of
-        the Verb).
-        This function returns whether this static ability affects
-        the given Getter or Verb, as a boolean.
-        """
-        # ModificationEffects are paired with CardPatterns looking at `source`
-        if isinstance(self.effect, ModificationEffect):
-            return (self.effect.right_type_to_affect(target)
-                    and self.applies_to.match(source, state, player, owner))
-        # ReplacementEffect are paired with VerbPatterns looking at `target`
-        elif isinstance(self.effect, ReplacementEffect):
-            return (self.effect.right_type_to_affect(target)
-                    and self.applies_to.match(target, state, player, owner))
+    def should_keep(self, state) -> bool:
+        """Returns whether this ability still applies (True) or
+        whether it is no longer applicable and ought to be removed
+        from tracking (False). Note: this function does not itself
+        remove or keep the ability, it just says what should be
+        done by someone else."""
+        if self.duration is None:  # keep as long as source is still in play
+            return self.source.is_in(Zone.Field)
+        elif isinstance(self.duration, bool):  # keep as long as True
+            return self.duration
+        elif isinstance(self.duration, Get.GetBool):  # keep as long as True
+            return self.duration.get(state, self.controller, self.source)
+        elif isinstance(self.duration, tuple):  # keep if not past expiration
+            turn = self.duration[0]
+            phase = self.duration[1]
+            return (state.total_turns < turn
+                    or (state.total_turns == turn and state.phase <= phase))
         else:
-            raise TypeError  # should only ever be one of these two types!
-        # note: you CAN pass a Cardboard into a VerbPattern. It'll
-        # return False but it won't crash. Same with passing a Verb
-        # into a CardPattern
-
-    def apply_modifier(self, value: T, state: GameState, player: int,
-                       source: Cardboard, owner: Cardboard) -> T:
-        """
-        Modify the Verb or the Getter output as dictated by the
-        Effect. This function assumes that the modification
-        SHOULD be applied. It does not recheck whether the
-        StaticAbility is applicable. That is the job of whoever
-        calls this function.
-        """
-        return self.effect.apply_modifier(value, state, player, source, owner)
-
-    def copy(self, new_state: GameState | None = None):
-        abil = StaticAbility(self.effect, self.applies_to)
-        abil.__class__ = self.__class__
-        return abil
-
-    def add_to_tracker(self, state: GameState, owner: Cardboard):
-        state.statics.append(StaticAbilityHolder(owner, self))
+            return False  # this is impossible, so don't keep it
 
     def __str__(self):
-        return "Static %s for %s" % (str(self.effect), str(self.applies_to))
+        return "{%s, %s}" % (str(self.source), str(self.effect))
 
 
-# # -----------------------------------------------------------------------
-
-# # duration: Phases.Phases | Get.GetBool):
-#
-#
-# class OngoingEffect:
-#     """
-#     This class is for ongoing effects that are created by another
-#     spell or ability. In practice, it is much like a Static
-#     Ability in that it holds a ModificationEffect (which modifies
-#     Getters) or a ReplacementEffect (which modifies Verbs).
-#     Unlike a StaticAbility, it has an independent existence from
-#     the card or ability which created it. It typically lasts until
-#     end of turn or until some other condition is met, rather than
-#     until the card generating the static effect leaves play. It is
-#     often targetted rather than affecting an entire category of
-#     cards, but either is possible.
-#     """
-#
-#     def __init__(self, name: str,
-#                  effect: ModificationEffect | ReplacementEffect,
-#                  applies_to: Match2.CardPattern | Match2.VerbPattern | None,
-#                  duration: Phases.Phases | Get.GetBool):
-#         """
-#         duration: the effect ends at the given Phase; or the effect
-#                 ends when the GetBool becomes False
-#
-#         """
-#
-#
-#         self.name: str = name
-#         self.getter_to_affect: Type[Get.Getter] = getter_to_affect
-#         self.pattern_for_card: Match2.CardPattern = pattern_for_card
-#         self.duration = duration  # phase or GetBool==True
-#         self.params = params  # parameters used by apply_modifier
-#
-#     def is_applicable(self, getter: Get.Getter, subject: Match.SUBJECT,
-#                       state: GameState, player: int, owner: Cardboard,
-#                       ) -> bool:
-#         """
-#         The card `owner` is creating this static ability. Now
-#         `player` is calling the Getter `getter` to find out info
-#         about `subject` (a Cardboard or Player, usually). This
-#         function returns whether this static ability affects the
-#         value returned by the Getter?
-#         """
-#         return (isinstance(getter, self.getter_to_affect)
-#                 and self.pattern_for_card.match(subject, state,
-#                                                 player, owner))
-#
-#     def apply_modifier(self, value: T, state: GameState, player: int,
-#                        source: Cardboard, owner: Cardboard) -> T:
-#         """
-#         `value` is the value that the Getter is currently
-#         reporting. This function applies the effect of the
-#         static ability by instead returning a DIFFERENT
-#         value -- usually an incremental chang from the
-#         given, previous value.
-#         This function assumes that the modification SHOULD
-#         be applied. It does not recheck whether the
-#         StaticAbility is applicable. That is the job of
-#         whoever calls this function.
-#         """
-#         raise NotImplementedError
-#
-#     def copy(self, new_state: GameState | None = None):
-#         abil = StaticAbility(self.name, self.getter_to_affect,
-#                              self.pattern_for_card, self.params)
-#         abil.__class__ = self.__class__
-#         return abil
-#
-#     def add_to_tracker(self, state: GameState, owner: Cardboard):
-#         state.statics.append(TimedAbilityHolder(owner, self))
+class StaticAbilityHolder(ActiveAbilityHolder):
+    def get_new_value(self, orig_value, state, player, source):
+        return self.effect.apply_modifier(orig_value, state, player, source,
+                                          self.source)
 
 
-# # -----------------------------------------------------------------------
+# ----------
 
 
 class TriggeredAbilityHolder:
@@ -496,25 +454,25 @@ class TimedAbilityHolder:
                                   self.effect.copy(state))
 
     def __str__(self):
-        return "{%s, %s}" %(str(self.card), str(self.effect))
+        return "{%s, %s}" % (str(self.card), str(self.effect))
 
+# class StaticAbilityHolder:
+#     """Holds static abilities in the GameState tracking lists"""
+#
+#     def __init__(self, referred_card: Cardboard, effect: StaticAbility,
+#                  lasts_until: Phases.Phases | None = None):
+#         self.card: Cardboard = referred_card
+#         self.static_ability: StaticAbility = effect
+#         self.lasts_until: Phases.Phases | None = lasts_until
+#
+#     def copy(self, state: GameState):
+#         return StaticAbilityHolder(self.card.copy(state),
+#                                    self.static_ability.copy(state),
+#                                    self.lasts_until)
+#
+#     def __str__(self):
+#         return "{%s, %s}" % (str(self.card), str(self.static_ability))
 
-class StaticAbilityHolder:
-    """Holds static abilities in the GameState tracking lists"""
-
-    def __init__(self, referred_card: Cardboard, effect: StaticAbility,
-                 lasts_until: Phases.Phases | None = None):
-        self.card: Cardboard = referred_card
-        self.static_ability: StaticAbility = effect
-        self.lasts_until: Phases.Phases | None = lasts_until
-
-    def copy(self, state: GameState):
-        return StaticAbilityHolder(self.card.copy(state),
-                                   self.static_ability.copy(state),
-                                   self.lasts_until)
-
-    def __str__(self):
-        return "{%s, %s}" % (str(self.card), str(self.static_ability))
 
 # class OngoingEffectHolder:
 #     """

@@ -60,11 +60,18 @@ Notes comparing this program to the real Magic:The Gathering rules:
         time on EACH turn.  There is no way to specify that it should only
         occur on yours, or on your opponents, or whatever. (Might be a way
         to add this info to Phases?)
+    - Extra turns don't exist and will probably break durations for ongoing
+        effects if they are ever added.
+    - Layers don't exist. Effects are applied in timestamp order, with the
+        newer effects applying on top of earlier effects.
+
 
 Notes on actually-correct things:
     - "casting" a land doesn't use the stack
     - mana abilities don't use the stack
     - "as-enters" triggers don't use the stack
+    - creatures entering or leaving the battlefield simultaneously all see
+        each other enter and leave
 
 -------------------------------------------------------------------------------
 

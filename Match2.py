@@ -165,20 +165,125 @@ class PlayerPattern(Pattern):
         raise NotImplementedError
 
 
-# class VerbPattern(Pattern):
-#     """Only matches to Verb subjects. Subjects of any other
-#     type do not match this Pattern."""
-#
-#     def match(self, subject, state: GameState, asking_player: int,
-#               asking_card: Cardboard) -> bool:
-#         if isinstance(subject, Verbs.Verb):
-#             return self._match(subject, state, asking_player, asking_card)
-#         else:
-#             return False
-#
-#     def _match(self, subject: Verbs.Verb, state: GameState,
-#                asking_player: int, asking_card: Cardboard) -> bool:
-#         raise NotImplementedError
+
+class VerbPattern(Pattern):
+    """Only matches to Verb subjects. Subjects of any other
+    type do not match this Pattern."""
+
+    def __init__(self,
+                 verb_type: Type[Verbs.Verb],
+                 pattern_for_subject: Pattern | None = None,
+                 pattern_for_source: CardPattern | None = None,
+                 pattern_for_player: PlayerPattern | None = None):
+        """
+        Matches to Verbs of the given type, whose subject and
+        source and player all match the respective Patterns.
+        If those Patterns are None, then this VerbPattern
+        will accept any value for the Verb's corresponding
+        trait.
+        """
+        self.verb_type: Type[Verbs.Verb] = verb_type
+        self.pattern_for_subject: Pattern | None = pattern_for_subject
+        self.pattern_for_source: CardPattern | None = pattern_for_source
+        self.pattern_for_player: PlayerPattern | None = pattern_for_player
+
+
+    def match(self, subject, state: GameState, asking_player: int,
+              asking_card: Cardboard) -> bool:
+        """
+        Note: a common usage is for a card with a triggered
+        ability to be trying to check if a Verb has triggered
+        that ability or not. In such a case, the asking_card
+        is the Cardboard containing the triggered ability and
+        the asking_player is that card's controller. The Verb's
+        subject, source, and player are likely different."""
+        if isinstance(subject, Verbs.Verb):
+            # isinstance can't see sub-verbs, so use Verb.is_type instead
+            good_type = subject.is_type(self.verb_type)
+            if isinstance(self.pattern_for_subject, Pattern):
+                good_subj = self.pattern_for_subject.match(
+                    subject.subject, state, asking_player, asking_card)
+            else:
+                good_subj = True
+            if isinstance(self.pattern_for_source, CardPattern):
+                good_srce = self.pattern_for_source.match(
+                    subject.source, state, asking_player, asking_card)
+            else:
+                good_srce = True
+            if isinstance(self.pattern_for_player, PlayerPattern):
+                player_obj = state.player_list[subject.player]  # int->Player
+                good_plyr = self.pattern_for_player.match(
+                    player_obj, state, asking_player, asking_card)
+            else:
+                good_plyr = True
+            return (good_type and good_subj and good_srce and good_plyr and
+                    self._match(subject, state, asking_player, asking_card))
+        else:
+            return False
+
+    def _match(self, subject: Verbs.Verb, state: GameState,
+               asking_player: int, asking_card: Cardboard) -> bool:
+        return True  # in parent VerbPattern, no additional work to do here
+
+    def __str__(self):
+        if self.pattern_for_subject is not None:
+            subj = str(self.pattern_for_subject)
+        else:
+            subj = "any"
+        return "(if subject %s becomes %s)" % (subj, self.verb_type.__name__)
+
+
+class QueryPattern(Pattern):
+    """Only matches to Get.GetterQuery subjects, which holds a
+    Getter along with specific arguments being fed into that
+    Getter. Subjects of any other type do not match this Pattern."""
+
+    def __init__(self,
+                 getter_type: Type[Get.Getter],
+                 pattern_for_source: CardPattern | None = None,
+                 pattern_for_player: PlayerPattern | None = None):
+        """
+        Matches to Verbs of the given type, whose subject and
+        source and player all match the respective Patterns.
+        If those Patterns are None, then this VerbPattern
+        will accept any value for the Verb's corresponding
+        trait.
+        """
+        self.getter_type: Type[Get.Getter] = getter_type
+        self.pattern_for_source: CardPattern | None = pattern_for_source
+        self.pattern_for_player: PlayerPattern | None = pattern_for_player
+
+    def match(self, subject, state: GameState, asking_player: int,
+              asking_card: Cardboard) -> bool:
+        if isinstance(subject, Get.GetterQuery):
+            good_type = isinstance(subject.getter, self.getter_type)
+            not_stale = state is subject.state
+            if self.pattern_for_source is not None:
+                good_srce = self.pattern_for_source.match(
+                    subject.source, state, asking_player, asking_card)
+            else:
+                good_srce = True
+            if self.pattern_for_player is not None:
+                player_obj = state.player_list[subject.player]  # int->Player
+                good_plyr = self.pattern_for_player.match(
+                    player_obj, state, asking_player, asking_card)
+            else:
+                good_plyr = True
+            return (good_type and not_stale and good_srce and good_plyr and
+                    self._match(subject, state, asking_player, asking_card))
+        else:
+            return False
+
+    def _match(self, subject: Get.GetterQuery, state: GameState,
+               asking_player: int, asking_card: Cardboard) -> bool:
+        return True  # in parent QueryPattern, no additional work to do here
+
+    def __str__(self):
+        if self.pattern_for_source is not None:
+            source = str(self.pattern_for_source)
+        else:
+            source = "any"
+        return "(%s asking about %s)" % (source, self.getter_type.__name__)
 
 
 # # ---------- CARD PATTERNS ----------------------------------------------
@@ -392,72 +497,6 @@ class Controller(PlayerPattern):
 
 
 # # ---------- VERB PATTERNS ----------------------------------------------
-
-class VerbPattern(Pattern):
-    """Only matches to Verb subjects. Subjects of any other
-    type do not match this Pattern."""
-
-    def __init__(self,
-                 verb_type: Type[Verbs.Verb],
-                 pattern_for_subject: Pattern | None = None,
-                 pattern_for_source: CardPattern | None = None,
-                 pattern_for_player: PlayerPattern | None = None):
-        """
-        Matches to Verbs of the given type, whose subject and
-        source and player all match the respective Patterns.
-        If those Patterns are None, then this VerbPattern
-        will accept any value for the Verb's corresponding
-        trait.
-        """
-        self.verb_type: Type[Verbs.Verb] = verb_type
-        self.pattern_for_subject: Pattern | None = pattern_for_subject
-        self.pattern_for_source: CardPattern | None = pattern_for_source
-        self.pattern_for_player: PlayerPattern | None = pattern_for_player
-
-
-    def match(self, subject, state: GameState, asking_player: int,
-              asking_card: Cardboard) -> bool:
-        """
-        Note: a common usage is for a card with a triggered
-        ability to be trying to check if a Verb has triggered
-        that ability or not. In such a case, the asking_card
-        is the Cardboard containing the triggered ability and
-        the asking_player is that card's controller. The Verb's
-        subject, source, and player are likely different."""
-        if isinstance(subject, Verbs.Verb):
-            # isinstance can't see sub-verbs, so use Verb.is_type instead
-            good_type = subject.is_type(self.verb_type)
-            if isinstance(self.pattern_for_subject, Pattern):
-                good_subj = self.pattern_for_subject.match(
-                    subject.subject, state, asking_player, asking_card)
-            else:
-                good_subj = True
-            if isinstance(self.pattern_for_source, CardPattern):
-                good_srce = self.pattern_for_subject.match(
-                    subject.source, state, asking_player, asking_card)
-            else:
-                good_srce = True
-            if isinstance(self.pattern_for_player, PlayerPattern):
-                player_obj = state.player_list[subject.player]  # int->Player
-                good_plyr = self.pattern_for_player.match(
-                    player_obj, state, asking_player, asking_card)
-            else:
-                good_plyr = True
-            return (good_type and good_subj and good_srce and good_plyr and
-                    self._match(subject, state, asking_player, asking_card))
-        else:
-            return False
-
-    def _match(self, subject: Verbs.Verb, state: GameState,
-               asking_player: int, asking_card: Cardboard) -> bool:
-        return True  # in basic VerbPattern, no additional work to do here
-
-    def __str__(self):
-        if self.pattern_for_subject is not None:
-            subj = str(self.pattern_for_subject)
-        else:
-            subj = "any"
-        return "(if subject %s becomes %s)" % (subj, self.verb_type.__name__)
 
 
 class MoveType(VerbPattern):
