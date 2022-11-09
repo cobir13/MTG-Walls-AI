@@ -230,6 +230,33 @@ class Verb:
         else:
             return [(state, self, to_track)]
 
+
+    def do_it(self: V, state: GameState, to_track: list = [],
+              check_triggers=True) -> List[RESULT]:
+        """
+        Carries out the Verb.
+        Returns the new GameState where the Verb has been done,
+            plus the Verb that was just done. The Verb may have
+            been updated to reflect the actual performance, in
+            which case it will be a fresh copy instead of the
+            same object.
+        If `copies`, returns fresh GameState to avoid mutating
+            the input GameState. If `copies` is False, then just
+            mutates it and returns the mutated object.
+        If `check_triggers`, calls check_triggers to add any new
+            triggers to the super_stack of the result states. If
+            not, the user is responsible for calling it later.
+         """
+        # the parent class doesn't actually DO anything. that'll be added
+        # in subclasses. This only records, possibly tracks triggers, and
+        # handles track-list
+        # This parent class function always mutates, as though copies=False.
+        self.add_self_to_state_history(state)
+        if check_triggers:
+            return [self.check_triggers(state, to_track)]
+        else:
+            return [(state, self, to_track)]
+
     def check_triggers(self: V, state: GameState, to_track: list = []
                        ) -> RESULT:
         """

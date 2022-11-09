@@ -186,7 +186,6 @@ if __name__ == "__main__":
     # define two cards which can "listen" for triggers. One cares about
     # tapping creatures, the other about moving them from field
 
-
     class WeirdOrb(RulesText.Creature):
         def __init__(self):
             super().__init__()
@@ -200,6 +199,7 @@ if __name__ == "__main__":
                                ),
                                Verbs.AddMana("R")
                                )
+
 
     class BloodArtist(RulesText.Creature):
         def __init__(self):
@@ -1267,7 +1267,6 @@ if __name__ == "__main__":
     print("             (~1.20 2022-09-06)")
     print("             (~0.70 2022-07-22)")
 
-
     # try a speed-test using a smarter pilot
 
     game2 = game.copy()
@@ -1290,7 +1289,6 @@ if __name__ == "__main__":
     assert len(tree2.get_intermediate()) == 31
 
     print("      smarter: %4.2f sec." % (time.perf_counter() - start_clock))
-
 
     # -----------------------------------------------------------------------
 
@@ -1540,9 +1538,9 @@ if __name__ == "__main__":
 
     # -----------------------------------------------------------------------
 
-
     print("Testing static abilities on permanents")
     start_clock = time.perf_counter()
+
 
     # give +1/+1 to all mine.  does it affect yours? mine? Then remove granter
     class Lord(RulesText.Creature):
@@ -1551,12 +1549,12 @@ if __name__ == "__main__":
             self.name = "Lord"
             self.cost = Costs.Cost("WW")
             self.set_power_toughness(2, 2)
-            a = Abilities.StaticAbility(Abilities.BuffStats("buff mine",
-                                                            (+1, +3)),
-                                        Match2.ControllerControls()
-                                        & Match2.CardType("creature")
-                                        & Match2.IsInZone(Zone.Field))
+            a = Abilities.StaticAbility(
+                Abilities.BuffStats("buff mine", (+1, +3)),
+                Match2.ControllerControls() & Match2.CardType("creature")
+                & Match2.IsInZone(Zone.Field))
             self.static = [a]
+
 
     class GiverOfHaste(RulesText.Creature):
         def __init__(self):
@@ -1564,12 +1562,10 @@ if __name__ == "__main__":
             self.name = "GiverOfHaste"
             self.cost = Costs.Cost("2R")
             self.set_power_toughness(0, 3)
-            buff = Abilities.StaticAbility(Abilities.GrantKeyword("Haste all",
-                                                                  ['haste']),
-                                           Match2.CardType("creature")
-                                           & Match2.IsInZone(Zone.Field))
+            buff = Abilities.StaticAbility(
+                Abilities.GrantKeyword("Haste all", ['haste']),
+                Match2.CardType("creature") & Match2.IsInZone(Zone.Field))
             self.static = [buff]
-
 
 
     pop_game = GameState(2)  # a populated game
@@ -1618,6 +1614,54 @@ if __name__ == "__main__":
     assert len(pop_game.active.get_valid_activations()) == 0
 
 
+    # test replacement effects: make something get bigger instead of destroyed
+
+    class GrowIndestructible(Abilities.ReplacementEffect):
+        def __init__(self):
+            super().__init__("counter not death", Verbs.Destroy, None)
+
+        def apply_modifier(self, orig: Verbs.Verb, state, player: int,
+                           source: Cardboard, owner: Cardboard) -> Verbs.Verb:
+            new_verb = Verbs.AddCounter("+1/+1")
+            new_verb._subject = orig.subject
+            new_verb._player = orig.player
+            new_verb._source = orig.source
+            new_verb._cause = orig.cause
+            new_verb.is_populated = True
+            return new_verb
+
+
+    class CantKillMe(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "CantKillMe"
+            self.cost = Costs.Cost("GGG")
+            self.set_power_toughness(3, 3)
+            repl = Abilities.StaticAbility(
+                GrowIndestructible(),
+                Match2.VerbPattern(Verbs.Destroy, Match2.IsSelf()))
+            self.static = [repl]
+
+
+    pop_game.give_to(Cardboard(CantKillMe()), Zone.Field, 1)
+    assert len(pop_game.player_list[0].field) == 3
+    assert len(pop_game.player_list[1].field) == 2
+    assert pop_game.player_list[1].field[0].name == "CantKillMe"
+    assert len(pop_game.player_list[1].field[0].counters) == 0
+    assert Get.Power().get(pop_game, 0, pop_game.player_list[1].field[0]) == 3
+    wrath = Verbs.Defer(
+        Verbs.Destroy().on(Get.AllWhich(Match2.CardType("creature")),
+                           Get.CardListFrom(Zone.Field(None))))
+    [wrath] = wrath.populate_options(pop_game, 1, None, None)
+    dead_game = wrath.do_it(pop_game)[0][0]
+    assert len(dead_game.player_list[0].field) == 0
+    assert len(dead_game.player_list[0].grave) == 3
+    assert len(dead_game.player_list[1].field) == 1
+    assert len(dead_game.player_list[1].grave) == 1
+    assert dead_game.player_list[1].field[0].name == "CantKillMe"
+    assert len(dead_game.player_list[1].field[0].counters) == 1
+    assert Get.Power().get(dead_game, 0, dead_game.player_list[1].field[0]) == 4
+
     # class DaughterOfBuff(RulesText.Creature):
     #     def __init__(self):
     #         super().__init__()
@@ -1639,17 +1683,11 @@ if __name__ == "__main__":
     #                                       Match2.CardType(RulesText.Creature),
     #                                       ["haste"])
 
-
-
-
     # spell that gives +1/+1 until EOT
     # permanent that reduces spell costs by (1)
     # types in list, not as part of class structure
     # animation test
 
     print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
-
-
-
 
     print("\n\npasses all tests!")
