@@ -12,7 +12,6 @@ import Getters as Get
 import Verbs
 from Cardboard import Cardboard
 from GameState import GameState, Player
-from RulesText import RulesText
 import Zone
 
 
@@ -196,30 +195,40 @@ class VerbPattern(Pattern):
         that ability or not. In such a case, the asking_card
         is the Cardboard containing the triggered ability and
         the asking_player is that card's controller. The Verb's
-        subject, source, and player are likely different."""
-        if isinstance(subject, Verbs.Verb):
-            # isinstance can't see sub-verbs, so use Verb.is_type instead
-            good_type = subject.is_type(self.verb_type)
-            if isinstance(self.pattern_for_subject, Pattern):
-                good_subj = self.pattern_for_subject.match(
-                    subject.subject, state, asking_player, asking_card)
-            else:
-                good_subj = True
-            if isinstance(self.pattern_for_source, CardPattern):
-                good_srce = self.pattern_for_source.match(
-                    subject.source, state, asking_player, asking_card)
-            else:
-                good_srce = True
-            if isinstance(self.pattern_for_player, PlayerPattern):
-                player_obj = state.player_list[subject.player]  # int->Player
-                good_plyr = self.pattern_for_player.match(
-                    player_obj, state, asking_player, asking_card)
-            else:
-                good_plyr = True
-            return (good_type and good_subj and good_srce and good_plyr and
-                    self._match(subject, state, asking_player, asking_card))
-        else:
+        subject, source, and player are likely different.
+
+        This function is structured to avoid calling Pattern.match
+        for as long as possible, and to do all other checks first.
+        This is because Pattern.match often calls Getters.get,
+        which in turn requires evaluating ContinuousEffects, which
+        in turn requires evaluating a Pattern.match. This can lead
+        to an infinite loop condition. Even in less pathological
+        cases, calls to Getters.get may scale with the number of
+        active effects and should be minimized if possible.
+        """
+        if not isinstance(subject, Verbs.Verb):
             return False
+        # isinstance can't see sub-verbs, so use Verb.is_type instead
+        if not subject.is_type(self.verb_type):
+            return False
+        if isinstance(self.pattern_for_player, Pattern):
+            player_obj = state.player_list[subject.player]  # int->Player
+            if not self.pattern_for_player.match(
+                    player_obj, state, asking_player, asking_card):
+                return False
+        if (isinstance(self.pattern_for_source, Pattern)
+                and not self.pattern_for_source.match(
+                subject.source, state, asking_player, asking_card)):
+            return False
+        if (isinstance(self.pattern_for_subject, Pattern)
+                and not self.pattern_for_subject.match(
+                subject.subject, state, asking_player, asking_card)):
+            return False
+        # if made it to here, there are no problems with the match so far!
+        # call on the subclass's private match function to check for any
+        # final details
+        return self._match(subject, state, asking_player, asking_card)
+
 
     def _match(self, subject: Verbs.Verb, state: GameState,
                asking_player: int, asking_card: Cardboard) -> bool:
@@ -243,10 +252,10 @@ class QueryPattern(Pattern):
                  pattern_for_source: CardPattern | None = None,
                  pattern_for_player: PlayerPattern | None = None):
         """
-        Matches to Verbs of the given type, whose subject and
+        Matches to Queries of the given type, whose Getter and
         source and player all match the respective Patterns.
-        If those Patterns are None, then this VerbPattern
-        will accept any value for the Verb's corresponding
+        If those Patterns are None, then this QueryPattern
+        will accept any value for the Query's corresponding
         trait.
         """
         self.getter_type: Type[Get.Getter] = getter_type
@@ -255,24 +264,35 @@ class QueryPattern(Pattern):
 
     def match(self, subject, state: GameState, asking_player: int,
               asking_card: Cardboard) -> bool:
-        if isinstance(subject, Get.GetterQuery):
-            good_type = isinstance(subject.getter, self.getter_type)
-            not_stale = state is subject.state
-            if self.pattern_for_source is not None:
-                good_srce = self.pattern_for_source.match(
-                    subject.source, state, asking_player, asking_card)
-            else:
-                good_srce = True
-            if self.pattern_for_player is not None:
-                player_obj = state.player_list[subject.player]  # int->Player
-                good_plyr = self.pattern_for_player.match(
-                    player_obj, state, asking_player, asking_card)
-            else:
-                good_plyr = True
-            return (good_type and not_stale and good_srce and good_plyr and
-                    self._match(subject, state, asking_player, asking_card))
-        else:
+        """
+        This function is structured to avoid calling Pattern.match
+        for as long as possible, and to do all other checks first.
+        This is because Pattern.match often calls Getters.get,
+        which in turn requires evaluating ContinuousEffects, which
+        in turn requires evaluating a Pattern.match. This can lead
+        to an infinite loop condition. Even in less pathological
+        cases, calls to Getters.get may scale with the number of
+        active effects and should be minimized if possible.
+        """
+        if not isinstance(subject, Get.GetterQuery):
             return False
+        if not isinstance(subject.getter, self.getter_type):
+            return False
+        if state is not subject.state:
+            return False  # Query is "stale", referring to different GameState
+        if isinstance(self.pattern_for_player, Pattern):
+            player_obj = state.player_list[subject.player]  # int->Player
+            if not self.pattern_for_player.match(
+                    player_obj, state, asking_player, asking_card):
+                return False
+        if (isinstance(self.pattern_for_source, Pattern)
+                and not self.pattern_for_source.match(
+                    subject.source, state, asking_player, asking_card)):
+            return False
+        # if made it to here, there are no problems with the match so far!
+        # call on the subclass's private match function to check for any
+        # final details
+        return self._match(subject, state, asking_player, asking_card)
 
     def _match(self, subject: Get.GetterQuery, state: GameState,
                asking_player: int, asking_card: Cardboard) -> bool:

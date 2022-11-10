@@ -222,16 +222,21 @@ if __name__ == "__main__":
     # give both of these creatures to player1
     orb1 = Cardboard(WeirdOrb())
     game1.give_to(orb1, Zone.Field, 1)
+    assert len(game1.super_stack) == 0  # nothing has happened yet
     artist1 = Cardboard(BloodArtist())
     assert len(artist1.rules_text.trig_verb[0].effect.sub_verbs) == 2
+    assert len(game1.super_stack) == 0  # nothing has happened yet
     game1.give_to(artist1, Zone.Field, 1)
+    assert len(game1.super_stack) == 0  # nothing has happened yet
     assert len(game1.player_list[1].field) == 3
     assert artist1.zone.location == 0  # BloodArtist comes 1st alphabetically
     # gamestate right now for game1:
     # Player0: Chocolate, Vanilla.    Player1: BloodArtist, Vanilla, WeirdOrb
 
     # copy the game and start doing verbs and see what happens!
+    assert len(game1.super_stack) == 0  # nothing has happened yet
     gameC = game1.copy()
+    assert len(gameC.super_stack) == 0  # nothing has happened yet
     chocC = gameC.player_list[0].field[0]
     assert chocC.is_equiv_to(choc0)
     tapper = Verbs.Tap()
@@ -241,6 +246,7 @@ if __name__ == "__main__":
     assert not tapper.can_be_done(gameC)
     assert tapper is not tapper2
     assert tapper2.can_be_done(gameC)
+    assert len(gameC.super_stack) == 0  # nothing has happened yet
     # now actually run the verb. Tap mutates.
     [(game_tap, verb_tap, list_tap)] = tapper2.do_it(gameC)
     assert list_tap == []
@@ -1543,7 +1549,9 @@ if __name__ == "__main__":
 
 
     # give +1/+1 to all mine.  does it affect yours? mine? Then remove granter
+
     class Lord(RulesText.Creature):
+
         def __init__(self):
             super().__init__()
             self.name = "Lord"
@@ -1617,8 +1625,7 @@ if __name__ == "__main__":
                     for c in field0 + field1])
     assert len(pop_game.active.get_valid_activations()) == 0
 
-
-    # # test replacement effects: make something get bigger instead of destroyed
+    # # test replacement effects: make get bigger instead of destroyed
     #
     # class GrowIndestructible(Abilities.ReplacementEffect):
     #     def __init__(self):
@@ -1641,7 +1648,7 @@ if __name__ == "__main__":
     #         self.name = "CantKillMe"
     #         self.cost = Costs.Cost("GGG")
     #         self.set_power_toughness(3, 3)
-    #         repl = Abilities.StaticAbility(  # make this be ETB EOT instead!!!
+    #         repl = Abilities.StaticAbility(  # make this be ETB EOT instead!
     #             GrowIndestructible(),
     #             Match2.VerbPattern(Verbs.Destroy, Match2.IsSelf()))
     #         self.static = [repl]

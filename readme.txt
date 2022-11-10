@@ -64,6 +64,11 @@ Notes comparing this program to the real Magic:The Gathering rules:
         effects if they are ever added.
     - Layers don't exist. Effects are applied in timestamp order, with the
         newer effects applying on top of earlier effects.
+    - KNOWN INFINITE LOOP BUG. ContinuousEffects check card characteristics
+        to see if the effect applies to that card. If any of those
+        characteristics are being modified by another (or the same) active
+        ContinuousEffect, the program loops until it crashes. Can't tell if
+        the effect applies without knowing if the effect applies!
 
 
 Notes on actually-correct things:

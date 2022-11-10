@@ -438,6 +438,11 @@ class TriggeredAbilityHolder:
         return TriggeredAbilityHolder(self.card.copy(state),
                                       self.effect.copy(state))
 
+    def apply_if_applicable(self, verb: Verbs.Verb, state: GameState):
+        """Adds the Triggered Ability to the super_stack, if
+        it is triggered by this Verb."""
+        self.effect.add_any_to_super(state, self.card, verb)
+
     def __str__(self):
         return "{%s, %s}" %(str(self.card), str(self.effect))
 
@@ -455,39 +460,3 @@ class TimedAbilityHolder:
 
     def __str__(self):
         return "{%s, %s}" % (str(self.card), str(self.effect))
-
-# class StaticAbilityHolder:
-#     """Holds static abilities in the GameState tracking lists"""
-#
-#     def __init__(self, referred_card: Cardboard, effect: StaticAbility,
-#                  lasts_until: Phases.Phases | None = None):
-#         self.card: Cardboard = referred_card
-#         self.static_ability: StaticAbility = effect
-#         self.lasts_until: Phases.Phases | None = lasts_until
-#
-#     def copy(self, state: GameState):
-#         return StaticAbilityHolder(self.card.copy(state),
-#                                    self.static_ability.copy(state),
-#                                    self.lasts_until)
-#
-#     def __str__(self):
-#         return "{%s, %s}" % (str(self.card), str(self.static_ability))
-
-
-# class OngoingEffectHolder:
-#     """
-#     Holds an ongoing effect as well as the target (NOT the source!)
-#     of the effect. One-shot effects no longer need to track their
-#     source.
-#     """
-#
-#     def __init__(self, referred_card: Cardboard, effect: StaticAbility,
-#                  lasts_until: Phases.Phases | None = None):
-#         self.card: Cardboard = referred_card
-#         self.effect: StaticAbility = effect
-#         self.lasts_until: Phases.Phases | None = lasts_until
-#
-#     def copy(self, state: GameState):
-#         return StaticAbilityHolder(self.card.copy(state),
-#                                    self.effect.copy(state),
-#                                    self.lasts_until)

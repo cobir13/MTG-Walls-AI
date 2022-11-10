@@ -915,7 +915,7 @@ class Player:
         self.gamestate.trig_timed = [t for t in self.gamestate.trig_timed
                                      if t.card is not card]
         self.gamestate.statics_to_remove += [t for t in self.gamestate.statics
-                                             if t.should_keep(self.gamestate)]
+                                             if not t.should_keep(self.gamestate)]
         self.gamestate.statics = [t for t in self.gamestate.statics
                                   if t.should_keep(self.gamestate)]
 
