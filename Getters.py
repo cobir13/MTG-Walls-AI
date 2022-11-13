@@ -70,27 +70,37 @@ class Getter:
 
 class GetInteger(Getter):
     """Return type of the Getter is an integer"""
-    pass
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise NotImplementedError
 
 
 class GetIntPair(Getter):
     """Return type of the Getter is a pair (tuple) of integers"""
-    pass
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise NotImplementedError
 
 
 class GetBool(Getter):
     """Return type of the Getter is a bool"""
-    pass
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise NotImplementedError
 
 
 class GetString(Getter):
     """Return type of the Getter is a single string"""
-    pass
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise NotImplementedError
 
 
 class GetStringList(Getter):
     """Return type of the Getter is a list of strings"""
-    pass
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise NotImplementedError
 
 
 class Const(Getter):
@@ -309,11 +319,17 @@ class Power(GetInteger):
     def get(self, state: GameState, player: int, source: Cardboard):
         return PowerAndTough().get(state, player, source)[0]
 
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise ValueError  # should never be called
+
 
 class Toughness(GetInteger):
     # Overrides get (not _get), because uses PowerAndTough rather than own _get
     def get(self, state: GameState, player: int, source: Cardboard):
         return PowerAndTough().get(state, player, source)[1]
+
+    def _get(self, state: GameState, player: int, source: Cardboard):
+        raise ValueError  # should never be called
 
 
 class ManaValue(GetInteger):
@@ -339,7 +355,6 @@ class ManaValue(GetInteger):
 #         return sum([len([c for c in zone.get(state)
 #                          if self.pattern.match(c, state, player, source)])
 #                     for zone in to_check])
-
 
 
 # ---------------------------------------------------------------------------

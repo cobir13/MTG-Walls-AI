@@ -1666,53 +1666,60 @@ if __name__ == "__main__":
     assert [Get.Power().get(pop_game, 1, c) for c in field1] == [6, 3, 1]
     assert [Get.Power().get(pop_game, 0, c) for c in hand0] == [0, 2, 1]
 
-    # # test replacement effects: make get bigger instead of destroyed
-    #
-    # class GrowIndestructible(Abilities.ReplacementEffect):
-    #     def __init__(self):
-    #         super().__init__("counter not death", Verbs.Destroy, None)
-    #
-    #     def apply_modifier(self, orig: Verbs.Verb, state, player: int,
-    #                        source: Cardboard, owner: Cardboard) -> Verbs.Verb:
-    #         new_verb = Verbs.AddCounter("+1/+1")
-    #         new_verb._subject = orig.subject
-    #         new_verb._player = orig.player
-    #         new_verb._source = orig.source
-    #         new_verb._cause = orig.cause
-    #         new_verb.is_populated = True
-    #         return new_verb
-    #
-    #
-    # class CantKillMe(RulesText.Creature):
-    #     def __init__(self):
-    #         super().__init__()
-    #         self.name = "CantKillMe"
-    #         self.cost = Costs.Cost("GGG")
-    #         self.set_power_toughness(3, 3)
-    #         repl = Abilities.StaticAbility(  # make this be ETB EOT instead!
-    #             GrowIndestructible(),
-    #             Match2.VerbPattern(Verbs.Destroy, Match2.IsSelf()))
-    #         self.static = [repl]
-    #
-    #
-    # pop_game.give_to(Cardboard(CantKillMe()), Zone.Field, 1)
-    # assert len(pop_game.player_list[0].field) == 3
-    # assert len(pop_game.player_list[1].field) == 2
-    # assert pop_game.player_list[1].field[0].name == "CantKillMe"
-    # assert len(pop_game.player_list[1].field[0].counters) == 0
-    # assert Get.Power().get(pop_game, 0, pop_game.player_list[1].field[0]) == 3
-    # wrath = Verbs.Defer(
-    #     Verbs.Destroy().on(Get.AllWhich(Match2.CardType("creature")),
-    #                        Get.CardListFrom(Zone.Field(None))))
-    # [wrath] = wrath.populate_options(pop_game, 1, None, None)
-    # dead_game = wrath.do_it(pop_game)[0][0]
-    # assert len(dead_game.player_list[0].field) == 0
-    # assert len(dead_game.player_list[0].grave) == 3
-    # assert len(dead_game.player_list[1].field) == 1
-    # assert len(dead_game.player_list[1].grave) == 1
-    # assert dead_game.player_list[1].field[0].name == "CantKillMe"
-    # assert len(dead_game.player_list[1].field[0].counters) == 1
-    # assert Get.Power().get(dead_game, 0, dead_game.player_list[1].field[0]) == 4
+    # test replacement effects: make get bigger instead of destroyed
+
+
+    class GrowIndestructible(Abilities.ContinousEffect):
+        def __init__(self, pattern_for_subject):
+            super().__init__("counter not death",
+                             Match2.VerbPattern(Verbs.Destroy,
+                                                pattern_for_subject,
+                                                None, None),
+                             duration=None,
+                             params=None)
+
+        def apply_modifier(self, orig: Verbs.Verb, state, player: int,
+                           source: Cardboard, owner: Cardboard) -> Verbs.Verb:
+            new_verb = Verbs.AddCounter("+1/+1")
+            new_verb._subject = orig.subject
+            new_verb._player = orig.player
+            new_verb._source = orig.source
+            new_verb._cause = orig.cause
+            new_verb.is_populated = True
+            return new_verb
+
+
+    class CantKillMe(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "CantKillMe"
+            self.cost = Costs.Cost("GGG")
+            self.set_power_toughness(0, 1)
+            self.static.append(GrowIndestructible(Match2.IsSelf()))
+
+    # Right now:
+    # Player 0: Caryatid, Chocolate, Lord, Vanilla
+    # Player 1: BigBoy, CantKillMe, RecursiveLord, Vanilla
+    pop_game.give_to(Cardboard(CantKillMe()), Zone.Field, 1)
+    assert len(field0) == 4
+    assert len(field1) == 4
+    assert field1[1].name == "CantKillMe"
+    assert len(field1[0].counters) == 0
+    assert Get.Power().get(pop_game, 0, field1[1]) == 0  # neither Lord affects
+    wrath = Verbs.Defer(
+        Verbs.Destroy().on(Get.AllWhich(Match2.CardType("creature")),
+                           Get.CardListFrom(Zone.Field(None))))
+    [wrath] = wrath.populate_options(pop_game, 1, None, None)
+    deadgame = wrath.do_it(pop_game)[0][0]
+    assert len(deadgame.player_list[0].field) == 0
+    assert len(deadgame.player_list[0].grave) == 4
+    assert len(deadgame.player_list[1].field) == 1
+    assert len(deadgame.player_list[1].grave) == 3
+    assert deadgame.player_list[1].field[0].name == "CantKillMe"
+    assert len(deadgame.player_list[1].field[0].counters) == 1
+    assert Get.Power().get(deadgame, 0, deadgame.player_list[1].field[0]) == 1
+
+
 
     # class DaughterOfBuff(RulesText.Creature):
     #     def __init__(self):

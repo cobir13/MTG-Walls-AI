@@ -221,8 +221,16 @@ class Verb:
             not, the user is responsible for calling it later.
          """
         # This parent class function always mutates, as though copies=False.
+        # Before calling the verb's private `_do_it` function, need to check
+        # for any relevant replacement effects that would modify the verb
+        iterate_verb = self
+        for holder in state.statics + state.statics_to_remove:
+            if holder.is_applicable(iterate_verb, state):
+                iterate_verb = holder.get_new_value(iterate_verb, state,
+                                                    iterate_verb.player,
+                                                    iterate_verb.source)
         accumulator: List[RESULT] = []
-        for state2, verb2, track2 in self._do_it(state, to_track):
+        for state2, verb2, track2 in iterate_verb._do_it(state, to_track):
             verb2._add_self_to_state_history(state2)
             if check_triggers:
                 accumulator.append(verb2._check_triggers(state2, track2))
