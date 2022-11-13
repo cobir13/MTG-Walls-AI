@@ -49,10 +49,11 @@ class Getter:
         iterate_value = self._get(state, player, source)
         query = GetterQuery(self, state, player, source)
         for holder in state.statics + state.statics_to_remove:
-            # NOTE: is_applicable calls GetterPattern.match, which may
-            # call Getters.get (this function). This can cause infinite
-            # loops! Especially if any ContinousEffect is affecting a Getter
-            # that another ContinousEffect is matching on.
+            # NOTE: `is_applicable` calls `GetterPattern.match`,
+            # which may call `Getters.get` (this function).
+            # For the purpose of deciding if an effect applies,
+            # that ability is treated as nonexistent. This occurs
+            # recursively.
             if holder.is_applicable(query, state):
                 iterate_value = holder.get_new_value(iterate_value, state,
                                                      player, source)

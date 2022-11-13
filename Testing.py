@@ -1548,8 +1548,6 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
 
 
-    # give +1/+1 to all mine.  does it affect yours? mine? Then remove granter
-
     class Lord(RulesText.Creature):
 
         def __init__(self):
@@ -1580,6 +1578,30 @@ if __name__ == "__main__":
                 params=['haste']))
 
 
+    class BigBoy(RulesText.Creature):
+        def __init__(self):
+            super().__init__()
+            self.name = "BigBoy"
+            self.cost = Costs.Cost("GGG")
+            self.set_power_toughness(5, 5)
+
+    class RecursiveLord(RulesText.Creature):
+
+        def __init__(self):
+            super().__init__()
+            self.name = "RecursiveLord"
+            self.cost = Costs.Cost("1UW")
+            self.set_power_toughness(2, 3)
+            self.static.append(Abilities.BuffStats(
+                "buff all big",
+                duration=None,
+                pattern_for_source=(Match2.Power(">=", 2)),
+                pattern_for_player=None,
+                params=(+1, +1)))
+
+
+
+    # give +1/+1 to all mine.  does it affect yours? mine? Then remove granter
     pop_game = GameState(2)  # a populated game
     pop_game.give_to(Cardboard(Vanil()), Zone.Field, 0)  # to player 0
     pop_game.give_to(Cardboard(Lord()), Zone.Field, 0)  # to player 0
@@ -1610,8 +1632,8 @@ if __name__ == "__main__":
     assert Get.Power().get(pop_game, 1, field1[0]) == 1
     assert [Get.Toughness().get(pop_game, 0, c) for c in hand0] == [2, 2]
 
-    # give a caryatid haste
-    pop_game.give_to(Cardboard(Decklist.Caryatid()), Zone.Field, 0)
+    # give everything (including a new caryatid) haste
+    pop_game.give_to(Cardboard(Decklist.Caryatid()), Zone.Field, 0)  # 0/3
     assert len(pop_game.active.get_valid_activations()) == 0
     pop_game.give_to(Cardboard(GiverOfHaste()), Zone.Field, 0)
     assert len(pop_game.active.get_valid_activations()) == 1
@@ -1624,6 +1646,25 @@ if __name__ == "__main__":
     assert not any(["haste" in Get.Keywords().get(pop_game, 0, c)
                     for c in field0 + field1])
     assert len(pop_game.active.get_valid_activations()) == 0
+
+    # test the recursive buff ability. Needs power to evaluate power...
+    pop_game.give_to(Cardboard(BigBoy()), Zone.Field, 1)  # 5/5
+    assert [Get.Power().get(pop_game, 0, c) for c in field0] == [0, 1, 1]
+    assert [Get.Power().get(pop_game, 1, c) for c in field1] == [5, 1]
+    assert [Get.Power().get(pop_game, 0, c) for c in hand0] == [0, 2, 1]
+    # add recursive lord to player1 (the effect is universal)
+    pop_game.give_to(Cardboard(RecursiveLord()), Zone.Field, 1)  # 2/3
+    assert [Get.Power().get(pop_game, 0, c) for c in field0] == [0, 1, 1]
+    assert [c.name for c in field1] == ["BigBoy", "RecursiveLord", "Vanilla"]
+    assert [Get.Power().get(pop_game, 1, c) for c in field1] == [6, 3, 1]
+    assert [Get.Power().get(pop_game, 0, c) for c in hand0] == [0, 2, 1]
+    # now add normal +1/+1 lord to player0. do effects stack the right way?
+    pop_game.give_to(Cardboard(Lord()), Zone.Field, 0)  # to player 0
+    assert [c.name for c in field0] == ['Caryatid', 'Chocolate',
+                                        'Lord', 'Vanilla']
+    assert [Get.Power().get(pop_game, 0, c) for c in field0] == [1, 3, 4, 3]
+    assert [Get.Power().get(pop_game, 1, c) for c in field1] == [6, 3, 1]
+    assert [Get.Power().get(pop_game, 0, c) for c in hand0] == [0, 2, 1]
 
     # # test replacement effects: make get bigger instead of destroyed
     #

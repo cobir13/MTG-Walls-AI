@@ -25,12 +25,12 @@ if TYPE_CHECKING:
 
 T = TypeVar('T')
 
+
 # Abilities either cause Verbs to occur (activated, triggered, timed) or
 # cause Effects to apply (replacement effects, modification effects). Note
 # that one possible Verb is the Verb to apply an effect (e.g. "target creature
 # gets +1/+1 until end of turn"), but that there are other ways for Effects
 # to apply (mainly static abilities)
-
 
 
 # # -----------------------------------------------------------------------
@@ -128,7 +128,7 @@ class TriggeredAbility:
 
     def __str__(self):
         return "TrigAbility(%s -> %s)" % (
-        str(self.condition), str(self.effect))
+            str(self.condition), str(self.effect))
 
     def get_id(self):
         return str(self)
@@ -231,6 +231,10 @@ class ContinousEffect:
             self.modifies = "verb"
         else:
             self.modifies = "getter"
+        # to avoid infinite loop, this allows Getters to temporarily disable
+        # this effect which checking to see if it is applicable or not. It is
+        # re-enabled afterwards.
+        self.temporarily_ignore = False
 
     def apply_modifier(self, orig: T, state: GameState, player: int,
                        source: Cardboard, owner: Cardboard) -> T:
@@ -356,9 +360,6 @@ class GrantKeyword(ContinousEffect):
         return "+%s" % ",".join(self.params)
 
 
-
-
-
 # # -----------------------------------------------------------------------
 
 
@@ -380,7 +381,8 @@ class ActiveAbilityHolder:
         self.source: Cardboard = source  # card creating the ability
         self.controller: int = controller  # player controlling the ability
         self.effect: ContinousEffect = effect
-        self.duration: Tuple[int, Phases.Phases] | Get.GetBool | None = duration
+        self.duration: Tuple[
+                           int, Phases.Phases] | Get.GetBool | None = duration
         self.target: VerbPattern | Match2.QueryPattern = target
         self.modifies: str = self.effect.modifies
 
@@ -392,7 +394,17 @@ class ActiveAbilityHolder:
     def is_applicable(self, subject: Verbs.Verb | Get.GetterQuery,
                       state: GameState):
         """This active ability cares about the given Verb or Getter"""
-        return self.target.match(subject, state, self.controller, self.source)
+        if self.effect.temporarily_ignore:
+            return False
+        else:
+            self.effect.temporarily_ignore = True
+            # the call to `match` may recursively call `is_applicable` on this
+            # (or other) effects. however, the call to THIS effect will be
+            # caught by the base case above, so there will not be an infinite
+            # loop
+            r = self.target.match(subject, state, self.controller, self.source)
+            self.effect.temporarily_ignore = False  # reset to active status
+            return r
 
     def should_keep(self, state) -> bool:
         """Returns whether this ability still applies (True) or
@@ -444,7 +456,7 @@ class TriggeredAbilityHolder:
         self.effect.add_any_to_super(state, self.card, verb)
 
     def __str__(self):
-        return "{%s, %s}" %(str(self.card), str(self.effect))
+        return "{%s, %s}" % (str(self.card), str(self.effect))
 
 
 class TimedAbilityHolder:
