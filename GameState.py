@@ -580,7 +580,7 @@ class GameState:
         """
         # if there are triggered abilities to remove from the tracking list,
         # remove them. Just clear the "remove" list and recurse.
-        if len(self.trigs_to_remove) > 0:
+        if len(self.trigs_to_remove) + len(self.statics_to_remove) > 0:
             new_state = self.copy()
             new_state.trigs_to_remove = []
             new_state.statics_to_remove = []

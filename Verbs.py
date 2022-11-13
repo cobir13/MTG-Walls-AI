@@ -220,26 +220,33 @@ class Verb:
             triggers to the super_stack of the result states. If
             not, the user is responsible for calling it later.
          """
-        # the parent class doesn't actually DO anything. that'll be added
-        # in subclasses. This only records, possibly tracks triggers, and
-        # handles track-list
         # This parent class function always mutates, as though copies=False.
-        self.add_self_to_state_history(state)
-        if check_triggers:
-            return [self.check_triggers(state, to_track)]
-        else:
-            return [(state, self, to_track)]
+        accumulator: List[RESULT] = []
+        for state2, verb2, track2 in self._do_it(state, to_track):
+            verb2._add_self_to_state_history(state2)
+            if check_triggers:
+                accumulator.append(verb2._check_triggers(state2, track2))
+            else:
+                accumulator.append((state2, verb2, track2))
+        return accumulator
+
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        """The function which actually knows how to carry
+        out the desired action within the GameState. Does
+        not check for triggers or account for Replacement
+        Effects."""
+        raise NotImplementedError
 
 
-    def check_triggers(self: V, state: GameState, to_track: list = []
-                       ) -> RESULT:
+    def _check_triggers(self: V, state: GameState, to_track: list = []
+                        ) -> RESULT:
         """
-        Adds any new triggers to the super_stack. THIS ALWAYS
-        MUTATES THE GAMESTATE. Also adds any triggers coming
-        from the verb's sub_verbs.
-        Note: doesn't DO anything with `to_track` argument.
-        But passing it in and back out again makes the syntax
-        cleaner for using the function in `do_it` and loops.
+        Adds any triggered abilities that are triggered by this
+        verb (or by any of its subverbs) to the super_stack. THIS
+        ALWAYS MUTATES THE GAMESTATE.
+        Note: doesn't DO anything with `to_track` argument. But
+        passing it in and back out again makes the syntax cleaner
+        for calling this function from `_do_it` and loops.
         """
         # `trigger_source` is the card which owns the triggered ability which
         # might be triggering. Not to be confused with `subject`, which is the
@@ -248,7 +255,7 @@ class Verb:
             # add any abilities that trigger to the super_stack
             holder.apply_if_applicable(self, state)
         for v in self.sub_verbs:
-            v.check_triggers(state, to_track)
+            v._check_triggers(state, to_track)
         return state, self, to_track
 
     def is_type(self, verb_type: type) -> bool:
@@ -276,7 +283,7 @@ class Verb:
             txt += "(%s)" % (", ".join([v.get_id() for v in self.sub_verbs]))
         return txt
 
-    def add_self_to_state_history(self, state: GameState) -> None:
+    def _add_self_to_state_history(self, state: GameState) -> None:
         """If the GameState is tracking history, adds a note
         to that history describing this Verb. Mutates state,
         technically, in that note is added rather than added
@@ -315,6 +322,8 @@ class MultiVerb(Verb):
                 ii += 1
 
     def replace_verb(self: V, index: int, new_verb: Verb) -> V:
+        """Returns copy of self with the given verb added into
+        self's list of subverbs at the given index."""
         if index < len(self.sub_verbs):  # can index into list
             if self._sub_verbs[index] is new_verb:
                 return self
@@ -348,7 +357,7 @@ class MultiVerb(Verb):
         return (super().can_be_done(state)
                 and all([v.can_be_done(state) for v in self.sub_verbs]))
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         tuple_list = [(state, self, to_track)]  # GameState, MultiVerb, list
         for ii in range(len(self.sub_verbs)):
             new_tuple_list = []
@@ -359,11 +368,16 @@ class MultiVerb(Verb):
                     track2 = things2[1:]
                     new_tuple_list.append((st2, multi2, track2))
             tuple_list = new_tuple_list
-        if check_triggers:
-            return [multi3.check_triggers(st3, trk3)
-                    for st3, multi3, trk3 in tuple_list]
-        else:
-            return tuple_list
+        return tuple_list
+
+    def _add_self_to_state_history(self, state: GameState) -> None:
+        """If the GameState is tracking history, adds a note
+        to that history describing this Verb. Mutates state,
+        technically, in that note is added rather than added
+        to a copy.
+        MultiVerbs don't record themselves. Only the subverbs
+        get recorded."""
+        return
 
     def is_type(self, verb_type: type):
         return any([v.is_type(verb_type) for v in self.sub_verbs])
@@ -392,11 +406,11 @@ class VerbFactory(Verb):
         """populating returns MultiVerbs, so this should never be run"""
         raise VerbFactory.ShouldNeverBeRunError
 
-    def do_it(self, state: GameState, to_track=[], check_triggers=True):
+    def _do_it(self, state: GameState, to_track=[]):
         """populating returns MultiVerbs, so this should never be run"""
         raise VerbFactory.ShouldNeverBeRunError
 
-    def check_triggers(self: V, state, to_track: list = []) -> RESULT:
+    def _check_triggers(self: V, state, to_track: list = []) -> RESULT:
         """populating returns MultiVerbs, so this should never be run"""
         raise VerbFactory.ShouldNeverBeRunError
 
@@ -425,6 +439,9 @@ class AffectPlayer(Verb):
         baselist = super().populate_options(state, player, source, cause)
         return [v.replace_subject(player) for v in baselist]
 
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        raise NotImplementedError
+
     def on(self,
            subject_chooser: Get.AllWhich,
            option_getter: Get.PlayerList,
@@ -449,6 +466,9 @@ class AffectCard(Verb):
     def populate_options(self, state, player, source, cause):
         baselist = super().populate_options(state, player, source, cause)
         return [v.replace_subject(source) for v in baselist]
+
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        raise NotImplementedError
 
     def on(self,
            subject_chooser: Get.AllWhich,
@@ -476,6 +496,9 @@ class AffectStack(Verb):
                          ) -> List[Verb]:
         baselist = super().populate_options(state, player, source, cause)
         return [v.replace_subject(stack_object) for v in baselist]
+
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        raise NotImplementedError
 
     def on(self,
            subject_chooser: Get.AllWhich,
@@ -617,32 +640,28 @@ class Defer(Verb):
                 and len(self.inputs) == self.num_inputs
                 )
 
-    def do_it(self, state: GameState, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         # list of verbs now WITH their options properly chosen
         populated = self.sub_verbs[0].populate_options(state, self.player,
                                                        self.source, self.cause)
-        # apply each populated verb to a different copy of `state`. Safe to
-        # check triggers as we go (if we were asked to do that) because each
-        # verb is happening in a different gamestate copy.
-        things = [self] + to_track
+        # apply each populated verb to a different copy of `state`. Return the
+        # verb that was actually performed. No need to return a Defer.
         results = []
-        for verb in populated:
-            if verb.copies:
-                results += [(st, trk[0].replace_verb(0, vb), trk[1:])
-                            for st, vb, trk in verb.do_it(state, things,
-                                                          check_triggers)]
+        for subverb in populated:
+            if subverb.copies:
+                results += subverb.do_it(state, to_track, False)
             else:
-                self2 = self.replace_verb(0, verb)
-                state2, things2 = state.copy_and_track([self2] + to_track)
-                verb2 = things2[0].sub_verbs[0]
-                results += [(st, trk[0].replace_verb(0, vb), trk[1:])
-                            for st, vb, trk in verb2.do_it(state2, things2,
-                                                           check_triggers)]
+                # I need to do the copying manually, to avoid mutating `state`
+                state2, things2 = state.copy_and_track([subverb] + to_track)
+                subverb2: Verb = things2[0]
+                to_track2 = things2[1:]
+                results += subverb2.do_it(state2, to_track2, False)
         return results
 
-    def check_triggers(self, state, to_track=[]) -> RESULT:
+    def _check_triggers(self, state, to_track=[]) -> RESULT:
         # nothing can trigger off of a "Defer" verb so doesn't bother to check
-        return self.sub_verbs[0].check_triggers(state, to_track)
+        # whether it itself caused a trigger. only checks the sub-verb.
+        return self.sub_verbs[0]._check_triggers(state, to_track)
 
     def is_type(self, verb_type: type):
         return self.sub_verbs[0].is_type(verb_type)
@@ -749,13 +768,13 @@ class NullVerb(Verb):
         new_copy.is_populated = True
         return [new_copy]
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
-        return [(state, self, to_track)]
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        return [(state, self, to_track)]  # doesn't DO anything
 
-    def check_triggers(self, state: GameState, to_track: list = []) -> RESULT:
+    def _check_triggers(self, state: GameState, to_track: list = []) -> RESULT:
         return state, self, to_track
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         return
 
     def __str__(self):
@@ -781,6 +800,9 @@ class SingleGetterInput(Verb):
         else:
             return [base]  # already definite value, so no replacement needed
 
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        raise NotImplementedError
+
 
 class PayMana(AffectPlayer, SingleGetterInput):
     """deducts the given amount of mana from the
@@ -798,17 +820,16 @@ class PayMana(AffectPlayer, SingleGetterInput):
         pool = state.player_list[self.subject].pool
         return pool.can_afford_mana_cost(ManaHandler.ManaCost(mana_str))
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         mana_str = self.inputs[0]
         pool = state.player_list[self.subject].pool
         pool.pay_mana_cost(ManaHandler.ManaCost(mana_str))
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
     def __str__(self):
         return "PayMana{%s}" % str(self.inputs[0])
 
-    def add_self_to_state_history(self, state: GameState):
+    def _add_self_to_state_history(self, state: GameState):
         if state.is_tracking_history:
             cost = ManaHandler.ManaCost(self.inputs[0])
             text = "\nPlayer%i add %s" % (self.subject, str(cost))
@@ -823,14 +844,13 @@ class AddMana(AffectPlayer, SingleGetterInput):
         super().__init__(1)
         self._inputs = [mana_string]
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         mana_str = self.inputs[0]
         pool = state.player_list[self.subject].pool
         pool.add_mana(ManaHandler.ManaPool(mana_str))
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             pool = ManaHandler.ManaPool(self.inputs[0])
             text = "\nPlayer%i add %s" % (self.subject, str(pool))
@@ -844,12 +864,11 @@ class LoseLife(AffectPlayer, SingleGetterInput):
         super().__init__(1)
         self._inputs = [damage_getter]
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         state.player_list[self.subject].life -= self.inputs[0]
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             text = "\nPlayer%i lose %i life" % (self.subject, self.inputs[0])
             state.events_since_previous += text
@@ -862,12 +881,11 @@ class GainLife(AffectPlayer, SingleGetterInput):
         super().__init__(1)
         self._inputs = [amount_getter]
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         state.player_list[self.subject].life += self.inputs[0]
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             text = "\nPlayer%i gain %i life" % (self.subject, self.inputs[0])
             state.events_since_previous += text
@@ -877,7 +895,7 @@ class DamageToPlayer(LoseLife):
     """The subject player is dealt the given amount of damage
         by the source."""
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         # make the source's controller gain life if source has lifelink
         if "lifelink" in Get.Keywords().get(state, self.source.player_index,
                                             self.source):
@@ -889,11 +907,12 @@ class DamageToPlayer(LoseLife):
             new_self = self.replace_verb(1, gainer)
         else:
             new_self = self
-        # super.do_it to make the player actually lose life. Also, as usual,
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return super(LoseLife, new_self).do_it(state, to_track, check_triggers)
+        # Can't call LoseLife._do_it because private. so duplicate it here
+        state.player_list[new_self.subject].life -= new_self.inputs[0]
+        # return
+        return [(state, new_self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             state.events_since_previous += "\n%s dealt " % str(self.source)
             state.events_since_previous += str(self.inputs[0])
@@ -909,7 +928,7 @@ class PayLife(LoseLife):
         return (super().can_be_done(state) and
                 state.player_list[self.subject].life >= self.inputs[0])
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             text = "\nPlayer%i pays %i life" % (self.subject, self.inputs[0])
             state.events_since_previous += text
@@ -917,7 +936,7 @@ class PayLife(LoseLife):
 
 class LoseTheGame(AffectPlayer):
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         state.player_list[self.subject].victory_status = "L"
         # if everyone else has lost, the last player standing wins!
         still_playing = [pl for pl in state.player_list
@@ -929,10 +948,9 @@ class LoseTheGame(AffectPlayer):
             new_self = self.replace_verb(0, win)  # add win as sub_verb
         else:
             new_self = self
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(new_self, state, to_track, check_triggers)
+        return [(state, new_self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             text = "\nPlayer %s loses the game!" % str(self.subject)
             state.events_since_previous += text
@@ -940,7 +958,7 @@ class LoseTheGame(AffectPlayer):
 
 class WinTheGame(AffectPlayer):
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         state.player_list[self.subject].victory_status = "W"
         # all other players automatically lose
         new_self = self.copy()
@@ -949,10 +967,9 @@ class WinTheGame(AffectPlayer):
                 lose = LoseTheGame().replace_subject(pl.player_index)
                 lose.do_it(state, check_triggers=False)  # mutates
                 new_self = new_self.replace_verb(len(new_self.sub_verbs), lose)
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(new_self, state, to_track, check_triggers)
+        return [(state, new_self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             text = "\nPlayer %s wins the game!" % str(self.subject)
             state.events_since_previous += text
@@ -968,13 +985,12 @@ class Tap(AffectCard):
                 and self.subject.is_in(Zone.Field)
                 and not self.subject.tapped)
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         self.subject.tapped = True
         # maintain the sorting in the subject's zone for new changed card id
         assert self.subject.is_in(Zone.Field)
         state.player_list[self.subject.player_index].re_sort_field()
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
 
 class Untap(AffectCard):
@@ -986,13 +1002,12 @@ class Untap(AffectCard):
                 and self.subject.is_in(Zone.Field)
                 and self.subject.tapped)
 
-    def do_it(self, state: GameState, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         self.subject.tapped = False
         # maintain the sorting in the subject's zone for new changed card id
         assert self.subject.is_in(Zone.Field)
         state.player_list[self.subject.player_index].re_sort_field()
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
 
 class TapSymbol(Tap):
@@ -1021,15 +1036,14 @@ class AddCounter(AffectCard):
         return (super().can_be_done(state)
                 and self.subject.is_in(Zone.Field))
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         self.subject.add_counter(self.counter_text)
         # maintain the sorting in the subject's zone for new changed card id
         assert self.subject.is_in(Zone.Field)
         state.player_list[self.subject.player_index].re_sort_field()
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state: GameState):
+    def _add_self_to_state_history(self, state: GameState):
         if state.is_tracking_history:
             text = "\nPut %s counter on %s" % (self.counter_text,
                                                str(self.subject))
@@ -1053,15 +1067,14 @@ class ActivateOncePerTurn(AffectCard):
                 and self.subject.is_in(Zone.Field)
                 and self.counter_text not in self.subject.counters)
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         self.subject.add_counter(self.counter_text)
         # maintain the sorting in the subject's zone for new changed card id
         assert self.subject.is_in(Zone.Field)
         state.player_list[self.subject.player_index].re_sort_field()
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         return  # doesn't mark itself as having done anything
 
 
@@ -1075,11 +1088,10 @@ class ActivateOnlyAsSorcery(Verb):
                 and len(state.stack) == 0 and len(state.super_stack) == 0
                 and state.active_player_index == self.player)
 
-    def do_it(self, state, to_track=[], check_triggers=True):
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        return [(state, self, to_track)]  # doesn't DO anything. It's a flag.
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         return  # doesn't mark itself as having done anything
 
 
@@ -1100,23 +1112,22 @@ class ActivateOnlyAsSorcery(Verb):
 #     def ongoing_effect(self) -> Abilities.OngoingEffect:
 #         return self.inputs[0]
 #
-#     def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+# def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
 #         self.ongoing_effect.add_to_tracker()
 
 
 class Shuffle(AffectPlayer):
     """Shuffles the deck of given player."""
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         """Mutates. Reorder deck randomly."""
         random.shuffle(state.player_list[self.subject].deck)
         # maintain location indexing of the deck
         for ii in range(len(state.player_list[self.subject].deck)):
             state.player_list[self.subject].deck[ii].zone.location = ii
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         if state.is_tracking_history:
             state.events_since_previous += "\nShuffle"
 
@@ -1159,7 +1170,7 @@ class MoveToZone(AffectCard):
         else:
             return True
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         # figure out absolute origin and destination zone
         dest = self.destination
         if not dest.is_single:
@@ -1178,8 +1189,7 @@ class MoveToZone(AffectCard):
         # add the origin and destination to inputs. necessary for checking.
         new_self = self.replace_input(0, dest)
         new_self = new_self.replace_input(1, origin)
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(new_self, state, to_track, check_triggers)
+        return [(state, new_self, to_track)]
 
     def __str__(self):
         return "MoveTo" + str(self.destination)
@@ -1201,7 +1211,7 @@ class DrawCard(AffectPlayer):
 
     # Note: even if the deck is empty, you CAN draw. you'll just lose.
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         top_card_list = Zone.DeckTop(self.subject).get(state)  # 0 or 1 cards
         if len(top_card_list) > 0:
             mover = MoveToZone(Zone.Hand(self.subject))
@@ -1211,12 +1221,13 @@ class DrawCard(AffectPlayer):
             mover.do_it(state, check_triggers=False)
             # add mover to sub_verbs, to be visible to triggers for move also
             new_self = self.replace_verb(0, mover)
-            return Verb.do_it(new_self, state, to_track, check_triggers)
+            return [(state, new_self, to_track)]
         else:
             lose = LoseTheGame().replace_subject(self.subject)
             lose.do_it(state, check_triggers=False)  # mutates
-            # didn't actually draw, so check for LoseTheGame not Draw or Move
-            return Verb.do_it(lose, state, to_track, check_triggers)
+            # didn't actually draw, only Lost. so, return only the Verb that
+            # actually OCCURRED (losing the game), not Draw or Move.
+            return [(state, lose, to_track)]
 
 
 class DiscardCard(MoveToZone):
@@ -1240,12 +1251,11 @@ class MarkAsPlayedLand(AffectPlayer):
         return (super().can_be_done(state)
                 and state.player_list[self.subject].land_drops_left > 0)
 
-    def do_it(self, state, to_track=[], check_triggers=True) -> List[RESULT]:
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         state.player_list[self.subject].num_lands_played += 1
-        # add history. maybe check_triggers (add to super_stack, trim inputs)
-        return Verb.do_it(self, state, to_track, check_triggers)
+        return [(state, self, to_track)]
 
-    def add_self_to_state_history(self, state):
+    def _add_self_to_state_history(self, state):
         return
 
 
@@ -1269,12 +1279,13 @@ class Destroy(MoveToZone):
         return (super().can_be_done(state)
                 and self.subject.is_in(Zone.Field))
 
-    def do_it(self, state, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         if Match2.Keyword("indestructible").match(self.subject, state,
                                                   self.player, self.source):
             return [(state, NullVerb(), to_track)]  # nothing to trigger
         else:
-            return super().do_it(state, to_track, check_triggers)
+            # use MoveToZone's private do_it function
+            return super()._do_it(state, to_track)
 
     def __str__(self):
         return "Destroy"
@@ -1358,7 +1369,7 @@ class UniversalCaster(AffectStack):
                 and stackobj.pay_cost is None
                 and stackobj.do_effect is None)
 
-    def do_it(self, state: GameState, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         """Put the StackObject onto the stack, populating
         the cost and effect verbs and paying the cost if any.
         Bypasses the stack if necessary."""
@@ -1397,14 +1408,19 @@ class UniversalCaster(AffectStack):
                 state2, track2 = state.copy_and_track([self_new] + to_track)
                 self2 = track2[0]
                 obj2: StackObject = self2.subject
-                self._add_to_stack(state2, obj2)
+                self._add_to_stack(state2, obj2)  # static method
                 # 601.2g: activate mana abilities -- not a thing that I allow
                 # 601.2h: pay costs
                 if obj2.pay_cost is not None:
-                    tupes = obj2.pay_cost.do_it(state2, track2, check_triggers)
-                    # verb in result list needs to be self2, not pay_verb
-                    tuple_list += [(state3, track3[0], track3[1:])
-                                   for state3, verb, track3 in tupes]
+                    # do the payment verb, then add it as sub_verb to Caster.
+                    # abilities that trigger off the sub_verb will be checked
+                    # when the caster finishes its do_it and check_triggers.
+                    tupes = obj2.pay_cost.do_it(state2, track2, False)
+                    for state3, pay_verb3, track3 in tupes:
+                        # verb in result needs to be self_new, not pay_verb
+                        caster_copy: UniversalCaster = track3[0]
+                        caster3 = caster_copy.replace_verb(0, pay_verb3)
+                        tuple_list.append((state3, caster3, track3[1:]))
                 else:
                     tuple_list += [(state2, self2, track2[1:])]
         # 601.2i: ability has now "been activated".
@@ -1417,11 +1433,7 @@ class UniversalCaster(AffectStack):
             # GameState and to make subclasses of UniversalCaster nicer.
             self4: UniversalCaster
             for state5, self5, track5 in self4._remove_if_needed(state4, trk4):
-                #  Any abilities which trigger from some aspect of paying
-                #  costs have already been added to the superstack during
-                #  ability.cost.pay. Now add any trigger that trigger off
-                #  of this activation/casting itself.
-                results += Verb.do_it(self5, state5, track5, check_triggers)
+                results.append((state5, self5, track5))
         return results
 
     @staticmethod
@@ -1434,11 +1446,12 @@ class UniversalCaster(AffectStack):
     def _remove_if_needed(self, game: GameState, to_track: list
                           ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that. Otherwise, just give back all
+        resolve instantly, resolve them and add their Verbs to the
+        returned verb as a sub_verb. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         return [(game, self, to_track)]
 
-    def add_self_to_state_history(self, state: GameState) -> None:
+    def _add_self_to_state_history(self, state: GameState) -> None:
         if state.is_tracking_history:
             record = "\n*** %s ***" % (str(self))
             state.events_since_previous += record
@@ -1457,7 +1470,8 @@ class PlayManaAbility(PlayAbility):
     def _remove_if_needed(self, game: GameState, to_track: list
                           ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that. Otherwise, just give back all
+        resolve instantly, resolve them and add their Verbs to the
+        returned verb as a sub_verb. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.pop_from_stack(-1)
         assert stack_obj is self.subject  # for debug
@@ -1471,15 +1485,17 @@ class PlayManaAbility(PlayAbility):
             # that its triggers are also automatically checked
             results = []
             for state2, effect2, things2 in tuple_list:
-                self2: UniversalCaster = things2[0].replace_verb(0, effect2)
+                caster: UniversalCaster = things2[0]
                 track2 = things2[1:]
+                index = len(caster.sub_verbs)
+                self2: UniversalCaster = caster.replace_verb(index, effect2)
                 results.append((state2, self2, track2))
             return results
 
 
 class AddTriggeredAbility(UniversalCaster):
 
-    def do_it(self, state: GameState, to_track=[], check_triggers=True):
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
         """Put the StackObject onto the stack. Bypass the
             stack if necessary. Assumes that the caster has
             already been removed from the super_stack by others.
@@ -1513,13 +1529,8 @@ class AddTriggeredAbility(UniversalCaster):
             # GameState and to make subclasses of UniversalCaster nicer.
             new_tuple_list = self2._remove_if_needed(state2, things[2:])
             for state3, self3, track3 in new_tuple_list:
-                #  Any abilities which trigger from some aspect of paying
-                #  costs have already been added to the superstack during
-                #  ability.cost.pay. Now add any trigger that trigger off
-                #  of this activation/casting itself.
                 self3: AddTriggeredAbility
-                final_results += Verb.do_it(self3, state3, track3,
-                                            check_triggers)
+                final_results.append((state3, self3, track3))
         return final_results
 
 
@@ -1527,7 +1538,8 @@ class AddAsEntersAbility(AddTriggeredAbility):
     def _remove_if_needed(self, game: GameState, to_track: list
                           ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that. Otherwise, just give back all
+        resolve instantly, resolve them and add their Verbs to the
+        returned verb as a sub_verb. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.pop_from_stack(-1)
         # perform the effect (resolve ability, perform spell, etc)
@@ -1541,8 +1553,10 @@ class AddAsEntersAbility(AddTriggeredAbility):
             # that its triggers are also automatically checked
             results = []
             for state2, effect2, things2 in tuple_list:
-                self2: UniversalCaster = things2[0].replace_verb(0, effect2)
+                caster: UniversalCaster = things2[0]
                 track2 = things2[1:]
+                index = len(caster.sub_verbs)
+                self2: UniversalCaster = caster.replace_verb(index, effect2)
                 results.append((state2, self2, track2))
             return results
 
@@ -1574,7 +1588,8 @@ class PlayLand(PlayCardboard):
     def _remove_if_needed(self, game: GameState, to_track: list
                           ) -> List[RESULT]:
         """If the thing we just put on the stack is supposed to
-        resolve instantly, do that. Otherwise, just give back all
+        resolve instantly, resolve them and add their Verbs to the
+        returned verb as a sub_verb. Otherwise, just give back all
         the arguments unchanged. ALLOWED TO MUTATE INPUT STATE."""
         stack_obj = game.pop_from_stack(-1)
         assert stack_obj is self.subject
