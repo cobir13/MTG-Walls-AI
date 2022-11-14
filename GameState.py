@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List, Tuple, Type
 
 from Abilities import TriggeredAbilityHolder, TimedAbilityHolder  # actual need
-from Abilities import StaticAbilityHolder  # actual need
+from Abilities import ActiveAbilityHolder  # actual need
 from Cardboard import Cardboard, CardNull  # actual need
 import Getters as Get  # actually needs
 import Zone

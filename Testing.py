@@ -1678,7 +1678,7 @@ if __name__ == "__main__":
                              duration=None,
                              params=None)
 
-        def apply_modifier(self, orig: Verbs.Verb, state, player: int,
+        def apply_modifier(self, orig: Verbs.Verb, state_arg, player_arg: int,
                            source: Cardboard, owner: Cardboard) -> Verbs.Verb:
             new_verb = Verbs.AddCounter("+1/+1")
             new_verb._subject = orig.subject
@@ -1687,6 +1687,9 @@ if __name__ == "__main__":
             new_verb._cause = orig.cause
             new_verb.is_populated = True
             return new_verb
+
+        def _string_params(self) -> str:
+            return ""
 
 
     class CantKillMe(RulesText.Creature):

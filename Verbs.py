@@ -14,12 +14,12 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
     from Stack import StackObject, StackCardboard
     import Zone
-    from Getters import Getter
+    import Getters as Get
 
     # SOURCE = Cardboard | Player
     CAUSE = Cardboard | Player | None
-    INPUTS = List[int | Cardboard | StackObject | None | Zone.Zone | Getter |
-                  Tuple[int | Cardboard | StackObject | None]]
+    INPUTS = List[int | Cardboard | StackObject | None | Zone.Zone |
+                  Get.Getter | Tuple[int | Cardboard | StackObject | None]]
 
 import Zone
 import Match2

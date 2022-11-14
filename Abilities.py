@@ -6,11 +6,10 @@ Created on Sun Jun 26 18:08:14 2022
 """
 
 from __future__ import annotations
-from typing import List, Type, Tuple, TYPE_CHECKING, TypeVar
+from typing import List, Tuple, TYPE_CHECKING, TypeVar
 
 import Verbs
 import Costs
-# import Zone
 import Getters as Get
 import Stack
 import Phases
@@ -21,7 +20,6 @@ if TYPE_CHECKING:
     from GameState import GameState
     from Cardboard import Cardboard
     from Match2 import VerbPattern
-    import Match2
 
 T = TypeVar('T')
 
@@ -292,7 +290,7 @@ class ContinousEffect:
         to the GameState when the creature is in play. Other
         ways of applying the effect should use the appropriate
         Verb instead of using this function."""
-        h = StaticAbilityHolder(source=owner,
+        h = ActiveAbilityHolder(source=owner,
                                 controller=owner.player_index,
                                 effect=self,
                                 duration=self.calcuate_duration(state, owner),
@@ -429,8 +427,6 @@ class ActiveAbilityHolder:
     def __str__(self):
         return "{%s, %s}" % (str(self.source), str(self.effect))
 
-
-class StaticAbilityHolder(ActiveAbilityHolder):
     def get_new_value(self, orig_value, state, player, source):
         return self.effect.apply_modifier(orig_value, state, player, source,
                                           self.source)
