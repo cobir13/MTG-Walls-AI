@@ -5,10 +5,12 @@ Created on Mon Dec 28 21:13:59 2020
 @author: Cobi
 """
 from __future__ import annotations
-from typing import List, Tuple, Type
+from typing import List, Tuple, Type, TYPE_CHECKING
 
-from Abilities import TriggeredAbilityHolder, TimedAbilityHolder  # actual need
-from Abilities import ActiveAbilityHolder  # actual need
+if TYPE_CHECKING:
+    from Abilities import ActiveAbilityHolder
+    from Abilities import TriggeredAbilityHolder, TimedAbilityHolder
+
 from Cardboard import Cardboard, CardNull  # actual need
 import Getters as Get  # actually needs
 import Zone
@@ -67,8 +69,8 @@ class GameState:
         self.trig_event: List[TriggeredAbilityHolder] = []
         self.trigs_to_remove: List[TriggeredAbilityHolder] = []
         # track static effects the same way we track triggers
-        self.statics: List[StaticAbilityHolder] = []
-        self.statics_to_remove: List[StaticAbilityHolder] = []
+        self.statics: List[ActiveAbilityHolder] = []
+        self.statics_to_remove: List[ActiveAbilityHolder] = []
 
     def __hash__(self):
         return self.get_id().__hash__()  # hash the string of the get_id
@@ -908,16 +910,16 @@ class Player:
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
         # remove mechanism for sensing triggers from this card
-        self.gamestate.trigs_to_remove += [t for t in self.gamestate.trig_event
-                                           if t.card is card]
-        self.gamestate.trig_event = [t for t in self.gamestate.trig_event
+        state = self.gamestate  # for brevity
+        state.trigs_to_remove += [h for h in state.trig_event
+                                  if not h.should_keep(state)]
+        state.trig_event = [h for h in state.trig_event
+                            if h.should_keep(state)]
+        state.trig_timed = [t for t in state.trig_timed
                                      if t.card is not card]
-        self.gamestate.trig_timed = [t for t in self.gamestate.trig_timed
-                                     if t.card is not card]
-        self.gamestate.statics_to_remove += [t for t in self.gamestate.statics
-                                             if not t.should_keep(self.gamestate)]
-        self.gamestate.statics = [t for t in self.gamestate.statics
-                                  if t.should_keep(self.gamestate)]
+        state.statics_to_remove += [h for h in state.statics
+                                    if not h.should_keep(state)]
+        state.statics = [h for h in state.statics if h.should_keep(state)]
 
     def re_sort_field(self):
         self.field.sort(key=Cardboard.get_id)

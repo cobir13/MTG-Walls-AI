@@ -287,7 +287,7 @@ if __name__ == "__main__":
     chocE = gameE.player_list[0].field[0]
     assert chocE.player_index == 0
     artist = gameE.player_list[1].field[0]
-    s = artist.rules_text.trig_verb[0].condition
+    s = artist.rules_text.trig_verb[0].triggers_from
     assert s.pattern_for_subject.match(chocE, gameE, 0, artist)
     [destroyer] = Verbs.Destroy().populate_options(gameE, 0, chocE, None)
     assert destroyer.can_be_done(gameE)
@@ -1675,8 +1675,7 @@ if __name__ == "__main__":
                              Match2.VerbPattern(Verbs.Destroy,
                                                 pattern_for_subject,
                                                 None, None),
-                             duration=None,
-                             params=None)
+                             duration=None)
 
         def apply_modifier(self, orig: Verbs.Verb, state_arg, player_arg: int,
                            source: Cardboard, owner: Cardboard) -> Verbs.Verb:

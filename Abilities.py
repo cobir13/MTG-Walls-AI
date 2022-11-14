@@ -89,44 +89,92 @@ class ActivatedAbility:
 # # -----------------------------------------------------------------------
 
 class TriggeredAbility:
-    def __init__(self, name, trigger: VerbPattern, effect: Verbs.Verb):
-        self.name: str = name
-        self.condition: VerbPattern = trigger
-        self.effect: Verbs.Verb = effect
-        self.num_inputs = effect.num_inputs
+    """
+    A TriggeredAbility says that when a triggering Verb is
+    performed, do a specific Verb in response.
+    For example, Wall of Blossoms says "when this card enters the
+    battlefield, draw a card." In this case, the trigger condition
+    is that a MoveToZone Verb with the Wall of Blossoms as the
+    subject and with Zone.Field as its destination was just
+    performed.  The effect Verb is to make the Wall of Blossom's
+    controller draw a card.
+    """
 
-    def add_any_to_super(self, state: GameState,
-                         source_of_ability: Cardboard,
-                         verb: Verbs.Verb):
+    def __init__(self, name, triggers_from: VerbPattern, effect: Verbs.Verb,
+                 duration: (Tuple[str, Phases.Phases] | Get.GetBool
+                            | None) = None):
         """
-        MUTATES.
-        Checks if the given Verb meets this ability's trigger
-        condition. If the ability IS triggered, MUTATES
-        the GameState `state` to add a populated
-        AddTriggeredAbility Verb to the super_stack.
+        `duration` describes the times when the TriggeredAbility
+        will listen for a triggering Verb to occur.  There are
+        three possible ways of describing this:
+        - ("mine" | "your" | "next", Phase):
+                The TriggeredAbility will listen from now until the
+                given phase, when the ability will vanish forever.
+        - Get.GetBool
+                The TriggeredAbility will listen from now until the
+                Getter evaluates to False, whereupon it will vanish.
+        - None
+                The TriggeredAbility will listen so long as the
+                source Cardboard creating it remains on the
+                battlefield.
         """
-        if self.condition.match(verb, state, source_of_ability.player_index,
-                                source_of_ability):
-            player = source_of_ability.player_index
-            stack_obj = Stack.StackTrigger(player, obj=self,
-                                           pay_cost=None, do_effect=None)
-            # Note: pay, effect verbs not yet populated. AddTriggeredAbility
-            # does that later.
-            caster = Verbs.AddTriggeredAbility()
-            # if isinstance(self.condition, SelfAsEnter):
-            # I can't use isinstance without causing circular imports
-            if type(self.condition).__name__ == "SelfAsEnter":
-                caster = Verbs.AddAsEntersAbility()
-            [caster] = caster.populate_options(state, player,
-                                               source=source_of_ability,
-                                               cause=verb.subject,
-                                               stack_object=stack_obj)
-            if caster.can_be_done(state):
-                state.super_stack.append(caster)
+        self.name: str = name
+        self.triggers_from: VerbPattern = triggers_from
+        self.effect: Verbs.Verb = effect
+        self.duration = duration
+
+    def calcuate_duration(self, state, owner
+                          ) -> Tuple[int, Phases.Phases] | Get.GetBool | None:
+        """turn relative time ("my next end step") into absolute"""
+        if isinstance(self.duration, tuple):
+            turn = state.total_turns
+            # if already passed the phase this turn, soonest is next turn
+            if self.duration[1] >= state.phase:
+                turn += 1
+            # now increment until we find the right player
+            if self.duration[0] == "mine":
+                while turn % len(state.player_list) != owner.player_index:
+                    turn += 1
+            elif self.duration[0] == "your":
+                while turn % len(state.player_list) == owner.player_index:
+                    turn += 1
+            return turn, self.duration[1]
+        else:
+            return self.duration
+
+    def add_effect_to_super(self, state: GameState,
+                            source_of_ability: Cardboard,
+                            causing_verb: Verbs.Verb):
+        """
+        Adds a populated AddTriggeredAbility Verb for the effect
+        to the state's super_stack, assuming that the effect can
+        legally be done. MUTATES THE GAMESTATE.
+        Note: does NOT check whether the causing_verb meets the
+        trigger condition or not. That should be done manually
+        by whoever calls this function.
+        """
+        # if self.triggers_from.match(verb, state,
+        #                             source_of_ability.player_index,
+        #                             source_of_ability):
+        player = source_of_ability.player_index
+        stack_obj = Stack.StackTrigger(player, obj=self,
+                                       pay_cost=None, do_effect=None)
+        # Note: pay, effect verbs not yet populated. AddTriggeredAbility
+        # does that later.
+        caster = Verbs.AddTriggeredAbility()
+        # I can't use isinstance without causing circular imports
+        if type(self.triggers_from).__name__ == "SelfAsEnter":
+            caster = Verbs.AddAsEntersAbility()
+        [caster] = caster.populate_options(state, player,
+                                           source=source_of_ability,
+                                           cause=causing_verb.subject,
+                                           stack_object=stack_obj)
+        if caster.can_be_done(state):
+            state.super_stack.append(caster)
 
     def __str__(self):
         return "TrigAbility(%s -> %s)" % (
-            str(self.condition), str(self.effect))
+            str(self.triggers_from), str(self.effect))
 
     def get_id(self):
         return str(self)
@@ -135,25 +183,38 @@ class TriggeredAbility:
         return self.effect.is_type(verb_type)
 
     def copy(self, new_state: GameState | None = None):
-        abil = TriggeredAbility(self.name, self.condition,
+        abil = TriggeredAbility(self.name, self.triggers_from,
                                 self.effect.copy(new_state))
         abil.__class__ = self.__class__
         return abil
 
     def add_to_tracker(self, state: GameState, owner: Cardboard):
-        state.trig_event.append(TriggeredAbilityHolder(owner, self))
+        """Add a Holder for this ability to the GameState's
+        trigger-tracker list. `owner` is the card that owns
+        this triggered ability."""
+        duration = Holder.calcuate_duration(self.duration, state, owner)
+        holder = TriggeredAbilityHolder(owner, owner.player_index,
+                                        self, duration)
+        state.trig_event.append(holder)
 
 
 # # -----------------------------------------------------------------------
 
 class TimedAbility:
+    """
+    A TimedAbility describes an ability which causes a Verb to
+    occur at a specified moment in time.
+    For example, Nyx-Fleece Ram says "at the beginning of your
+    upkeep, you gain 1 life." This is a TimedAbility. The
+    timing is "your upkeep" and the Verb is "you can 1 life."
+    """
+
     def __init__(self, name, phase: Phases.Phases,
                  if_condition: Get.GetBool, effect: Verbs.Verb):
         self.name: str = name
         self.timing: Phases.Phases = phase
         self.condition: Get.GetBool = if_condition
         self.effect: Verbs.Verb = effect
-        self.num_inputs = effect.num_inputs
 
     def add_any_to_super(self, state: GameState,
                          source_of_ability: Cardboard):
@@ -212,23 +273,24 @@ class ContinousEffect:
 
     def __init__(self, name: str,
                  thing_to_affect: Match2.QueryPattern | Match2.VerbPattern,
-                 duration: Tuple[str, Phases.Phases] | Get.GetBool | None,
-                 params):
+                 duration: Tuple[str, Phases.Phases] | Get.GetBool | None):
         """
-        duration: - until ( "mine" | "your" | "next", Phase)
-                  - until GetBool becomes False
-                  - None. Holder endures until permanent leaves play
-        params are parameters used by apply_modifier, in subclasses
+        `duration` describes how long the ContinuousEffect applies
+        for. There are three possible ways of describing this:
+        - ("mine" | "your" | "next", Phase):
+                The effect lasts from now until the given phase.
+        - Get.GetBool
+                The effect lasts until the Getter evaluates to
+                False, whereupon it will vanish.
+        - None
+                The effect lasts so long as the source Cardboard
+                creating it remains on the battlefield.
         """
         self.name: str = name
         self.condition: Match2.QueryPattern | Match2.VerbPattern = \
             thing_to_affect
         self.duration = duration
-        self.params = params  # parameters used by apply_modifier
-        if isinstance(self.condition, Match2.VerbPattern):
-            self.modifies = "verb"
-        else:
-            self.modifies = "getter"
+        self.params = None  # parameters used by apply_modifier, in subclasses
         # to avoid infinite loop, this allows Getters to temporarily disable
         # this effect which checking to see if it is applicable or not. It is
         # re-enabled afterwards.
@@ -266,34 +328,16 @@ class ContinousEffect:
         return "%s modified by %s until %s" % (str(self.condition),
                                                self._string_params(), timesup)
 
-    def calcuate_duration(self, state, owner
-                          ) -> Tuple[int, Phases.Phases] | Get.GetBool | None:
-        """turn relative time ("my next end step") into absolute"""
-        if isinstance(self.duration, tuple):
-            turn = state.total_turns
-            # if already passed the phase this turn, soonest is next turn
-            if self.duration[1] >= state.phase:
-                turn += 1
-            # now increment until we find the right player
-            if self.duration[0] == "mine":
-                while turn % len(state.player_list) != owner.player_index:
-                    turn += 1
-            elif self.duration[0] == "your":
-                while turn % len(state.player_list) == owner.player_index:
-                    turn += 1
-            return turn, self.duration[1]
-        else:
-            return self.duration
-
     def add_to_tracker(self, state: GameState, owner: Cardboard):
         """For static abilities which add themselves directly
         to the GameState when the creature is in play. Other
         ways of applying the effect should use the appropriate
         Verb instead of using this function."""
+        duration = Holder.calcuate_duration(self.duration, state, owner)
         h = ActiveAbilityHolder(source=owner,
                                 controller=owner.player_index,
                                 effect=self,
-                                duration=self.calcuate_duration(state, owner),
+                                duration=duration,
                                 target=self.condition
                                 )
         state.statics.append(h)
@@ -311,17 +355,17 @@ class BuffStats(ContinousEffect):
         creatures in play, so no need to specify the card type or the
         zone.
         """
+        card_pattern = (pattern_for_source & Match2.CardType("creature")
+                        & Match2.IsInZone(Zone.Field))
+        pattern = Match2.QueryPattern(Get.PowerAndTough, card_pattern,
+                                      pattern_for_player)
+        super().__init__(name, pattern, duration)
         p_mod, t_mod = params  # modifiers to power and toughness
         if isinstance(p_mod, int):
             p_mod = Get.ConstInteger(p_mod)
         if isinstance(t_mod, int):
             t_mod = Get.ConstInteger(t_mod)
-        card_pattern = (pattern_for_source & Match2.CardType("creature")
-                        & Match2.IsInZone(Zone.Field))
-        pattern = Match2.QueryPattern(Get.PowerAndTough, card_pattern,
-                                      pattern_for_player)
-        super().__init__(name, pattern, duration, (p_mod, t_mod))
-        self.params: Tuple[Get.GetInteger, Get.GetInteger]
+        self.params: Tuple[Get.GetInteger, Get.GetInteger] = (p_mod, t_mod)
 
     def apply_modifier(self, orig: Tuple[int, int], state: GameState,
                        player: int, source: Cardboard, owner: Cardboard
@@ -341,12 +385,13 @@ class GrantKeyword(ContinousEffect):
                  pattern_for_player: Match2.PlayerPattern | None,
                  params: List[str] | Get.GetStringList):
         """Params are a list of keywords to grant."""
-        if isinstance(params, list):
-            params = Get.ConstStringList(params)
+
         pattern = Match2.QueryPattern(Get.Keywords, pattern_for_source,
                                       pattern_for_player)
-        super().__init__(name, pattern, duration, params)
-        self.params: Get.GetStringList
+        super().__init__(name, pattern, duration)
+        if isinstance(params, list):
+            params = Get.ConstStringList(params)
+        self.params: Get.GetStringList = params
 
     def apply_modifier(self, orig: List[str], state: GameState, player: int,
                        source: Cardboard, owner: Cardboard) -> List[str]:
@@ -355,19 +400,16 @@ class GrantKeyword(ContinousEffect):
 
     def _string_params(self) -> str:
         """Format the params nicely to be printed for debug, tracking."""
-        return "+%s" % ",".join(self.params)
+        return "+" + str(self.params)
 
 
 # # -----------------------------------------------------------------------
 
-
-class ActiveAbilityHolder:
-    """Holds active abilities (static, triggered, timed) in the
-    GameState tracking lists"""
-
+class Holder:
     def __init__(self, source: Cardboard, controller: int,
-                 effect: ContinousEffect,
-                 duration, target):
+                 effect: ContinousEffect | TriggeredAbility,
+                 duration: Tuple[int, Phases.Phases] | Get.GetBool | None,
+                 target: VerbPattern | Match2.QueryPattern):
         """
         duration: - turn and phase. if later than that, remove this holder.
                   - bool or GetBool. if False, remove this holder
@@ -378,31 +420,13 @@ class ActiveAbilityHolder:
 
         self.source: Cardboard = source  # card creating the ability
         self.controller: int = controller  # player controlling the ability
-        self.effect: ContinousEffect = effect
+        self.effect: ContinousEffect | TriggeredAbility = effect
         self.duration: Tuple[
                            int, Phases.Phases] | Get.GetBool | None = duration
         self.target: VerbPattern | Match2.QueryPattern = target
-        self.modifies: str = self.effect.modifies
 
     def copy(self, state: GameState):
-        return ActiveAbilityHolder(self.source.copy(state), self.controller,
-                                   self.effect, self.duration,
-                                   self.target)
-
-    def is_applicable(self, subject: Verbs.Verb | Get.GetterQuery,
-                      state: GameState):
-        """This active ability cares about the given Verb or Getter"""
-        if self.effect.temporarily_ignore:
-            return False
-        else:
-            self.effect.temporarily_ignore = True
-            # the call to `match` may recursively call `is_applicable` on this
-            # (or other) effects. however, the call to THIS effect will be
-            # caught by the base case above, so there will not be an infinite
-            # loop
-            r = self.target.match(subject, state, self.controller, self.source)
-            self.effect.temporarily_ignore = False  # reset to active status
-            return r
+        raise NotImplementedError
 
     def should_keep(self, state) -> bool:
         """Returns whether this ability still applies (True) or
@@ -424,6 +448,51 @@ class ActiveAbilityHolder:
         else:
             return False  # this is impossible, so don't keep it
 
+    @staticmethod
+    def calcuate_duration(duration, state, owner
+                          ) -> Tuple[int, Phases.Phases] | Get.GetBool | None:
+        """turn relative time ("my next end step") into absolute"""
+        if isinstance(duration, tuple):
+            turn = state.total_turns
+            # if already passed the phase this turn, soonest is next turn
+            if duration[1] >= state.phase:
+                turn += 1
+            # now increment until we find the right player
+            if duration[0] == "mine":
+                while turn % len(state.player_list) != owner.player_index:
+                    turn += 1
+            elif duration[0] == "your":
+                while turn % len(state.player_list) == owner.player_index:
+                    turn += 1
+            return turn, duration[1]
+        else:
+            return duration
+
+
+class ActiveAbilityHolder(Holder):
+    """Holds active abilities (static, triggered, timed) in the
+    GameState tracking lists"""
+
+    def copy(self, state: GameState):
+        return ActiveAbilityHolder(self.source.copy(state), self.controller,
+                                   self.effect, self.duration,
+                                   self.target)
+
+    def is_applicable(self, subject: Verbs.Verb | Get.GetterQuery,
+                      state: GameState):
+        """This active ability cares about the given Verb or Getter"""
+        if self.effect.temporarily_ignore:
+            return False
+        else:
+            self.effect.temporarily_ignore = True
+            # the call to `match` may recursively call `is_applicable` on this
+            # (or other) effects. however, the call to THIS effect will be
+            # caught by the base case above, so there will not be an infinite
+            # loop
+            r = self.target.match(subject, state, self.controller, self.source)
+            self.effect.temporarily_ignore = False  # reset to active status
+            return r
+
     def __str__(self):
         return "{%s, %s}" % (str(self.source), str(self.effect))
 
@@ -432,27 +501,25 @@ class ActiveAbilityHolder:
                                           self.source)
 
 
-# ----------
-
-
-class TriggeredAbilityHolder:
+class TriggeredAbilityHolder(Holder):
     """Holds triggered abilities in the GameState tracking lists"""
 
-    def __init__(self, referred_card: Cardboard, effect: TriggeredAbility):
-        self.card: Cardboard = referred_card
-        self.effect: TriggeredAbility = effect
+    def __init__(self, source: Cardboard, controller: int,
+                 effect: TriggeredAbility,
+                 duration: Tuple[int, Phases.Phases] | Get.GetBool | None):
+        super().__init__(source, controller, effect, duration,
+                         target=effect.triggers_from)
 
     def copy(self, state: GameState):
-        return TriggeredAbilityHolder(self.card.copy(state),
-                                      self.effect.copy(state))
+        return TriggeredAbilityHolder(self.source.copy(state), self.controller,
+                                      self.effect, self.duration)
 
-    def apply_if_applicable(self, verb: Verbs.Verb, state: GameState):
-        """Adds the Triggered Ability to the super_stack, if
-        it is triggered by this Verb."""
-        self.effect.add_any_to_super(state, self.card, verb)
+    def apply_if_applicable(self, subject: Verbs.Verb, state: GameState):
+        if self.target.match(subject, state, self.controller, self.source):
+            self.effect.add_effect_to_super(state, self.source, subject)
 
     def __str__(self):
-        return "{%s, %s}" % (str(self.card), str(self.effect))
+        return "{%s, %s}" % (str(self.source), str(self.effect))
 
 
 class TimedAbilityHolder:

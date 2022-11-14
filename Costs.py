@@ -23,7 +23,6 @@ class Cost:
                 self.base_mana_cost = args[0]
                 args = args[1:]
         self.additional: List[Verb] = list(args)
-        self.num_inputs = sum([v.num_inputs for v in self.additional])
         # pre-calculate mana_value integer because it never changes
         if self.base_mana_cost is None:
             self.mana_value = 0

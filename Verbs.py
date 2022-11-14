@@ -229,6 +229,7 @@ class Verb:
                 iterate_verb = holder.get_new_value(iterate_verb, state,
                                                     iterate_verb.player,
                                                     iterate_verb.source)
+        # now perform the verb!
         accumulator: List[RESULT] = []
         for state2, verb2, track2 in iterate_verb._do_it(state, to_track):
             verb2._add_self_to_state_history(state2)
