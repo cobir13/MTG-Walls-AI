@@ -59,7 +59,7 @@ Notes comparing this program to the real Magic:The Gathering rules:
     - Right now, timed abilities (e.g. "at end of turn") will occur at that
         time on EACH turn.  There is no way to specify that it should only
         occur on yours, or on your opponents, or whatever. (Might be a way
-        to add this info to Phases?)
+        to add this info to Phase?)
     - Extra turns don't exist and will probably break durations for ongoing
         effects if they are ever added.
     - Layers don't exist. Effects are applied in timestamp order, with the

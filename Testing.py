@@ -22,7 +22,7 @@ import Match2
 import time
 import RulesText
 import Costs
-from Phases import Phases
+from Times import Phase
 
 if __name__ == "__main__":
 
@@ -185,6 +185,7 @@ if __name__ == "__main__":
 
     # define two cards which can "listen" for triggers. One cares about
     # tapping creatures, the other about moving them from field
+
 
     class WeirdOrb(RulesText.Creature):
         def __init__(self):
@@ -682,7 +683,7 @@ if __name__ == "__main__":
 
     tree_game = carygame1.copy()
     tree_game.active.turn_count = 1  # roll back to earlier turn
-    tree_game.phase = Phases.UNTAP  # reset to untap phase
+    tree_game.phase = Phase.UNTAP  # reset to untap phase
     tree_game.is_tracking_history = True
     for x in range(5):
         tree_game.give_to(Cardboard(Decklist.Caryatid()), Zone.DeckTop)
@@ -824,7 +825,7 @@ if __name__ == "__main__":
     # put some basics in hand, make sure they're playable and produce mana
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Plains()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Island()), Zone.Hand)
@@ -839,7 +840,7 @@ if __name__ == "__main__":
     # nothing; play land x5; tap land x5; cast relevant colored Rock x5
     assert tree.get_num_active(1) == [0, 0, 0, 1, 16, 0, 0, 16]
     collector = set()
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         if len(g.active.field) == 2:  # land AND colored rock in play
             collector.add((g.active.field[0].name, g.active.field[1].name))
     assert collector == {('Mountain', 'RockR'), ('Island', 'RockU'),
@@ -849,7 +850,7 @@ if __name__ == "__main__":
     # test a shock land the same way
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     for rock_type in rock_list:
         game.give_to(Cardboard(rock_type()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
@@ -902,7 +903,7 @@ if __name__ == "__main__":
     # because after you pass phase, can't tell which color Fountain tapped for.
     assert tree.get_num_active(1) == [0, 0, 0, 1, 9, 0, 0, 9]
     collector = set()
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         names = [c.name + ("T" if c.tapped else "") for c in g.active.field]
         collector.add(",".join(names) + "," + str(g.active.life))
     assert collector == {',20', 'Forest,20', 'ForestT,20', 'ForestT,RockG,20',
@@ -913,7 +914,7 @@ if __name__ == "__main__":
     # test a fetch land with many valid targets
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     for rock_type in rock_list:
         game.give_to(Cardboard(rock_type()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Forest()), Zone.DeckTop)
@@ -939,7 +940,7 @@ if __name__ == "__main__":
     # tap it; cast 2 possible Rocks.  So 1 + 2*3 + 2*5 + 1 = 18
     assert tree.get_num_active(1) == [0, 0, 0, 1, 18, 0, 0, 18]
     collector = set()
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         collector.add(",".join([c.name for c in g.active.field]
                                + [str(g.active.life)]))
         if len(g.active.grave) > 0:
@@ -956,7 +957,7 @@ if __name__ == "__main__":
     # what about a fetch with no valid targets
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     game.give_to(Cardboard(Decklist.Island()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.Roots()), Zone.DeckTop)
     game.give_to(Cardboard(Decklist.Swamp()), Zone.DeckTop)
@@ -964,7 +965,7 @@ if __name__ == "__main__":
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
     assert tree.get_num_active(1) == [0, 0, 0, 1, 2, 0, 0, 2]
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         grave = len(g.active.grave)
         life = g.active.life
         field = len(g.active.field)
@@ -974,12 +975,12 @@ if __name__ == "__main__":
     # what about no deck at all?
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
     assert tree.get_num_active(1) == [0, 0, 0, 1, 2, 0, 0, 2]
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         assert len(g.active.deck) == 0
         assert len(g.active.field) == 0
         life = g.active.life
@@ -1100,7 +1101,7 @@ if __name__ == "__main__":
 
     game.pass_turn()
     game.step_untap()
-    game.phase = Phases.MAIN1
+    game.phase = Phase.MAIN1
     assert not game.active.field[0].summon_sick
     assert (len(game.active.get_valid_activations()) == 0)  # nothing to tap
 
@@ -1115,7 +1116,7 @@ if __name__ == "__main__":
     # pass; tap summon-sick caryatid using caretaker; play caretaker
     assert tree.get_num_active(1) == [0, 0, 0, 1, 3, 0, 0, 3]
     collector = set()
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         collector.add(",".join([("T" if c.tapped else "")
                                 + ("S" if c.summon_sick else "")
                                 for c in g.active.field]))
@@ -1143,7 +1144,7 @@ if __name__ == "__main__":
     # pass; tap caryatid; cast Rock; tap caretaker; cast Rock
     assert tree.get_num_active(1) == [0, 0, 0, 1, 5, 0, 0, 5]
     results = []
-    for g in tree.get_latest_active(1, Phases.CLEANUP):
+    for g in tree.get_latest_active(1, Phase.CLEANUP):
         if len(g.active.hand) == 0:
             results.append(g)
             assert len([c for c in g.active.field if c.tapped]) == 2
@@ -1195,7 +1196,7 @@ if __name__ == "__main__":
     assert len(game6.active.get_valid_activations()) == 4
 
     game6.active.turn_count = 1  # set to turn 1, not turn 0
-    game6.phase = Phases.MAIN1  # set to main phase
+    game6.phase = Phase.MAIN1  # set to main phase
     game6.is_tracking_history = True
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_then_end()
@@ -1231,7 +1232,7 @@ if __name__ == "__main__":
 
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     game.is_tracking_history = True
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
     game.give_to(Cardboard(Decklist.Forest()), Zone.Hand)
@@ -1303,7 +1304,7 @@ if __name__ == "__main__":
 
     game = GameState(1)
     game.active.turn_count = 1  # set to turn 1, not turn 0
-    game.phase = Phases.MAIN1  # set to main phase
+    game.phase = Phase.MAIN1  # set to main phase
     game.is_tracking_history = True
     # field
     game.give_to(Cardboard(Decklist.Plains()), Zone.Field)

@@ -20,7 +20,7 @@ from ManaHandler import ManaPool
 from Stack import StackObject
 from Verbs import MoveToZone, DrawCard, Untap, NullVerb
 import Pilots
-from Phases import Phases
+import Times
 
 
 class GameState:
@@ -53,7 +53,7 @@ class GameState:
             Player(self)  # adds single new asking_player to the player_list
         self.active_player_index: int = 0
         self.priority_player_index: int = 0
-        self.phase: Phases = Phases.UNTAP
+        self.phase: Times.Phase = Times.Phase.UNTAP
         # If we are tracking history, then we write down the previous distinct
         # GameState and a string describing how we got from there to here.
         # Things that mutate will add to the string, and things that copy
@@ -231,7 +231,7 @@ class GameState:
     # -------------------------------------------------------------------------
 
     def pass_turn(self) -> GameState:
-        self.phase = Phases(0)
+        self.phase = Times.Phase(0)
         self.active_player_index = ((self.active_player_index + 1)
                                     % len(self.player_list))
         self.priority_player_index: int = self.active_player_index
@@ -298,12 +298,12 @@ class GameState:
         # active player has priority
         self.priority_player_index = self.active_player_index
         # increment the phase counter. if at end, pass turn instead
-        if self.phase.value == len(Phases):
+        if self.phase.value == len(Times.Phase):
             if self.is_tracking_history:
                 self.events_since_previous += message
             return self.pass_turn()
         else:
-            new_phase = Phases(self.phase.value + 1)
+            new_phase = Times.Phase(self.phase.value + 1)
             if self.is_tracking_history:
                 message += "%s>>%s" % (self.phase.name, new_phase.name)
                 self.events_since_previous += message
@@ -399,7 +399,7 @@ class GameState:
         the super_stack. The phase becomes "upkeep".
         MUTATES.
         """
-        assert self.phase == Phases.UNTAP
+        assert self.phase == Times.Phase.UNTAP
         self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
@@ -423,21 +423,20 @@ class GameState:
         remains "upkeep".
         MUTATES.
         """
-        assert self.phase == Phases.UPKEEP
+        assert self.phase == Times.Phase.UPKEEP
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
         # adds timed abilities to super_stack, if time & conditions are right
         for ab_holder in self.trig_timed:
-            ab_holder.effect.add_any_to_super(state=self,
-                                              source_of_ability=ab_holder.card)
+            ab_holder.apply_if_applicable(self)
 
     def step_draw(self):
         """
         Draws a card for turn and puts any triggers on the
         super_stack. The phase remains "draw". MUTATES.
         """
-        assert self.phase == Phases.DRAW
+        assert self.phase == Times.Phase.DRAW
         self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
@@ -450,19 +449,17 @@ class GameState:
         self.is_tracking_history = was_tracking  # reset tracking to how it was
         # adds timed abilities to super_stack, if time & conditions are right
         for ab_holder in self.trig_timed:
-            ab_holder.effect.add_any_to_super(state=self,
-                                              source_of_ability=ab_holder.card)
+            ab_holder.apply_if_applicable(self)
 
     def step_attack(self):
         """Handles the whole combat phase. Phase becomes main2. MUTATES."""
-        assert self.phase == Phases.COMBAT
+        assert self.phase == Times.Phase.COMBAT
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nGo to combat"
         # adds timed abilities to super_stack, if time & conditions are right
         for ab_holder in self.trig_timed:
-            ab_holder.effect.add_any_to_super(state=self,
-                                              source_of_ability=ab_holder.card)
+            ab_holder.apply_if_applicable(self)
         # get a list of all possible attackers
         # player = self.active_player_index
         # field = Zone.Field(player).get(self)
@@ -477,14 +474,13 @@ class GameState:
         remains "endstep".
         MUTATES.
         """
-        assert self.phase == Phases.ENDSTEP
+        assert self.phase == Times.Phase.ENDSTEP
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nEnd step"
         # adds timed abilities to super_stack, if time & conditions are right
         for ab_holder in self.trig_timed:
-            ab_holder.effect.add_any_to_super(state=self,
-                                              source_of_ability=ab_holder.card)
+            ab_holder.apply_if_applicable(self)
 
     def step_cleanup(self) -> List[GameState]:
         """
@@ -497,11 +493,11 @@ class GameState:
         player's next turn.
         DOES NOT MUTATE SELF. Returns new GameStates instead.
         """
-        assert self.phase == Phases.CLEANUP
+        assert self.phase == Times.Phase.CLEANUP
         if len(self.stack) > 0:
             game_list = []
             for g in self.do_priority_action():
-                if g.phase == Phases.CLEANUP:
+                if g.phase == Times.Phase.CLEANUP:
                     game_list += g.step_cleanup()
                 else:
                     game_list.append(g)
@@ -915,8 +911,8 @@ class Player:
                                   if not h.should_keep(state)]
         state.trig_event = [h for h in state.trig_event
                             if h.should_keep(state)]
-        state.trig_timed = [t for t in state.trig_timed
-                                     if t.card is not card]
+        state.trig_timed = [h for h in state.trig_timed
+                            if h.should_keep(state)]
         state.statics_to_remove += [h for h in state.statics
                                     if not h.should_keep(state)]
         state.statics = [h for h in state.statics if h.should_keep(state)]

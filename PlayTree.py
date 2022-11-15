@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List, Set
 
 from GameState import GameState
-from Phases import Phases
+from Times import Phase
 
 
 class PlayTree:
@@ -67,7 +67,7 @@ class PlayTree:
             # make sure trackers have enough slots. all are same length.
             while len(self._active_states) <= state.total_turns:
                 # for _active_states, need one sub-list per phase
-                self._active_states.append([[] for _ in Phases])
+                self._active_states.append([[] for _ in Phase])
                 # self._out_of_option_states.append([])
                 self._game_over_states.append([])
             if state.game_over:
@@ -79,7 +79,7 @@ class PlayTree:
             self._intermediate_states.add(state)
 
     def _whittle_and_respond(self, in_progress: List[GameState],
-                             track_set: Set[GameState], phase: Phases):
+                             track_set: Set[GameState], phase: Phase):
         """
         Pops GameStates off of the `in_progress` set (mutating
         it). Let the players respond to Triggers or just pass,
@@ -103,7 +103,7 @@ class PlayTree:
     def phase_untap(self):
         """process the states in the uptap phase of active states
         and moves them to the upkeep phase."""
-        for state in self._active_states[-1][Phases.UNTAP]:
+        for state in self._active_states[-1][Phase.UNTAP]:
             state2 = state.copy()
             state2.step_untap()  # phase becomes upkeep
             for new_state in state2.clear_super_stack():
@@ -115,14 +115,14 @@ class PlayTree:
         in_progress: List[GameState] = []
         screener: Set[GameState] = set()
         # add upkeep triggers to stack
-        for state in self._active_states[-1][Phases.UPKEEP]:
+        for state in self._active_states[-1][Phase.UPKEEP]:
             state2 = state.copy()
             state2.step_upkeep()  # phase remains upkeep
             to_track = state2.clear_super_stack()
             in_progress.extend([s for s in to_track if s not in screener])
             screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, screener, Phases.UPKEEP)
+        self._whittle_and_respond(in_progress, screener, Phase.UPKEEP)
 
     def phase_draw(self):
         """process the states in the draw phase of active states
@@ -130,16 +130,16 @@ class PlayTree:
         in_progress: List[GameState] = []
         screener: Set[GameState] = set()
         # draw a card and add any triggers to the stack
-        for state in self._active_states[-1][Phases.DRAW]:
+        for state in self._active_states[-1][Phase.DRAW]:
             state2 = state.copy()
             state2.step_draw()  # phase remains draw step
             to_track = state2.clear_super_stack()
             in_progress.extend([s for s in to_track if s not in screener])
             screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, screener, Phases.DRAW)
+        self._whittle_and_respond(in_progress, screener, Phase.DRAW)
 
-    def phase_main(self, phase=Phases.MAIN1):
+    def phase_main(self, phase=Phase.MAIN1):
         """process the states in the main1 or main2 phase of
         active states and moves them to the next phase."""
         in_progress: List[GameState] = []
@@ -153,7 +153,7 @@ class PlayTree:
     def phase_combat(self):
         # Right now, there's no priority during combat. Players just declare
         # attacks and blocks and then damage happens.
-        for state in self._active_states[-1][Phases.COMBAT]:
+        for state in self._active_states[-1][Phase.COMBAT]:
             state2 = state.copy()
             state2.step_attack()  # phase becomes main2
             for new_state in state2.clear_super_stack():
@@ -165,19 +165,19 @@ class PlayTree:
         in_progress: List[GameState] = []
         screener: Set[GameState] = set()
         # add end-step triggers to stack
-        for state in self._active_states[-1][Phases.ENDSTEP]:
+        for state in self._active_states[-1][Phase.ENDSTEP]:
             state2 = state.copy()
             state2.step_endstep()  # phase remains end step
             to_track = state2.clear_super_stack()
             in_progress.extend([s for s in to_track if s not in screener])
             screener.update(to_track)
         # let the players respond to triggers or just pass, as they choose.
-        self._whittle_and_respond(in_progress, screener, Phases.ENDSTEP)
+        self._whittle_and_respond(in_progress, screener, Phase.ENDSTEP)
 
     def phase_cleanup(self, ):
         """process the states in the endstep phase of active states
         and moves them to the cleanup phase."""
-        for state in self._active_states[-1][Phases.CLEANUP]:
+        for state in self._active_states[-1][Phase.CLEANUP]:
             for state2 in state.step_cleanup():
                 assert state2.phase == 0
                 self._add_state_to_trackers(state2)
@@ -187,9 +187,9 @@ class PlayTree:
         DOES NOT MUTATE EXISTING STATES"""
         self.phase_main()
         # main1 dumps results into combat phase. move to endstep phase instead.
-        for state in self._active_states[-1][Phases.COMBAT]:
+        for state in self._active_states[-1][Phase.COMBAT]:
             state2 = state.copy()
-            state2.phase = Phases.CLEANUP
+            state2.phase = Phase.CLEANUP
             if state2.is_tracking_history:
                 state2.events_since_previous += "\n||skip to cleanup"
             self._add_state_to_trackers(state2)
@@ -207,7 +207,7 @@ class PlayTree:
         return list(self._intermediate_states)
 
     def get_latest_active(self, turn: int | None = None,
-                          phase: Phases | int | None = None
+                          phase: Phase | int | None = None
                           ) -> List[GameState]:
         """Returns the set of active states for the specified
         turn and phase. If turn is None, gets the states from the
@@ -227,7 +227,7 @@ class PlayTree:
             return turn_list[phase]
 
     def get_latest_no_options(self, turn: int | None = None,
-                              phase: Phases | int | None = None
+                              phase: Phase | int | None = None
                               ) -> List[GameState]:
         """Returns the active states which finished their previous
         phase with the "no more options" flag in their histories.

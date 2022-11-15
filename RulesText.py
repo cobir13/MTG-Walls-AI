@@ -161,7 +161,7 @@ class Sorcery(Spell):
 #         # add a "revert at end of turn" ability
 #         rules.former = self.subject.rules_text
 #         abil_name = "revert " + self.subject.name,
-#         rules.trig_timed[Phases.ENDSTEP].append(
+#         rules.trig_timed[Times.ENDSTEP].append(
 #             TimedAbility(abil_name, Getters.ConstBool(True), Revert()))
 #         # overwrite with new RulesText
 #         self.subject.rules_text = rules
