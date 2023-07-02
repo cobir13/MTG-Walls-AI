@@ -35,6 +35,24 @@ values without disturbing the text printed on the cards, so to speak.
 
 -------------------------------------------------------------------------------
 
+Process of playing through a phase, in PlayTree.process_states_in_phase
+
+The PlayTree holds GameStates grouped by turn and phase. The states are at
+the beginning of the phase.  To process a given phase:
+
+1)  Each state from that phase is copied to a temporary holding list.
+2)  Each state has the phase-specific actions applied to it. For example,
+    in the untap phase the active player's permanents are untapped. This
+    requires no input from the players.
+3) Ask the active player if they want to take any actions, using the method
+    GameState.do_priority_action. Keep taking actions until the players
+    agree to pass to the next phase or until the game ends.
+
+
+
+
+-------------------------------------------------------------------------------
+
 The process of taking an action, in GameState.do_priority_action:
 
 1)  The GameState asks the player with priority to choose an action to take,
@@ -84,6 +102,7 @@ The process of taking an action, in GameState.do_priority_action:
         divvy up those triggers onto the stack itself. (For example: if the
         card was a creature, then Soul Warden would trigger to gain you 1
         life when that creature enters the battlefield.)
+
 
 
 -------------------------------------------------------------------------------

@@ -312,12 +312,24 @@ class GameState:
 
     def pass_priority(self) -> List[GameState]:
         """
-        The current player with priority has passed priority. Give
-        priority to the next player who wants it or pass until all
-        players have passed. If everyone has passed, resolve top
-        of the stack or move to the next phase.
-        MUTATES SELF. also returns list of new gamestate(s).
+        The current player with priority has passed priority.
+          - Return a GameState where priority has been passed around
+            the table until it reached a player who wants to take an
+            action. Return a state with that player having priority,
+            but without them having done the action yet.
+          - If the stack is non-empty, and we reached the player who
+            controls the top of the stack before we reached a player
+            who wants to act, then return a list of states where the
+            top of the stack has been resolved.
+          - If the stack is empty, and we reached the player whose
+            turn it is before we reached a player who wants to act,
+            then return a state that has moved to the next phase.
+            TODO: Instead move to next phase where someone WANTS to act?
+        MUTATES SELF.
+        Resulting GameStates (as well as input GameState) have empty
+            superstacks.
         """
+        # Give priority to the next player
         index = self.priority_player_index + 1
         self.priority_player_index = index % len(self.player_list)
         # if there is a stack, increment the priority counter until either we
@@ -325,7 +337,7 @@ class GameState:
         # top of the stack (in which case we've passed all around the circle).
         if len(self.stack) > 0:
             stack_controller = self.stack[-1].player_index
-            # increment until find controller, or player who wants to respond.
+            # increment until find controller or find player with response
             while (self.priority_player_index != stack_controller
                    and not self.priority.want_to_respond):
                 index = self.priority_player_index + 1
@@ -336,10 +348,10 @@ class GameState:
             else:
                 # a player who wants to respond now has priority. return.
                 return [self]
+        # Else: stack is empty. increment the priority counter until either
+        # all players have passed in a circle back to the active player, or
+        # until we find a player who wants to take an action
         else:
-            # stack is empty. increment the priority counter until either all
-            # players have passed in a circle back to the active player, or
-            # until we find a player who wants to take an action
             while (self.priority_player_index != self.active_player_index
                    and not self.priority.want_to_act):
                 index = self.priority_player_index + 1
@@ -353,14 +365,18 @@ class GameState:
 
     def do_priority_action(self) -> List[GameState]:
         """
-        The player with priority chooses a single valid action
-        to do and does it. This action can be: cast a spell,
-        activate an ability, or pass priority. A list of new
-        GameStates is returned, one for each chosen action,
-        where that action has been performed. The original
-        GameState is NOT MUTATED.
-        Note that pass_priority may change the phase, if no
-        player wants priority within this phase.
+        The player with priority chooses a single valid action to
+            do and does it. This action can be: cast a spell,
+            activate an ability, or pass priority. A list of new
+            GameStates is returned, one for each chosen action,
+            where the action has been performed and the superstack
+            cleared.
+        This function expects that the superstack is empty, like
+            usual, but the stack may have things on it.
+        Does not mutate the calling GameState.
+        NOTE: the returned GameStates may be in different phases
+            from the original gamestate, if no player wants
+            priority within this phase and the stack is empty.
         """
         # sometimes the player has already stated that they don't want to act
         # at this point in time. If so, just pass priority immediately
@@ -540,7 +556,8 @@ class GameState:
             have been placed on the stack.
         If it was a StackAbility then the ability has been resolved
             and any new abilities that triggered as a result have
-            been placed on the stack."""
+            been placed on the stack.
+        All returned GameStates have empty SuperStacks."""
         if len(self.stack) == 0:
             return []
         new_state = self.copy()
@@ -566,33 +583,40 @@ class GameState:
             final_results += tup[0].clear_super_stack()
         return final_results
 
-    def clear_super_stack(self) -> List[GameState]:
-        """Returns a list of GameStates where the caster in the
-        super_stack have been run to put their StackObjects on
-        the stack. Each GameState describes casting them in a
-        different possible order. For all returned GameStates,
-        the list of triggers to remove have been removed.
+    def clear_super_stack(self, may_mutate=False) -> List[GameState]:
+        """
+        Performs any state-based actions, clears any state triggers
+            or abilities, and then moves the super_stack onto the
+            normal stack.
+        Returns a list of GameStates where the caster in the
+            super_stack have been run to put their StackObjects on
+            the stack. Each GameState describes casting them in a
+            different possible order. For all returned GameStates,
+            the list of triggers to remove have been removed.
         If super_stack is empty, returns [self].
         DOES NOT MUTATE, unless explicitly told it is allowed to.
         """
-        # if there are triggered abilities to remove from the tracking list,
-        # remove them. Just clear the "remove" list and recurse.
-        if len(self.trigs_to_remove) + len(self.statics_to_remove) > 0:
-            new_state = self.copy()
-            new_state.trigs_to_remove = []
-            new_state.statics_to_remove = []
-            return new_state.clear_super_stack()  # recurse
+        # # if there are triggered abilities to remove from the tracking list,
+        # # remove them. Just clear the "remove" list and recurse.
+        # if len(self.trigs_to_remove) + len(self.statics_to_remove) > 0:
+        #     new_state = self.copy()
+        #     new_state.trigs_to_remove = []
+        #     new_state.statics_to_remove = []
+        #     return new_state.clear_super_stack()  # recurse
+
+        # do state_based_actions first, as that might increase superstack
+        state2 = self if may_mutate else self.copy()
+        state2.state_based_actions()
         # base case: no items on super_stack
-        if len(self.super_stack) == 0:
-            return [self]
+        if len(state2.super_stack) == 0:
+            return [state2]
         # trivial case: one item on super_stack
-        elif len(self.super_stack) == 1:
-            state2 = self.copy()
-            caster2 = state2.super_stack.pop()  # verb to add it to stack
+        elif len(state2.super_stack) == 1:
+            caster3 = state2.super_stack.pop()  # verb to add it to stack
             # put onto the stack of copies of state2. doesn't mutate state2
-            if caster2.can_be_done(state2):
+            if caster3.can_be_done(state2):
                 # just want gamestates, don't care about verb or tracklist
-                on_stack = [t[0] for t in caster2.do_it(state2)]
+                on_stack = [t[0] for t in caster3.do_it(state2)]
                 return [state2] if len(on_stack) == 0 else on_stack
             else:
                 # If can't resolve ability, still return a GameState where it
@@ -603,26 +627,26 @@ class GameState:
         results: List[GameState] = []
         # active player puts their triggers onto the stack first. So, find the
         # first player in player-order who has a caster on the super_stack.
-        player = self.active_player_index
+        player = state2.active_player_index
         theirs = [(ii, caster)
-                  for (ii, caster) in enumerate(self.super_stack)
+                  for (ii, caster) in enumerate(state2.super_stack)
                   if caster.player == player]
         while len(theirs) == 0:
-            player = player + 1 % len(self.player_list)
+            player = player + 1 % len(state2.player_list)
             theirs = [(ii, caster)
-                      for (ii, caster) in enumerate(self.super_stack)
+                      for (ii, caster) in enumerate(state2.super_stack)
                       if caster.player == player]
             # only back to active player if super_stack==[]. breaks base case.
-            assert player != self.active_player_index
+            assert player != state2.active_player_index
         # pick a super_stack caster to cast first.
-        decider = self.player_list[player].pilot
+        decider = state2.player_list[player].pilot
         for ii, v in decider.choose_exactly_one(theirs, "Put on stack"):
-            state3 = self.copy()
-            caster2 = state3.super_stack.pop(ii)  # verb to add it to stack
+            state3 = state2.copy()
+            caster3 = state3.super_stack.pop(ii)  # verb to add it to stack
             # put onto the stack of copies of state2. doesn't mutate state2
-            if caster2.can_be_done(state3):
+            if caster3.can_be_done(state3):
                 # just want gamestates, don't care about verb or tracklist
-                on_stack = [t[0] for t in caster2.do_it(state3)]
+                on_stack = [t[0] for t in caster3.do_it(state3)]
                 if len(on_stack) == 0:  # see note re failing to resolve
                     results.append(state3)
                 else:
@@ -639,12 +663,13 @@ class GameState:
         return final_results
 
     def state_based_actions(self):
-        """MUTATES. Performs any state-based actions such as killing
-        creatures with toughness less than 0.
+        """MUTATES.
+        Performs any state-based actions. Also clears any stale
+        triggers or abilities that the GameState was tracking.
         If anything triggers as a result of carrying out these
         state-based actions, this function adds them to the
         super-stack.
-        See rule 704.5:
+        For state-based actions, see rule 704.5:
         -   players with 0 or less life lose the game (I check in
             the Verb instead)
         -   players who drew from empty decks lose the game (I check
