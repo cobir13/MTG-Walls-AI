@@ -69,14 +69,14 @@ class Getter:
 
 
 class GetInteger(Getter):
-    """Return type of the Getter is an integer"""
+    """Return type of the Getter is an integer or None"""
 
     def _get(self, state: GameState, player: int, source: Cardboard):
         raise NotImplementedError
 
 
 class GetIntPair(Getter):
-    """Return type of the Getter is a pair (tuple) of integers"""
+    """Return type of the Getter is a pair (tuple) of integers or Nones"""
 
     def _get(self, state: GameState, player: int, source: Cardboard):
         raise NotImplementedError
@@ -311,7 +311,7 @@ class PowerAndTough(GetIntPair):
             toughness = source.rules_text.toughness + tough_mod
             return power, toughness
         except AttributeError:
-            return 0, 0
+            return None, None
 
 
 class Power(GetInteger):
