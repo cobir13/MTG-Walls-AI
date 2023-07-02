@@ -1205,7 +1205,7 @@ if __name__ == "__main__":
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_then_end()
     assert tree6.get_num_active(1) == [0, 0, 1, 23, 0, 0, 23]
-    for g in tree6.get_latest_active(1, 7):
+    for g in tree6.get_latest_active(1, Phase.CLEANUP):
         hist_list = g.get_all_history().strip("\n-----").split("\n-----")
         for ii, history in enumerate(hist_list):
             if "Activate Axebane" in history:
@@ -1267,7 +1267,7 @@ if __name__ == "__main__":
     tree.main_phase_then_end()
     # note: had to discard in some, so 31 -> 35.  numbers below are empirical.
     assert tree.get_num_active(3) == [35, 16, 16, 629, 0, 0, 629]
-    cast_eight = [g for g in tree.get_latest_active(3, 7)
+    cast_eight = [g for g in tree.get_latest_active(3, Phase.CLEANUP)
                   if "EightDrop" in [c.name for c in g.active.field]]
     assert len(cast_eight) == 1
 
@@ -1291,7 +1291,7 @@ if __name__ == "__main__":
     # 4 possibilities: in each from prev 2, caretaker can tap battlement
     # (dumb) or can tap roots (correct).
     assert tree2.get_num_active(3) == [2, 2, 2, 4, 0, 0, 4]
-    cast_eight = [g for g in tree2.get_latest_active(3, 7)
+    cast_eight = [g for g in tree2.get_latest_active(3, Phase.CLEANUP)
                   if "EightDrop" in [c.name for c in g.active.field]]
     assert len(cast_eight) == 1
 
@@ -1321,8 +1321,8 @@ if __name__ == "__main__":
     # Pass | Plains(T) | Plains,Forest | Plains(T),Forest | Plains,Forest(T) |
     # Plains(T),Forest(T) | Plains(T),Forest(T),Blossoms
     assert tree.get_num_active(1) == [0, 0, 1, 7, 0, 0, 7]
-    assert len(tree.get_latest_no_options(1, 7)) == 1
-    [final] = tree.get_latest_no_options(1, 7)  # cleanup of this turn
+    assert len(tree.get_latest_no_options(1, Phase.CLEANUP)) == 1
+    [final] = tree.get_latest_no_options(1, Phase.CLEANUP)  # of this turn
     assert len(final.active.hand) == 2
     assert len(final.active.field) == 3
     assert len(final.active.deck) == 9
@@ -1331,13 +1331,13 @@ if __name__ == "__main__":
 
     # play next turn: draw Island, play Island, play Blossoms, draw Island
     tree2 = PlayTree([final], 5)
-    tree2.phase_cleanup()
+    tree2.process_states_in_phase(Phase.CLEANUP)
     tree2.beginning_phases()
     tree2.main_phase_then_end()
-    assert tree2.get_num_active(2) == [1, 1, 1, 1, 16, 0, 0, 16]  # empirical
+    assert tree2.get_num_active(2) == [1, 1, 1, 16, 0, 0, 16]  # empirical
     # Both Blossoms in play, all lands tapped
-    assert len(tree2.get_latest_no_options(2, 7)) == 1
-    [final2] = tree2.get_latest_no_options(2, 7)
+    assert len(tree2.get_latest_no_options(2, Phase.CLEANUP)) == 1
+    [final2] = tree2.get_latest_no_options(2, Phase.CLEANUP)
     assert len(final2.active.hand) == 2
     assert len(final2.active.field) == 5
     assert len(final2.active.deck) == 7
@@ -1347,11 +1347,11 @@ if __name__ == "__main__":
     # cast a Caryatid to be sure I didn't make ALL defenders draw on etb
     final2.give_to(Cardboard(Decklist.Caryatid()), Zone.Hand)
     tree3 = PlayTree([final2], 5)
-    tree3.phase_cleanup()
+    tree3.process_states_in_phase(Phase.CLEANUP)
     tree3.beginning_phases()
     tree3.main_phase_then_end()
-    assert tree3.get_num_active(3) == [1, 1, 1, 1, 34, 0, 0, 34]  # empirical
-    for g in tree3.get_latest_no_options(3, 7):
+    assert tree3.get_num_active(3) == [1, 1, 1, 34, 0, 0, 34]  # empirical
+    for g in tree3.get_latest_no_options(3, Phase.CLEANUP):
         assert len(g.active.hand) == 2
         assert len(g.active.field) == 7
         assert len(g.active.deck) == 6
