@@ -53,7 +53,7 @@ class GameState:
             Player(self)  # adds single new asking_player to the player_list
         self.active_player_index: int = 0
         self.priority_player_index: int = 0
-        self.phase: Times.Phase = Times.Phase.UNTAP
+        self.phase: Times.Phase = Times.Phase.UNTAP_UPKEEP
         # If we are tracking history, then we write down the previous distinct
         # GameState and a string describing how we got from there to here.
         # Things that mutate will add to the string, and things that copy
@@ -123,7 +123,7 @@ class GameState:
         returned"""
         # make new Gamestate and start copying attributes by value
         state = GameState(0)
-        # copy the player list. new players automatically added to state.
+        # build copies of all players. new players auto-added to state.
         [p.copy(state) for p in self.player_list]
         state.active_player_index = self.active_player_index
         state.priority_player_index = self.priority_player_index
@@ -449,7 +449,8 @@ class GameState:
     def step_draw(self):
         """
         Draws a card for turn and puts any triggers on the
-        super_stack. The phase remains "draw". MUTATES.
+            super_stack. The phase remains "draw".
+        MUTATES.
         """
         assert self.phase == Times.Phase.DRAW
         self.priority_player_index = self.active_player_index
@@ -786,7 +787,7 @@ class Player:
         index = "P%i" % self.player_index
         index += "A" if self.is_my_turn else ""
         index += "P" if self.is_my_priority else ""
-        index += "" if self.victory_status == "" else self.victory_status
+        index += self.victory_status
         turn = "t%i" % self.turn_count
         life = "life%i" % self.life
         land = "land%i" % self.num_lands_played
@@ -804,12 +805,7 @@ class Player:
         return isinstance(self, some_type)
 
     def copy(self, new_state: GameState) -> Player:
-        """Returns a disconnected copy of the Player and also
-        a list of Cardboards in the new Player corresponding
-        to the list of Cardboards we were asked to track. This
-        allows tracking "between split universes."
-        If track_list has non-Cardboard objects, they're also
-        returned"""
+        """Returns a disconnected copy of the Player. """
         new_player = Player(new_state, self.pilot)
         # copy the ints by value
         new_player.turn_count = self.turn_count
@@ -818,6 +814,8 @@ class Player:
         new_player.num_spells_cast = self.num_spells_cast
         # copy mana pool
         new_player.pool = self.pool.copy()
+        # copy victory status
+        new_player.victory_status = self.victory_status
         # for the lists of Cardboards (hand, deck, field, grave), spin
         # through making copies as I go. The ordering will be maintained. Note
         # this doesn't supply a GameState to copy() because there should be
@@ -827,6 +825,7 @@ class Player:
         new_player.field = [c.copy() for c in self.field]
         new_player.grave = [c.copy() for c in self.grave]
         return new_player
+
 
     def get_valid_activations(self, hide_equivalent=True
                               ) -> List[Verbs.UniversalCaster]:

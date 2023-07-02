@@ -7,7 +7,6 @@ Created on Mon Dec 28 21:13:59 2020
 from __future__ import annotations
 from typing import List, Set
 
-import Times
 from GameState import GameState
 from Times import Phase
 
@@ -29,13 +28,13 @@ class PlayTree:
                   PERFORMED ON IT. Note that PlayTree does not clear these
                   states, but rather leaves them as a history marker. Thus,
                   these states should be copied rather than mutated.
+                  Superstack and normal stack must both be empty.
                   Indexed as _active_states[turn][phase][index].
-                  Superstack and normal stack must both be empty.
-              _out_of_option_states:
-                  list (turn of game) of list of states where the game has
-                  no more valid option this turn. Indexed as
-                  _out_of_option_states[turn][index].
-                  Superstack and normal stack must both be empty.
+              # _out_of_option_states:
+              #     list (turn of game) of list of states where the game has
+              #     no more valid option this turn. Indexed as
+              #     _out_of_option_states[turn][index].
+              #     Superstack and normal stack must both be empty.
               _game_over_states:
                   list (turn of game) of list of states where the game has
                   ended. Indexed as _game_over_states[turn][index].
@@ -54,13 +53,12 @@ class PlayTree:
             self.track_this_state(state)
 
     def track_this_state(self, state: GameState):
-        if len(self._active_states) <= state.total_turns:
-            # make sure trackers have enough slots. all are same length.
-            while len(self._active_states) <= state.total_turns:
-                # for _active_states, need one sub-list per phase
-                self._active_states.append([[] for _ in Phase])
-                # self._out_of_option_states.append([])
-                self._game_over_states.append([])
+        # make sure trackers have enough slots. all are same length.
+        while len(self._active_states) <= state.total_turns:
+            # for _active_states, need one sub-list per phase
+            self._active_states.append([[] for _ in Phase])
+            # self._out_of_option_states.append([])
+            self._game_over_states.append([])
         if state.game_over:
             self._game_over_states[state.total_turns].append(state)
         else:
@@ -76,9 +74,11 @@ class PlayTree:
         intermeds: Set[GameState] = set()
         # all states still in this phase that still need to be processed.
         in_progress: List[GameState] = []
-        for s in self._active_states[turn][phase]:
-            # instantiate by doing any automatic phase actions
-            in_progress += Times.do_special_phase_thing(s)
+        for st in self._active_states[turn][phase]:
+            # start by doing any automatic phase actions
+            intermeds.update(PlayTree.do_special_phase_thing(st))
+        # build from set in case special_phase_things caused any duplicates
+        in_progress = list(intermeds)
         while len(in_progress) > 0:
             # remove a GameState from the in-progress list and explore it
             state4: GameState = in_progress.pop()
@@ -91,11 +91,47 @@ class PlayTree:
                 in_progress.extend([s for s in new_sts if s not in intermeds])
                 intermeds.update(new_sts)
 
+    @staticmethod
+    def do_special_phase_thing(state: GameState) -> List[GameState]:
+        """
+        Takes in a GameState which is at the beginning of whatever
+            phase it says it's in.  Returns a copy of that state
+            where the special phase actions have now been done
+            (uptap, draw, etc.).  This may result in triggers on
+            the stack.
+        Does not mutate the input state."""
+        state2 = state.copy()
+        if state2.phase == Phase.UNTAP_UPKEEP:
+            state2.step_untap()
+            results: List[GameState] = []
+            # put any superstack triggers due to untapping onto the stack
+            for state_upkeep in state2.clear_super_stack():
+                # put any upkeep triggers onto the superstack, then onto stack
+                state_upkeep.step_upkeep()
+                results.extend(state_upkeep.clear_super_stack())
+            return results
+        elif state2.phase == Phase.DRAW:
+            state2.step_draw()
+            return state2.clear_super_stack()
+        elif state2.phase == Phase.MAIN1 or state2.phase == Phase.MAIN2:
+            return [state2]
+        elif state2.phase == Phase.COMBAT:
+            state2.step_attack()  # TODO: IMPLEMENT COMBAT PROPERLY
+            return state2.clear_super_stack()
+        elif state2.phase == Phase.ENDSTEP:
+            state2.step_endstep()
+            return state2.clear_super_stack()
+        elif state2.phase == Phase.CLEANUP:
+            return state2.step_cleanup()
+        else:
+            raise ValueError("Phase isn't in standard phase list!")
+
     def main_phase_then_end(self):
         """Does main phase 1 and then skips directly to do cleanup phase.
+            Exists mainly for testing.
         DOES NOT MUTATE EXISTING STATES"""
-        self.phase_main()
-        # main1 dumps results into combat phase. move to endstep phase instead.
+        self.process_states_in_phase(Phase.MAIN1, -1)
+        # main1 dumps results into combat phase. move to endstep instead.
         for state in self._active_states[-1][Phase.COMBAT]:
             state2 = state.copy()
             state2.phase = Phase.CLEANUP
@@ -103,14 +139,14 @@ class PlayTree:
                 state2.events_since_previous += "\n||skip to cleanup"
             self.track_this_state(state2)
         # run endstep phase
-        self.phase_cleanup()
+        self.process_states_in_phase(Phase.CLEANUP, -1)
 
     def beginning_phases(self):
         """Untap, upkeep, draw, and move to main phase.
-        DOES NOT MUTATE EXISTING STATES"""
-        self.phase_untap()
-        self.phase_upkeep()
-        self.phase_draw()
+        DOES NOT MUTATE EXISTING STATES.
+        For convenience during Testing, mostly."""
+        self.process_states_in_phase(Phase.UNTAP_UPKEEP)
+        self.process_states_in_phase(Phase.DRAW)
 
     def get_latest_active(self, turn: int | None = None,
                           phase: Phase | int | None = None

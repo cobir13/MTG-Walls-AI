@@ -48,9 +48,6 @@ the beginning of the phase.  To process a given phase:
     GameState.do_priority_action. Keep taking actions until the players
     agree to pass to the next phase or until the game ends.
 
-
-
-
 -------------------------------------------------------------------------------
 
 The process of taking an action, in GameState.do_priority_action:

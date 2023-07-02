@@ -668,22 +668,20 @@ if __name__ == "__main__":
         assert len(tree1.get_latest_active(t)) == 0
         assert len(tree1.get_finished(t)) == 0
     assert len(tree1.get_latest_active(2)) == 1
-    assert tree1.get_num_active(2) == [0, 1, 0, 0, 0, 0, 0, 0]
+    assert tree1.get_num_active(2) == [1, 0, 0, 0, 0, 0, 0]
     assert len(tree1.get_latest_active()) == 1
-    assert len(tree1.get_intermediate()) == 1
     assert len(tree1.get_finished()) == 0
 
     # try untap and upkeep. expect game_over because draw from empty deck
     tree1.beginning_phases()
-    assert tree1.get_num_active(2) == [0, 1, 1, 0, 0, 0, 0, 0]
+    assert tree1.get_num_active(2) == [1, 1, 0, 0, 0, 0, 0]
     assert len(tree1.get_finished()) == 1
-    assert len(tree1.get_intermediate()) == 3  # 2 active, 1 finished.
     assert tree1.get_finished()[0].game_over
     assert tree1.get_finished()[0].active.victory_status == "L"
 
     tree_game = carygame1.copy()
     tree_game.active.turn_count = 1  # roll back to earlier turn
-    tree_game.phase = Phase.UNTAP  # reset to untap phase
+    tree_game.phase = Phase.UNTAP_UPKEEP  # reset to untap phase
     tree_game.is_tracking_history = True
     for x in range(5):
         tree_game.give_to(Cardboard(Decklist.Caryatid()), Zone.DeckTop)
@@ -691,8 +689,7 @@ if __name__ == "__main__":
     # FIELD: Caryatid, Roots
     # Life: 20 vs 20. Deck: 5x caryatids. Mana: (). Turn 1, untap phase.
     tree2 = PlayTree([tree_game], 5)
-    assert tree2.get_num_active(1) == [1, 0, 0, 0, 0, 0, 0, 0]
-    assert len(tree2.get_intermediate()) == 1
+    assert tree2.get_num_active(1) == [1, 0, 0, 0, 0, 0, 0]
     assert len(tree2.get_finished()) == 0
     assert all([len(gs.active.deck) == 5 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.active.hand) == 3 for gs in tree2.get_latest_active(1)])
@@ -701,33 +698,32 @@ if __name__ == "__main__":
     # noinspection PyProtectedMember
     assert len(tree2._active_states) == 2  # turns 0, 1.
     # reached main phase one. But no interesting branch-points yet.
-    assert tree2.get_num_active(1) == [1, 1, 1, 1, 0, 0, 0, 0]
+    assert tree2.get_num_active(1) == [1, 1, 1, 0, 0, 0, 0]
     assert len(tree2.get_latest_active(1)) == 1
     assert len(tree2.get_latest_active(0)) == 0  # unchanged
     assert len(tree2.get_finished(1)) == 0
-    assert len(tree2.get_intermediate()) == 4  # 4 phases, similar boardstates
     assert all([len(gs.active.deck) == 4 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.active.hand) == 4 for gs in tree2.get_latest_active(1)])
     assert all([len(gs.stack) == 0 for gs in tree2.get_latest_active(1)])
     # HAND: Roots, Roots, Roots, Caryatid
     # FIELD: Caryatid, Roots
-    # Life: 20. Deck: [Caryatid]x4. Mana: ().  Turn 1, phase 3 (main1)
+    # Life: 20. Deck: [Caryatid]x4. Mana: ().  Turn 1, phase MAIN1
     tree2.main_phase_then_end()
     # 9 intermediate. They are: after draw. add G 1st. OR add Au 1st. float GA.
     # caryatid on stack. resolve caryatid.
     # OR roots on stack. resolve roots. float G.
     # the mana is erased by changing phase, but still evidence on the creature
     # producing it. HOWEVER, don't see stack in active lists, so only see 7.
-    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
-    assert tree2.get_num_active(2) == [7, 0, 0, 0, 0, 0, 0, 0]
+    assert tree2.get_num_active(1) == [1, 1, 1, 7, 0, 0, 7]
+    assert tree2.get_num_active(2) == [7, 0, 0, 0, 0, 0, 0]
 
     # do one more turn
     tree2.beginning_phases()
-    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
+    assert tree2.get_num_active(1) == [1, 1, 1, 7, 0, 0, 7]
     # 5 distinct states. 9, minus 2 that had card on stack. Then Cary{T}+G
     # and unused Caryatid are indistinguishable, and same with Roots[-0/-1]+G
     # and Roots[-0/-1]+Cary{T}+GA.  So 9-2-2=5
-    assert tree2.get_num_active(2) == [7, 5, 5, 5, 0, 0, 0, 0]
+    assert tree2.get_num_active(2) == [7, 5, 5, 0, 0, 0, 0]
     # The 5 states are:
     # 1) Caryatid,           Roots
     # 2) Caryatid,           Roots[-0/-1]
@@ -738,42 +734,50 @@ if __name__ == "__main__":
     # I did the theory out on paper by hand. Results are in the asserts below.
     # Split these 5 off into separate trees for the next test.
     new_trees = []
-    collector_t2 = [set(), set(), set(), set(), set(), set(), set(), set()]
-    collector_t3 = [set(), set(), set(), set(), set(), set(), set(), set()]
-    for ii, game in enumerate(tree2.get_latest_active(2, 3)):
-        assert len(game.active.field) == [2, 2, 3, 3, 3][ii]
+    collector_t2 = [set() for phase in Phase]  # one empty set per Phase
+    collector_t3 = [set() for phase in Phase]
+    len_field = [0, 0, 0, 0, 0]  # some possibe field sizes
+    for game in tree2.get_latest_active(2, Phase.MAIN1):
+        len_field[len(game.active.field)] += 1
         new_tree = PlayTree([game], 5)
         new_tree.main_phase_then_end()
         new_tree.beginning_phases()
         new_trees.append(new_tree)
         # if I combine these final results, how many do I get?
-        for phase in range(8):
+        for phase in Phase:
+            # hold all states, categorized by phase
+            # noinspection PyTypeChecker
             collector_t2[phase].update(new_tree.get_latest_active(2, phase))
+            # noinspection PyTypeChecker
             collector_t3[phase].update(new_tree.get_latest_active(3, phase))
-    assert new_trees[0].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
-    assert new_trees[0].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
-    assert new_trees[1].get_num_active(2) == [0, 0, 0, 1, 7, 0, 0, 7]
-    assert new_trees[1].get_num_active(3) == [7, 5, 5, 5, 0, 0, 0, 0]
-    assert new_trees[2].get_num_active(2) == [0, 0, 0, 1, 23, 0, 0, 23]
-    assert new_trees[2].get_num_active(3) == [23, 15, 15, 15, 0, 0, 0, 0]
-    assert new_trees[3].get_num_active(2) == [0, 0, 0, 1, 18, 0, 0, 18]
-    assert new_trees[3].get_num_active(3) == [18, 12, 12, 12, 0, 0, 0, 0]
-    assert new_trees[4].get_num_active(2) == [0, 0, 0, 1, 18, 0, 0, 18]
-    assert new_trees[4].get_num_active(3) == [18, 11, 11, 11, 0, 0, 0, 0]
-    assert len(collector_t3[3]) == 32  # T3 main phase starts with 32 states.
-    assert [len(s) for s in collector_t2] == [0, 0, 0, 5, 73, 0, 0, 73]
-    assert [len(s) for s in collector_t3] == [64, 32, 32, 32, 0, 0, 0, 0]
+    assert len_field == [0, 0, 2, 3, 0]  # 2 fields with 2, 3 fields with 3
+    turn2_expected = [[0, 0, 1, 7, 0, 0, 7],
+                      [0, 0, 1, 7, 0, 0, 7],
+                      [0, 0, 1, 18, 0, 0, 18],
+                      [0, 0, 1, 18, 0, 0, 18],
+                      [0, 0, 1, 23, 0, 0, 23]]  # answers in sorted order
+    assert sorted([t.get_num_active(2) for t in new_trees]) == turn2_expected
+    turn3_expected = [[7, 5, 5, 0, 0, 0, 0],
+                      [7, 5, 5, 0, 0, 0, 0],
+                      [18, 11, 11, 0, 0, 0, 0],
+                      [18, 12, 12, 0, 0, 0, 0],
+                      [23, 15, 15, 0, 0, 0, 0]]  # answers in sorted order
+    assert sorted([t.get_num_active(3) for t in new_trees]) == turn3_expected
+    # T3 main phase starts off with 32 states.
+    assert len(collector_t3[Phase.MAIN1]) == 32
+    assert [len(ph) for ph in collector_t2] == [0, 0, 5, 73, 0, 0, 73]
+    assert [len(ph) for ph in collector_t3] == [64, 32, 32, 0, 0, 0, 0]
     # NOTE: 73 -> 64 is because of clearing "already used" markers, I think
 
     # proceed with the same calculations but in tree2, not split off
     tree2.main_phase_then_end()
     tree2.beginning_phases()
     # the intermediate values are empirical. but they match collector! good!
-    assert tree2.get_num_active(1) == [1, 1, 1, 1, 7, 0, 0, 7]
-    assert tree2.get_num_active(2) == [7, 5, 5, 5, 73, 0, 0, 73]
-    assert tree2.get_num_active(2)[4:] == [len(s) for s in collector_t2][4:]
-    assert tree2.get_num_active(3) == [len(s) for s in collector_t3]
-    for g in tree2.get_latest_active(3, 3):
+    assert tree2.get_num_active(1) == [1, 1, 1, 7, 0, 0, 7]
+    assert tree2.get_num_active(2) == [7, 5, 5, 73, 0, 0, 73]
+    assert tree2.get_num_active(2)[4:] == [len(ph) for ph in collector_t2][4:]
+    assert tree2.get_num_active(3) == [len(ph) for ph in collector_t3]
+    for g in tree2.get_latest_active(3, Phase.MAIN1):
         assert (len(g.stack) == 0)
         assert (g.active.pool.cmc() == 0)
 
@@ -838,7 +842,7 @@ if __name__ == "__main__":
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
     # nothing; play land x5; tap land x5; cast relevant colored Rock x5
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 16, 0, 0, 16]
+    assert tree.get_num_active(1) == [0, 0, 1, 16, 0, 0, 16]
     collector = set()
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         if len(g.active.field) == 2:  # land AND colored rock in play
@@ -901,7 +905,7 @@ if __name__ == "__main__":
     # shock enters tapped; shock in; 2x tap for color; 2x play rock. Or play
     # basic; tap it; play rock. Or do nothing. 10 total. But collapsed to 9
     # because after you pass phase, can't tell which color Fountain tapped for.
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 9, 0, 0, 9]
+    assert tree.get_num_active(1) == [0, 0, 1, 9, 0, 0, 9]
     collector = set()
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         names = [c.name + ("T" if c.tapped else "") for c in g.active.field]
@@ -938,7 +942,7 @@ if __name__ == "__main__":
     # to find. Each basic gives 3 options: pass with it untapped; tap it;
     # cast Rock. Each shock gives 5 options: etb tapped; shock in and pass;
     # tap it; cast 2 possible Rocks.  So 1 + 2*3 + 2*5 + 1 = 18
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 18, 0, 0, 18]
+    assert tree.get_num_active(1) == [0, 0, 1, 18, 0, 0, 18]
     collector = set()
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         collector.add(",".join([c.name for c in g.active.field]
@@ -964,7 +968,7 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 2, 0, 0, 2]
+    assert tree.get_num_active(1) == [0, 0, 1, 2, 0, 0, 2]
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         grave = len(g.active.grave)
         life = g.active.life
@@ -979,7 +983,7 @@ if __name__ == "__main__":
     game.give_to(Cardboard(Decklist.WindsweptHeath()), Zone.Hand)
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 2, 0, 0, 2]
+    assert tree.get_num_active(1) == [0, 0, 1, 2, 0, 0, 2]
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         assert len(g.active.deck) == 0
         assert len(g.active.field) == 0
@@ -1114,7 +1118,7 @@ if __name__ == "__main__":
     tree = PlayTree([game], 3)
     tree.main_phase_then_end()
     # pass; tap summon-sick caryatid using caretaker; play caretaker
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 3, 0, 0, 3]
+    assert tree.get_num_active(1) == [0, 0, 1, 3, 0, 0, 3]
     collector = set()
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         collector.add(",".join([("T" if c.tapped else "")
@@ -1142,7 +1146,7 @@ if __name__ == "__main__":
     tree = PlayTree([game], 2)
     tree.main_phase_then_end()
     # pass; tap caryatid; cast Rock; tap caretaker; cast Rock
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 5, 0, 0, 5]
+    assert tree.get_num_active(1) == [0, 0, 1, 5, 0, 0, 5]
     results = []
     for g in tree.get_latest_active(1, Phase.CLEANUP):
         if len(g.active.hand) == 0:
@@ -1200,7 +1204,7 @@ if __name__ == "__main__":
     game6.is_tracking_history = True
     tree6 = PlayTree([game6], 5)
     tree6.main_phase_then_end()
-    assert tree6.get_num_active(1) == [0, 0, 0, 1, 23, 0, 0, 23]
+    assert tree6.get_num_active(1) == [0, 0, 1, 23, 0, 0, 23]
     for g in tree6.get_latest_active(1, 7):
         hist_list = g.get_all_history().strip("\n-----").split("\n-----")
         for ii, history in enumerate(hist_list):
@@ -1250,22 +1254,19 @@ if __name__ == "__main__":
     tree.main_phase_then_end()
     # 4 outcomes: pass, play Forest, tap Forest, play Caretaker. Collapses
     # to 3 after untap.
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 4, 0, 0, 4]
+    assert tree.get_num_active(1) == [0, 0, 1, 4, 0, 0, 4]
     # Start state in main phase; 4 states in combat, cleanup, and next untap
-    assert len(tree.get_intermediate()) == 13
 
     # Turn 2.
     tree.beginning_phases()
     tree.main_phase_then_end()
-    assert tree.get_num_active(2) == [4, 3, 3, 3, 31, 0, 0, 31]  # empirical
-    assert len(tree.get_intermediate()) == 119  # empirical  # 119
+    assert tree.get_num_active(2) == [4, 3, 3, 31, 0, 0, 31]  # empirical
 
     # Turn 3.
     tree.beginning_phases()
     tree.main_phase_then_end()
     # note: had to discard in some, so 31 -> 35.  numbers below are empirical.
-    assert tree.get_num_active(3) == [35, 16, 16, 16, 629, 0, 0, 629]
-    assert len(tree.get_intermediate()) == 2014  # empirical
+    assert tree.get_num_active(3) == [35, 16, 16, 629, 0, 0, 629]
     cast_eight = [g for g in tree.get_latest_active(3, 7)
                   if "EightDrop" in [c.name for c in g.active.field]]
     assert len(cast_eight) == 1
@@ -1281,19 +1282,18 @@ if __name__ == "__main__":
     start_clock = time.perf_counter()
     tree2 = PlayTree([game2], 5)
     tree2.main_phase_then_end()
-    assert tree2.get_num_active(1) == [0, 0, 0, 1, 1, 0, 0, 1]
+    assert tree2.get_num_active(1) == [0, 0, 1, 1, 0, 0, 1]
     tree2.beginning_phases()
     tree2.main_phase_then_end()
-    assert tree2.get_num_active(2) == [1, 1, 1, 1, 2, 0, 0, 2]  # theory
+    assert tree2.get_num_active(2) == [1, 1, 1, 2, 0, 0, 2]  # theory
     tree2.beginning_phases()
     tree2.main_phase_then_end()
     # 4 possibilities: in each from prev 2, caretaker can tap battlement
     # (dumb) or can tap roots (correct).
-    assert tree2.get_num_active(3) == [2, 2, 2, 2, 4, 0, 0, 4]
+    assert tree2.get_num_active(3) == [2, 2, 2, 4, 0, 0, 4]
     cast_eight = [g for g in tree2.get_latest_active(3, 7)
                   if "EightDrop" in [c.name for c in g.active.field]]
     assert len(cast_eight) == 1
-    assert len(tree2.get_intermediate()) == 31
 
     print("      smarter: %4.2f sec." % (time.perf_counter() - start_clock))
 
@@ -1320,7 +1320,7 @@ if __name__ == "__main__":
     tree.main_phase_then_end()
     # Pass | Plains(T) | Plains,Forest | Plains(T),Forest | Plains,Forest(T) |
     # Plains(T),Forest(T) | Plains(T),Forest(T),Blossoms
-    assert tree.get_num_active(1) == [0, 0, 0, 1, 7, 0, 0, 7]
+    assert tree.get_num_active(1) == [0, 0, 1, 7, 0, 0, 7]
     assert len(tree.get_latest_no_options(1, 7)) == 1
     [final] = tree.get_latest_no_options(1, 7)  # cleanup of this turn
     assert len(final.active.hand) == 2

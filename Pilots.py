@@ -11,6 +11,7 @@ import itertools
 import tkinter as tk
 
 import Verbs
+import Times
 
 
 class AbortChoiceError(Exception):
@@ -19,17 +20,19 @@ class AbortChoiceError(Exception):
 
 class Pilot:
     def __init__(self):
-        # untap, upkeep, draw, main1, combat, main2, endstep, cleanup.
+        # untap+upkeep, draw, main1, combat, main2, endstep, cleanup.
+        # make sure these options are actually in sync with the phases
+        assert len(Times.Phase) == 7
         # Want option to act (rather than pass) during my/opponents phase:
         self.act_in_my_phase = [
-            False, False, False, True, False, False, False, False]
+            False, False, True, False, False, False, False]
         self.act_in_opp_phase = [
-            False, False, False, False, False, False, False, False]
+            False, False, False, False, False, False, False]
         # Respond to anything going on the stack during my/opponents phase:
         self.respond_in_my_phase = [
-            True, True, True, False, False, False, False, False]
+            True, True, False, False, False, False, False]
         self.respond_in_opp_phase = [
-            False, False, False, False, False, False, False, False]
+            False, False, False, False, False, False, False]
 
 
     def choose_exactly_one(self, options: list | tuple,
