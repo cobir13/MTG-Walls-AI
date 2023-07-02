@@ -396,10 +396,10 @@ class GameState:
     def step_untap(self):
         """
         Untaps all permaments and adds any triggers to
-        the super_stack. The phase becomes "upkeep".
+        the super_stack.  Phase remains UNTAP_UPKEEP.
         MUTATES.
         """
-        assert self.phase == Times.Phase.UNTAP
+        assert self.phase == Times.Phase.UNTAP_UPKEEP
         self.priority_player_index = self.active_player_index
         was_tracking = self.is_tracking_history
         if self.is_tracking_history:
@@ -415,7 +415,6 @@ class GameState:
             untapper.do_it(self, check_triggers=True)
             card.summon_sick = False
         self.is_tracking_history = was_tracking  # reset tracking to how it was
-        self.pass_phase()
 
     def step_upkeep(self):
         """
@@ -423,7 +422,7 @@ class GameState:
         remains "upkeep".
         MUTATES.
         """
-        assert self.phase == Times.Phase.UPKEEP
+        assert self.phase == Times.Phase.UNTAP_UPKEEP
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
             self.events_since_previous += "\nUpkeep step"
@@ -452,7 +451,8 @@ class GameState:
             ab_holder.apply_if_applicable(self)
 
     def step_attack(self):
-        """Handles the whole combat phase. Phase becomes main2. MUTATES."""
+        """Handles the whole combat phase. Phase remains attack.
+        MUTATES."""
         assert self.phase == Times.Phase.COMBAT
         self.priority_player_index = self.active_player_index
         if self.is_tracking_history:
@@ -466,7 +466,6 @@ class GameState:
         # for card in field:
         #     RulesText.DeclareAttacker().on()
         print("Combat not yet implemented. instead, skip combat.")
-        self.pass_phase()
 
     def step_endstep(self):
         """
@@ -640,23 +639,30 @@ class GameState:
         return final_results
 
     def state_based_actions(self):
-        """MUTATES. Performs any state-based actions like killing
-        creatures if toughness is less than 0. See rule 704.5.
+        """MUTATES. Performs any state-based actions such as killing
+        creatures with toughness less than 0.
         If anything triggers as a result of carrying out these
         state-based actions, this function adds them to the
         super-stack.
+        See rule 704.5:
         -   players with 0 or less life lose the game (I check in
             the Verb instead)
         -   players who drew from empty decks lose the game (I check
             in the Verb instead)
-        -   poison (poinon not implemented)
+        -   poison (poison not implemented)
         -   tokens disappear (tokens not yet implemented)
         -   creatures with toughness less than 0 die
         -   creatures die from lethal damage (damage not yet implemented)
         -   legend rule (not yet implemented)
         -   +1/+1 and -1/-1 counters anihilate (not yet implemented)
-
         """
+        # remove any stale triggers or abilities the GameState is tracking
+        self.trig_event = [h for h in self.trig_event if h.should_keep(self)]
+        self.trig_timed = [h for h in self.trig_timed if h.should_keep(self)]
+        self.statics = [h for h in self.statics if h.should_keep(self)]
+        self.trigs_to_remove = []
+        self.statics_to_remove = []
+        # check all creatures each player controls
         for player in self.player_list:
             i = 0
             while i < len(player.field):
@@ -670,6 +676,7 @@ class GameState:
                 i += 1
             # legend rule   # TODO
             # Sacrifice().do_it(self, player.player_index, card)
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -906,6 +913,7 @@ class Player:
         for ii in range(index, len(self.field)):
             self.field[ii].zone.location = ii
         # remove mechanism for sensing triggers from this card
+        # TODO: remove as unecessary? state_based_actions already does this
         state = self.gamestate  # for brevity
         state.trigs_to_remove += [h for h in state.trig_event
                                   if not h.should_keep(state)]
