@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 import Costs
 from Abilities import ActivatedAbility, TriggeredAbility, TimedAbility,\
-    ContinousEffect
+    ContinuousEffect
 from Verbs import MarkAsPlayedLand, NullVerb, Verb, PlayCardboard, PlayLand,\
     PlayPermanent
 import Zone
@@ -33,7 +33,7 @@ class RulesText:
         # triggered by verbs (actions that are done)
         self.trig_verb: List[TriggeredAbility] = []
         self.trig_timed: List[TimedAbility] = []
-        self.static: List[ContinousEffect] = []  # static effects
+        self.static: List[ContinuousEffect] = []  # static effects
         # NOTE: cast_destination.player=None, as don't know which player yet
         self.cast_destination: Zone.Zone = Zone.Unknown()
         self.effect: Verb | None = None

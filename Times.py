@@ -13,6 +13,12 @@ class Phase(IntEnum):
 
 
 class RelativeTime:
+    """
+    A way to describe 'the next <phase>.  For example, "the next
+    end step" would be (ENDSTEP, "any") while "my next end step"
+    would be (ENDSTEP, "mine").
+    """
+
     def __init__(self, phase: Phase, player: str | int):
         """
         `phase`: which phase of the turn it is
@@ -30,3 +36,11 @@ class RelativeTime:
         else:
             pl_text = self.player  # string
         return "%s %s" % (pl_text, self.phase.name)
+
+
+class UntilEndOfTurn(RelativeTime):
+    def __init__(self):
+        super().__init__(Phase.UNTAP_UPKEEP, "any")
+
+    def __str__(self):
+        return "EndOfTurn"

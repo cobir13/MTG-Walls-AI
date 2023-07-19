@@ -36,15 +36,15 @@ class Getter:
     def get(self, state: GameState, player: int, source: Cardboard):
         """
         Return the value of the parameter or concept we are
-        interested in. `state` is the GameState to look in,
-        and `player` and `source` are the player and card
-        which are causing us to look.
-        For example, the card may have an ability which
-        requires knowing the number of creatures in play. In
-        that case, `source` is that card and `player` is the
-        index of that card's controlling Player.
-        The returned value takes into account any static
-        effects which may change the result.
+            interested in. `state` is the GameState to look in, and
+            `player` and `source` are the player and card which are
+            causing us to look.
+        For example, the GameState might need to know the toughness
+            of a creature to check if it has died to damage. The
+            creature card itself would be "source" and the player
+            controlling it would be "player".
+        The returned value takes into account any static effects
+            which may change the result.
         """
         iterate_value = self._get(state, player, source)
         query = GetterQuery(self, state, player, source)
@@ -298,6 +298,8 @@ class CanTapSymbol(GetBool):
 
 
 class PowerAndTough(GetIntPair):
+    """Here, source is the card whose power and toughness we want
+        to learn about. Player is its controller. """
     def _get(self, state: GameState, player: int, source: Cardboard
              ) -> Tuple[int, int]:
         try:

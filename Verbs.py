@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from Cardboard import Cardboard
     from Stack import StackObject, StackCardboard
     import Zone
+    import Abilities
     import Getters as Get
 
     # SOURCE = Cardboard | Player
@@ -245,7 +246,6 @@ class Verb:
         not check for triggers or account for Replacement
         Effects."""
         raise NotImplementedError
-
 
     def _check_triggers(self: V, state: GameState, to_track: list = []
                         ) -> RESULT:
@@ -528,7 +528,7 @@ class ApplyToTargets(VerbFactory):
     def __init__(self, subject_chooser: Get.AllWhich,
                  option_getter: (Get.CardListFrom | Get.PlayerList
                                  | Get.StackList),
-                 verb: AffectCard | AffectPlayer | AffectStack,
+                 verb: Verb, # prev: AffectCard | AffectPlayer | AffectStack,
                  allowed_to_fail: bool = True):
         super().__init__(3, copies=verb.copies)
         self._inputs = [subject_chooser, option_getter, allowed_to_fail]
@@ -929,6 +929,11 @@ class DamageToPlayer(LoseLife):
             state.events_since_previous += str(self.subject)
 
 
+class CombatDamageToPlayer(DamageToPlayer):
+    """Distinguish combat damage specifically from other damage."""
+    pass
+
+
 class PayLife(LoseLife):
     """The subject player pays the given amount of life.
     Cannot be done if they don't have enough life to pay."""
@@ -1104,25 +1109,41 @@ class ActivateOnlyAsSorcery(Verb):
         return  # doesn't mark itself as having done anything
 
 
-# class AddOngoingEffect(AffectCard):
-#     """
-#     Adds the given OngoingEffect to the list of active static
-#     effects of the GameState. If the OngoingEffect requires
-#     a target, the subject of this Verb will be set as the
-#     target. (Otherwise the subject is unused.) It is assumed
-#     that the source of this Verb is also the source of the
-#     effect.
-#     """
-#     def __init__(self, effect: Abilities.OngoingEffect):
-#         super().__init__(num_inputs=1, copies=False)
-#         self._inputs = [effect]
-#
-#     @property
-#     def ongoing_effect(self) -> Abilities.OngoingEffect:
-#         return self.inputs[0]
-#
-# def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
-#         self.ongoing_effect.add_to_tracker()
+class AddContinuousEffect(Verb):
+    """
+    Adds the given ContinuousEffect to the list of active static
+        effects of the GameState. If the OngoingEffect requires
+        a target, the subject of this Verb should be set as the
+        target using the "on" function. (Otherwise the subject
+        remains None and is unused.)
+    It is assumed that the source of this Verb is also the source
+        of the effect.
+    """
+    def __init__(self, effect: Abilities.ContinuousEffect ):
+        super().__init__(num_inputs=1, copies=False)
+        self._inputs = [effect]
+
+    @property
+    def continuous_effect(self) -> Abilities.ContinuousEffect:
+        return self.inputs[0]
+
+    def populate_options(self, state, player, source, cause
+                         ) -> List[MultiVerb]:
+        pass  # TODO: RESUME HERE
+
+
+    def _do_it(self: V, state: GameState, to_track: list = []) -> List[RESULT]:
+        """Mutates. Add the effect to the GameState's list of
+        tracked continuous effects."""
+        self.continuous_effect.add_to_tracker(state, self.player)
+        return [state, self, to_track]
+
+    def on(self,
+           subject_chooser: Get.AllWhich,
+           option_getter: Get.CardListFrom,
+           allowed_to_fail: bool = True) -> ApplyToTargets:
+        return ApplyToTargets(subject_chooser, option_getter,
+                              self, allowed_to_fail)
 
 
 class Shuffle(AffectPlayer):

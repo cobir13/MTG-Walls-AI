@@ -133,6 +133,10 @@ Notes comparing this program to the real Magic:The Gathering rules:
         effects if they are ever added.
     - Layers don't exist. Effects are applied in timestamp order, with the
         newer effects applying on top of earlier effects.
+    - "Until end of turn" effects wear off at the beginning of the next
+        cleanup step. This can potentially do strange things if you manage
+        to get priority in the cleanup step or if you had an "until end of
+        turn" effect which would relevantly affect you discarding cards.
 
 
 Notes on actually-correct things:

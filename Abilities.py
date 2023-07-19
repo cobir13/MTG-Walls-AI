@@ -272,33 +272,37 @@ class TimedAbility:
 
 # # -----------------------------------------------------------------------
 
-class ContinousEffect:
+class ContinuousEffect:
     """
-    Broadly speaking, Effects change the values returned by Getters
-    (modification effect) or the Verbs that actually execute when
-    you try to perform a Verb (replacement effects).
-    For example, a card that gave all merfolk you control +1/+1
-    and islandwalk would be two m odification effects: one to make
-    Get.PowerAndTough return a value 1 larger than before, and one
-    to add "islandwalk" to the return list of Get.Keywords.
+    Broadly speaking, ContinousEffect change the values returned by
+        Getters (modification effect) or the Verbs that actually
+        execute when you attempt to perform a Verb (replacement
+        effects).
+    For example, a card that gave all merfolk you control +1/+1 and
+        islandwalk would be two modification effects: one to make
+        Get.PowerAndTough return a value 1 larger than before, and
+        one to add "islandwalk" to the return list of Get.Keywords.
     For example, a card that prevented all damage would be a
-    replacement effect: DealDamage is being replaced with NullVerb.
+        replacement effect: DealDamage is being replaced with
+        NullVerb.
     """
 
     def __init__(self, name: str,
                  thing_to_affect: Match2.QueryPattern | Match2.VerbPattern,
                  duration: Times.RelativeTime | Get.GetBool | None):
         """
-        `duration` describes how long the ContinuousEffect applies
-        for. There are three possible ways of describing this:
+        `duration` describes how long the ContinuousEffect will
+            apply for. There are three ways of describing this:
         - Times.RelativeTime
-                The effect lasts from now until the given phase.
+                The effect lasts from now until the beginning of
+                the given phase, whereupon it will silently vanish.
         - Get.GetBool
                 The effect lasts until the Getter evaluates to
-                False, whereupon it will vanish.
+                False, whereupon it will silently vanish.
         - None
                 The effect lasts so long as the source Cardboard
-                creating it remains on the battlefield.
+                creating it remains on the battlefield, whereupon
+                it will silently vanish.
         """
         self.name: str = name
         self.condition: Match2.QueryPattern | Match2.VerbPattern = \
@@ -355,17 +359,20 @@ class ContinousEffect:
         state.statics.append(h)
 
 
-class BuffStats(ContinousEffect):
+class BuffStats(ContinuousEffect):
     def __init__(self, name: str, duration,
                  pattern_for_source: Match2.CardPattern | None,
                  pattern_for_player: Match2.PlayerPattern | None,
                  params: Tuple[int | Get.GetInteger, int | Get.GetInteger]):
         """
-        Params is a pair of integers representing power and toughness
-        modifications to the creature's base power and toughness.
-        This class automatically assumes that you only want to affect
-        creatures in play, so no need to specify the card type or the
-        zone.
+        Params is a pair of integers representing power and
+            toughness modifications to the creature's base power
+            and toughness. This class automatically assumes that
+            you will only ever want to affect creatures that are
+            in play, so no need to specify the card type or zone
+            to affect.
+        pattern_for_source describes the criteria for creatures
+            that should be affected by this effect.
         """
         card_pattern = (pattern_for_source & Match2.CardType("creature")
                         & Match2.IsInZone(Zone.Field))
@@ -391,7 +398,7 @@ class BuffStats(ContinousEffect):
         return "+%s/+%s" % (str(self.params[0]), str(self.params[1]))
 
 
-class GrantKeyword(ContinousEffect):
+class GrantKeyword(ContinuousEffect):
     def __init__(self, name: str, duration,
                  pattern_for_source: Match2.CardPattern | None,
                  pattern_for_player: Match2.PlayerPattern | None,
@@ -419,7 +426,7 @@ class GrantKeyword(ContinousEffect):
 
 class Holder:
     def __init__(self, source: Cardboard, controller: int,
-                 effect: ContinousEffect | TriggeredAbility | TimedAbility,
+                 effect: ContinuousEffect | TriggeredAbility | TimedAbility,
                  duration: Tuple[int, Times.Phase] | Get.GetBool | None,
                  target: VerbPattern | Match2.QueryPattern | None):
         """
@@ -433,7 +440,7 @@ class Holder:
 
         self.source: Cardboard = source  # card creating the ability
         self.controller: int = controller  # player controlling the ability
-        self.effect: ContinousEffect | TriggeredAbility | TimedAbility = effect
+        self.effect: ContinuousEffect | TriggeredAbility | TimedAbility = effect
         self.duration: Tuple[
                            int, Times.Phase] | Get.GetBool | None = duration
         self.target: VerbPattern | Match2.QueryPattern | None = target
@@ -489,7 +496,7 @@ class Holder:
 
 class ActiveAbilityHolder(Holder):
     """Holds active abilities (static, triggered, timed) in the
-    GameState tracking lists"""
+    GameState's tracking lists"""
 
     def copy(self, state: GameState):
         return ActiveAbilityHolder(self.source.copy(state), self.controller,
@@ -520,7 +527,7 @@ class ActiveAbilityHolder(Holder):
 
 
 class TriggeredAbilityHolder(Holder):
-    """Holds triggered abilities in the GameState tracking lists"""
+    """Holds triggered abilities in the GameState's tracking lists"""
 
     def __init__(self, source: Cardboard, controller: int,
                  effect: TriggeredAbility,
@@ -542,7 +549,7 @@ class TriggeredAbilityHolder(Holder):
 
 
 class TimedAbilityHolder(Holder):
-    """Holds timed abilities in the GameState tracking lists"""
+    """Holds timed abilities in the GameState's tracking lists"""
 
     def __init__(self, source: Cardboard, controller: int,
                  effect: TimedAbility,

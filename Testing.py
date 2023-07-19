@@ -10,6 +10,7 @@ from typing import List
 import Getters as Get
 import Abilities
 import Pilots
+import Times
 import Zone
 from GameState import GameState
 import ManaHandler
@@ -1550,7 +1551,6 @@ if __name__ == "__main__":
 
 
     class Lord(RulesText.Creature):
-
         def __init__(self):
             super().__init__()
             self.name = "Lord"
@@ -1565,6 +1565,7 @@ if __name__ == "__main__":
 
 
     class GiverOfHaste(RulesText.Creature):
+        """give Haste to every creature in play regardless of owner"""
         def __init__(self):
             super().__init__()
             self.name = "GiverOfHaste"
@@ -1587,7 +1588,6 @@ if __name__ == "__main__":
             self.set_power_toughness(5, 5)
 
     class RecursiveLord(RulesText.Creature):
-
         def __init__(self):
             super().__init__()
             self.name = "RecursiveLord"
@@ -1601,8 +1601,8 @@ if __name__ == "__main__":
                 params=(+1, +1)))
 
 
-
-    # give +1/+1 to all mine.  does it affect yours? mine? Then remove granter
+    # Give +1/+1 to all mine.  does it affect yours? mine?
+    # Then remove granter. Did the buff vanish?
     pop_game = GameState(2)  # a populated game
     pop_game.give_to(Cardboard(Vanil()), Zone.Field, 0)  # to player 0
     pop_game.give_to(Cardboard(Lord()), Zone.Field, 0)  # to player 0
@@ -1667,10 +1667,16 @@ if __name__ == "__main__":
     assert [Get.Power().get(pop_game, 1, c) for c in field1] == [6, 3, 1]
     assert [Get.Power().get(pop_game, 0, c) for c in hand0] == [0, 2, 1]
 
-    # test replacement effects: make get bigger instead of destroyed
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+
+    # -----------------------------------------------------------------------
+
+    print("Testing static replacement effects")
+    start_clock = time.perf_counter()
 
 
-    class GrowIndestructible(Abilities.ContinousEffect):
+
+    class GrowIndestructible(Abilities.ContinuousEffect):
         def __init__(self, pattern_for_subject):
             super().__init__("counter not death",
                              Match2.VerbPattern(Verbs.Destroy,
@@ -1722,26 +1728,51 @@ if __name__ == "__main__":
     assert len(deadgame.player_list[1].field[0].counters) == 1
     assert Get.Power().get(deadgame, 0, deadgame.player_list[1].field[0]) == 1
 
+    print("      ...done, %0.2f sec" % (time.perf_counter() - start_clock))
+
+    # -----------------------------------------------------------------------
+
+    print("Testing effects with one target...")
+    start_clock = time.perf_counter()
+
+    game17 = GameState(1)
+    game17.give_to(Cardboard(Vanil()), Zone.Field, 0)
+    vanil = game17.active.field[0]
+    assert Get.PowerAndTough().get(game17, 0, vanil) == (1, 2)
+
+    eff = Abilities.BuffStats("GiantGrowth", Times.UntilEndOfTurn(),
+                              )
 
 
-    # class DaughterOfBuff(RulesText.Creature):
+
+
+
+    # print("Testing 'until end of turn' spells")
+    # start_clock = time.perf_counter()
+
+    #
+    # class MightOfTheMasses(RulesText.Instant):
     #     def __init__(self):
     #         super().__init__()
-    #         self.name = "DaughterOfBuff"
-    #         self.cost = Costs.Cost("W")
-    #         self.set_power_toughness(1, 2)
-    #         self.add_activated("Buff a target",
-    #                            Costs.Cost(RulesText.TapSymbol()),
-    #                            Verbs.AddOngoingEffect(
-    #                                Abilities.OngoingEffect("buff +1/+1"),
-    #                                "choose 1" #vs choose N or choose all or copy whole Pattern
-    #                                                        ).on(Get.Any(Match2.CardType("creature")))
-    #                            )
+    #         self.name = "MightOfTheMasses"
+    #         self.cost = Costs.Cost("G")
+    #         self.effect =
     #
     #
-    #                            )
     #
     #
+    #             Verbs.ApplyToTargets(
+    #             Get.Target(Match2.CardType("creature") & Match2.YouControl(),
+    #                        num_to_choose=1, can_be_fewer=False),
+    #             option_getter=Get.CardListFrom(Zone.Field(Get.You())),
+    #             verb=Verbs.AddContinuousEffect)
+    # num_ = Get.Count(Match2.CardType("creature"), Zone.Field(Get.You()))
+    #
+
+
+
+
+
 
     # spell that gives +1/+1 until EOT
     # permanent that reduces spell costs by (1)
